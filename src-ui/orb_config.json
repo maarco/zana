@@ -1,0 +1,64 @@
+{
+  "animation": {
+    "fadeInSpeed": 0.08,
+    "fadeOutSpeed": 0.27,
+    "colorBlendSpeed": 0.02,
+    "audioSmoothingFactor": 0.2,
+    "poofDuration": 1.2
+  },
+  "audio": {
+    "baselineLevel": 0.2,
+    "levelMultiplier": 1.4,
+    "levelCap": 24
+  },
+  "visuals": {
+    "cloudCount": 7,
+    "particleMultiplier": 40,
+    "processingTimeScale": 4.5,
+    "cloudOrbitAudioBoost": 3,
+    "colors": {
+      "normal": {
+        "clouds": [
+          [200, 80, 255],
+          [140, 60, 220],
+          [255, 100, 200],
+          [100, 80, 255],
+          [180, 40, 200],
+          [255, 100, 200],
+          [100, 80, 255]
+        ],
+        "core": [180, 100, 255],
+        "sparkle": [255, 255, 255]
+      },
+      "processing": {
+        "clouds": [
+          [80, 200, 255],
+          [60, 160, 220],
+          [100, 220, 255],
+          [40, 140, 200],
+          [80, 180, 240],
+          [100, 220, 255],
+          [40, 140, 200]
+        ],
+        "core": [100, 180, 255],
+        "sparkle": [200, 255, 255]
+      },
+      "poof": {
+        "ring": [200, 255, 230],
+        "particle": [180, 255, 220],
+        "flash": [200, 255, 230]
+      }
+    }
+  },
+  "poof": {
+    "ringCount": 1,
+    "particleCount": 3,
+    "ringDelay": 0.05
+  },
+  "window": {
+    "size": 300,
+    "panelLevel": 1000,
+    "fadeOutDelay": 1000,
+    "animationCompleteDelay": 3600
+  }
+}

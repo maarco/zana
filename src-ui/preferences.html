@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>kVoice Preferences</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+      background: #1e1e2e;
+      color: #cdd6f4;
+      min-height: 100vh;
+      -webkit-app-region: drag;
+    }
+    .titlebar {
+      height: 38px;
+      background: #181825;
+      display: flex;
+      align-items: center;
+      padding: 0 76px;
+      border-bottom: 1px solid #313244;
+    }
+    .titlebar h1 {
+      font-size: 13px;
+      font-weight: 500;
+      color: #a6adc8;
+      width: 100%;
+      text-align: center;
+    }
+    .content {
+      padding: 24px;
+      -webkit-app-region: no-drag;
+    }
+    .section {
+      margin-bottom: 32px;
+    }
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #6c7086;
+      margin-bottom: 12px;
+    }
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: #181825;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .setting-label {
+      font-size: 14px;
+      color: #cdd6f4;
+    }
+    .setting-desc {
+      font-size: 12px;
+      color: #6c7086;
+      margin-top: 2px;
+    }
+    select, input[type="text"] {
+      background: #313244;
+      border: 1px solid #45475a;
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: #cdd6f4;
+      font-size: 13px;
+      min-width: 180px;
+    }
+    select:focus, input:focus {
+      outline: none;
+      border-color: #89b4fa;
+    }
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      background: #45475a;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .toggle.active {
+      background: #89b4fa;
+    }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      background: #cdd6f4;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+    .toggle.active::after {
+      transform: translateX(20px);
+    }
+    .button-row {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid #313244;
+    }
+    button {
+      padding: 8px 20px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+    .btn-secondary {
+      background: #313244;
+      color: #cdd6f4;
+    }
+    .btn-secondary:hover {
+      background: #45475a;
+    }
+    .btn-primary {
+      background: #89b4fa;
+      color: #1e1e2e;
+    }
+    .btn-primary:hover {
+      background: #b4befe;
+    }
+  </style>
+</head>
+<body>
+  <div class="titlebar">
+    <h1>Preferences</h1>
+  </div>
+
+  <div class="content">
+    <div class="section">
+      <div class="section-title">Speech Recognition</div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Whisper Model</div>
+          <div class="setting-desc">Larger models are more accurate but slower</div>
+        </div>
+        <select id="whisper-model">
+          <option value="tiny">Tiny (75MB, fastest)</option>
+          <option value="base">Base (150MB)</option>
+          <option value="small" selected>Small (500MB, recommended)</option>
+          <option value="medium">Medium (1.5GB)</option>
+          <option value="large">Large (3GB, most accurate)</option>
+        </select>
+      </div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Language</div>
+          <div class="setting-desc">Auto-detect or specify language</div>
+        </div>
+        <select id="language">
+          <option value="auto" selected>Auto-detect</option>
+          <option value="en">English</option>
+          <option value="es">Spanish</option>
+          <option value="fr">French</option>
+          <option value="de">German</option>
+          <option value="ja">Japanese</option>
+          <option value="zh">Chinese</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Recording</div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Audio Input</div>
+          <div class="setting-desc">Select microphone for recording</div>
+        </div>
+        <select id="audio-input">
+          <option value="default">Default Microphone</option>
+        </select>
+      </div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Double-tap to Latch</div>
+          <div class="setting-desc">Double-tap Fn to start continuous recording</div>
+        </div>
+        <div class="toggle active" id="double-tap-toggle"></div>
+      </div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Minimum Hold Duration</div>
+          <div class="setting-desc">Ignore quick taps shorter than this</div>
+        </div>
+        <select id="min-hold">
+          <option value="200">200ms</option>
+          <option value="300" selected>300ms</option>
+          <option value="400">400ms</option>
+          <option value="500">500ms</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Keyboard Shortcuts</div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Recording Trigger</div>
+          <div class="setting-desc">Key to hold for recording</div>
+        </div>
+        <select id="trigger-key">
+          <option value="fn" selected>Fn Key</option>
+          <option value="ctrl">Control Key</option>
+          <option value="option">Option Key</option>
+          <option value="shift">Shift Key</option>
+        </select>
+      </div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Global Shortcut</div>
+          <div class="setting-desc">Alternative keyboard shortcut</div>
+        </div>
+        <input type="text" id="global-shortcut" value="Cmd+Shift+Space" placeholder="Press keys...">
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Appearance</div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Orb Style</div>
+          <div class="setting-desc">Visual style for the recording indicator</div>
+        </div>
+        <select id="orb-style">
+          <option value="fire" selected>Cosmic Fire</option>
+          <option value="nebula">Nebula Aura</option>
+          <option value="blackhole">Black Hole</option>
+        </select>
+      </div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Show in Menu Bar</div>
+          <div class="setting-desc">Display kVoice icon in menu bar</div>
+        </div>
+        <div class="toggle active" id="menubar-toggle"></div>
+      </div>
+    </div>
+
+    <div class="button-row">
+      <button class="btn-secondary" onclick="window.close()">Cancel</button>
+      <button class="btn-primary" onclick="savePreferences()">Save</button>
+    </div>
+  </div>
+
+  <script>
+    // Toggle switches
+    document.querySelectorAll('.toggle').forEach(toggle => {
+      toggle.addEventListener('click', () => {
+        toggle.classList.toggle('active');
+      });
+    });
+
+    function savePreferences() {
+      const prefs = {
+        whisperModel: document.getElementById('whisper-model').value,
+        language: document.getElementById('language').value,
+        audioInput: document.getElementById('audio-input').value,
+        doubleTapEnabled: document.getElementById('double-tap-toggle').classList.contains('active'),
+        minHoldDuration: parseInt(document.getElementById('min-hold').value),
+        triggerKey: document.getElementById('trigger-key').value,
+        globalShortcut: document.getElementById('global-shortcut').value,
+        orbStyle: document.getElementById('orb-style').value,
+        showInMenuBar: document.getElementById('menubar-toggle').classList.contains('active')
+      };
+
+      // TODO: Save via Tauri IPC
+      console.log('Saving preferences:', prefs);
+      window.close();
+    }
+  </script>
+</body>
+</html>

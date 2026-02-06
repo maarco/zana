@@ -1,0 +1,75 @@
+[workspace]
+members = ["src-tauri"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["kVoice Team"]
+repository = "https://github.com/kvoice/kvoice"
+
+[workspace.dependencies]
+# GUI Framework
+eframe = { version = "0.31", default-features = false, features = [
+    "default_fonts",
+    "glow",
+    "persistence",
+] }
+egui = "0.31"
+egui-wgpu = "0.31"
+
+# GPU Rendering
+wgpu = { version = "24", features = ["webgl"] }
+winit = { version = "0.30", features = ["rwh_06"] }
+
+# Async runtime
+tokio = { version = "1.42", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Logging
+log = "0.4"
+env_logger = "0.11"
+
+# Audio
+cpal = "0.15"
+hound = "3.5"
+whisper-rs = "0.15"
+audiopus = "0.3.0-rc.0"
+symphonia = { version = "0.5", features = ["all"] }
+webm-iterable = "0.6"
+
+# Async utilities
+futures-util = "0.3"
+async-trait = "0.1"
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "stream"] }
+
+# UUID generation
+uuid = { version = "1.11", features = ["v4"] }
+
+# Date/time
+chrono = { version = "0.4", features = ["serde"] }
+
+# File system
+dirs = "6.0"
+notify = "7.0"
+
+# WASM (for plugins)
+wasmtime = "27"
+
+[profile.release]
+opt-level = "z"       # Optimize for size
+lto = true            # Enable Link Time Optimization
+codegen-units = 1     # Reduce codegen units to increase optimizations
+panic = "abort"       # Abort on panic
+strip = true          # Strip symbols from binary

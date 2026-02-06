@@ -1,0 +1,1583 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>kVoice - Genesis</title>
+  <!-- Inter font with 900 weight -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;400;500;900&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --void: #000000;
+      --nebula-core: #F97316;
+      --nebula-glow: rgba(249, 115, 22, 0.6);
+      --nebula-warm: #EF4444;
+      --nebula-hot: #FBBF24;
+      --text-ethereal: rgba(255, 255, 255, 0.9);
+      --text-whisper: rgba(255, 255, 255, 0.4);
+      --success-pulse: #22c55e;
+      --warning-glow: #f59e0b;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: var(--text-ethereal);
+      cursor: default;
+      user-select: none;
+      -webkit-user-select: none;
+      /* Allow dragging the window */
+      -webkit-app-region: drag;
+    }
+
+    /* Disable drag on interactive elements */
+    button, .audio-visualizer, .voice-ring {
+      -webkit-app-region: no-drag;
+    }
+
+    /* ========================================
+       CANVAS - THE UNIVERSE
+       ======================================== */
+    #genesis-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      background: transparent;
+    }
+
+    /* ========================================
+       NARRATIVE LAYER
+       ======================================== */
+    #narrative {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    .phase {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 1.5s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s 1.5s;
+    }
+
+    .phase.active {
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 1.5s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s 0s;
+    }
+
+    /* ========================================
+       PHASE 0: THE VOID - AWAKENING
+       ======================================== */
+    #phase-void .text-reveal {
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      color: var(--text-whisper);
+      animation: breathe 4s ease-in-out infinite;
+      margin-top: 0px;
+    }
+
+    @keyframes breathe {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 0.7; }
+    }
+
+    #phase-void .prompt {
+      margin-top: 20px;
+      font-family: 'Inter', sans-serif;
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      opacity: 0;
+      animation: fade-up 2s ease-out 2s forwards;
+      margin-bottom: 50px;
+    }
+
+    .begin-trigger {
+      margin-top: 160px;
+      padding: 16px 48px;
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 100px;
+      color: var(--text-whisper);
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      cursor: pointer;
+      pointer-events: auto;
+      opacity: 0;
+      animation: fade-up 2s ease-out 3s forwards;
+      transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .begin-trigger:hover {
+      background: rgba(249, 115, 22, 0.1);
+      border-color: var(--nebula-core);
+      color: var(--text-ethereal);
+      box-shadow: 0 0 40px rgba(249, 115, 22, 0.3);
+      transform: scale(1.02);
+    }
+
+    /* ========================================
+       PHASE 1: FIRST LIGHT - VOICE TEST
+       ======================================== */
+    #phase-voice .instruction {
+      font-family: 'Inter', sans-serif;
+      font-size: 38px;
+      font-weight: 900;
+      text-align: center;
+      line-height: 1.4;
+      max-width: 700px;
+      text-transform: uppercase;
+      letter-spacing: -0.5px;
+      background: linear-gradient(180deg, #ffffff 0%, rgba(255,255,255,0.6) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 40px;
+    }
+
+    /* Voice status floating text */
+    .voice-status {
+      position: absolute;
+      top: 35%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    .status-text {
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: var(--nebula-core);
+      opacity: 0.6;
+      animation: status-pulse 2s ease-in-out infinite;
+    }
+
+    .status-text.hidden {
+      display: none;
+    }
+
+    .status-text.active {
+      opacity: 1;
+      color: #FBBF24;
+    }
+
+    @keyframes status-pulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 0.8; }
+    }
+
+    .voice-hint {
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      font-weight: 900;
+      color: var(--text-whisper);
+      margin-top: 20px;
+      letter-spacing: 1px;
+      animation: hint-fade 3s ease-in-out infinite;
+    }
+
+    @keyframes hint-fade {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 0.6; }
+    }
+
+    .skip-voice {
+      position: absolute;
+      bottom: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: none;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 100px;
+      padding: 10px 24px;
+      color: var(--text-whisper);
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      cursor: pointer;
+      pointer-events: auto;
+      opacity: 0;
+      animation: fade-up 1s ease-out 4s forwards;
+      transition: all 0.3s ease;
+    }
+
+    .skip-voice:hover {
+      color: var(--text-ethereal);
+      border-color: rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    /* ========================================
+       PHASE 2: PERMISSION - SOUL BINDING
+       ======================================== */
+    #phase-permission .title {
+      font-size: 28px;
+      font-weight: 900;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    #phase-permission .subtitle {
+      font-size: 15px;
+      font-weight: 900;
+      color: var(--text-whisper);
+      text-align: center;
+      max-width: 400px;
+      line-height: 1.8;
+    }
+
+    .permission-orb {
+      width: 180px;
+      height: 180px;
+      margin: 50px 0;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%,
+        rgba(249, 115, 22, 0.4) 0%,
+        rgba(249, 115, 22, 0.1) 50%,
+        transparent 70%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      animation: orb-float 6s ease-in-out infinite;
+    }
+
+    @keyframes orb-float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+
+    .permission-orb::before {
+      content: '';
+      position: absolute;
+      inset: -20px;
+      border-radius: 50%;
+      background: radial-gradient(circle,
+        rgba(249, 115, 22, 0.1) 0%,
+        transparent 70%);
+      animation: glow-rotate 10s linear infinite;
+    }
+
+    @keyframes glow-rotate {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .permission-status {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 28px;
+      border-radius: 100px;
+      font-weight: 900;
+      font-size: 14px;
+      letter-spacing: 1px;
+    }
+
+    .permission-status.pending {
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      color: var(--warning-glow);
+    }
+
+    .permission-status.granted {
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: var(--success-pulse);
+      animation: status-success 0.6s ease-out;
+    }
+
+    @keyframes status-success {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+
+    .permission-status .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: dot-pulse 1.5s ease-in-out infinite;
+    }
+
+    .permission-status.granted .dot {
+      animation: none;
+    }
+
+    @keyframes dot-pulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+
+    .btn-permission {
+      margin-top: 30px;
+      padding: 14px 36px;
+      background: linear-gradient(135deg, rgba(249, 115, 22, 0.2) 0%, rgba(249, 115, 22, 0.1) 100%);
+      border: 1px solid rgba(249, 115, 22, 0.4);
+      border-radius: 100px;
+      color: var(--text-ethereal);
+      font-size: 14px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      cursor: pointer;
+      pointer-events: auto;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .btn-permission:hover {
+      background: linear-gradient(135deg, rgba(249, 115, 22, 0.4) 0%, rgba(249, 115, 22, 0.2) 100%);
+      border-color: var(--nebula-core);
+      box-shadow: 0 0 40px rgba(249, 115, 22, 0.4);
+      transform: translateY(-2px);
+    }
+
+    .btn-continue {
+      margin-top: 16px;
+      background: none;
+      border: none;
+      color: var(--text-whisper);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      cursor: pointer;
+      pointer-events: auto;
+      transition: color 0.3s ease;
+    }
+
+    .btn-continue:hover {
+      color: var(--text-ethereal);
+    }
+
+    /* ========================================
+       PHASE 3: DOWNLOAD - CONSCIOUSNESS
+       ======================================== */
+    #phase-download .title {
+      font-size: 24px;
+      font-weight: 900;
+      margin-bottom: 12px;
+    }
+
+    #phase-download .subtitle {
+      font-size: 14px;
+      font-weight: 900;
+      color: var(--text-whisper);
+    }
+
+    .consciousness-container {
+      width: 400px;
+      margin: 60px 0;
+      position: relative;
+    }
+
+    .neural-progress {
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 100px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .neural-progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg,
+        var(--nebula-core) 0%,
+        #FBBF24 50%,
+        var(--nebula-core) 100%);
+      background-size: 200% 100%;
+      border-radius: 100px;
+      transition: width 0.3s ease;
+      animation: shimmer 2s linear infinite;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .download-stats {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 16px;
+      font-size: 12px;
+      color: var(--text-whisper);
+    }
+
+    .download-percent {
+      color: var(--nebula-core);
+      font-weight: 900;
+    }
+
+    .consciousness-visual {
+      width: 300px;
+      height: 200px;
+      margin: 40px auto 0;
+      position: relative;
+    }
+
+    .synapse {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      background: var(--nebula-core);
+      border-radius: 50%;
+      opacity: 0;
+      animation: synapse-fire 3s ease-in-out infinite;
+    }
+
+    @keyframes synapse-fire {
+      0%, 100% { opacity: 0; transform: scale(0.5); }
+      50% { opacity: 1; transform: scale(1); box-shadow: 0 0 20px var(--nebula-core); }
+    }
+
+    .download-message {
+      margin-top: 20px;
+      font-size: 13px;
+      color: var(--text-whisper);
+      font-style: italic;
+      animation: message-fade 4s ease-in-out infinite;
+    }
+
+    @keyframes message-fade {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 0.8; }
+    }
+
+    /* ========================================
+       PHASE 4: READY - FIRST BREATH
+       ======================================== */
+    #phase-ready {
+      text-align: center;
+      padding: 40px;
+      justify-content: space-between;
+    }
+
+    .ready-top {
+      margin-top: 20px;
+    }
+
+    #phase-ready .awakening {
+      font-family: 'Inter', sans-serif;
+      font-size: 48px;
+      font-weight: 900;
+      letter-spacing: -1px;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      background: linear-gradient(135deg, #ffffff 0%, #FBBF24 50%, #F97316 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: text-glow 3s ease-in-out infinite;
+    }
+
+    @keyframes text-glow {
+      0%, 100% { filter: drop-shadow(0 0 20px rgba(249, 115, 22, 0.4)); }
+      50% { filter: drop-shadow(0 0 40px rgba(249, 115, 22, 0.7)); }
+    }
+
+    #phase-ready .subtitle {
+      font-size: 14px;
+      font-weight: 900;
+      color: var(--text-whisper);
+    }
+
+    .ready-bottom {
+      margin-bottom: 30px;
+    }
+
+    .instructions-container {
+      background: transparent;
+      border: none;
+      padding: 20px 40px;
+      margin-bottom: 30px;
+    }
+
+    .instruction-row {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      padding: 16px 0;
+    }
+
+    .instruction-row:not(:last-child) {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .key-visual {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .key {
+      padding: 8px 16px;
+      background: rgba(249, 115, 22, 0.15);
+      border: 1px solid rgba(249, 115, 22, 0.3);
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 900;
+      color: var(--nebula-core);
+      letter-spacing: 1px;
+    }
+
+    .key-action {
+      font-size: 11px;
+      font-weight: 900;
+      color: var(--text-whisper);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .instruction-text {
+      font-size: 14px;
+      font-weight: 900;
+      color: var(--text-ethereal);
+    }
+
+    .btn-complete {
+      padding: 18px 60px;
+      background: linear-gradient(135deg, var(--nebula-core) 0%, #EF4444 100%);
+      border: none;
+      border-radius: 100px;
+      color: white;
+      font-size: 14px;
+      font-weight: 900;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      cursor: pointer;
+      pointer-events: auto;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 0 40px rgba(249, 115, 22, 0.4);
+    }
+
+    .btn-complete:hover {
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 0 60px rgba(249, 115, 22, 0.6);
+    }
+
+    .restart-note {
+      margin-top: 24px;
+      font-size: 12px;
+      color: var(--text-whisper);
+    }
+
+    /* ========================================
+       CLOSE BUTTON (borderless window)
+       ======================================== */
+    .close-btn {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 100;
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 50%;
+      color: var(--text-whisper);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+      -webkit-app-region: no-drag;
+    }
+
+    .close-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-ethereal);
+    }
+
+    .close-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    /* ========================================
+       UTILITY ANIMATIONS
+       ======================================== */
+    @keyframes fade-up {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fade-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    /* ========================================
+       PARTICLES OVERLAY
+       ======================================== */
+    #particles {
+      position: fixed;
+      inset: 0;
+      z-index: 5;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .particle {
+      position: absolute;
+      width: 2px;
+      height: 2px;
+      background: rgba(249, 115, 22, 0.6);
+      border-radius: 50%;
+      animation: float-particle 15s linear infinite;
+    }
+
+    @keyframes float-particle {
+      0% {
+        transform: translateY(100vh) scale(0);
+        opacity: 0;
+      }
+      10% {
+        opacity: 1;
+        transform: translateY(80vh) scale(1);
+      }
+      90% {
+        opacity: 1;
+      }
+      100% {
+        transform: translateY(-10vh) scale(0);
+        opacity: 0;
+      }
+    }
+
+    /* Voice phase layout */
+    #phase-voice {
+      justify-content: flex-start;
+      padding-top: 60px;
+    }
+
+    #phase-voice .instruction {
+      position: relative;
+      z-index: 10;
+    }
+
+    #phase-voice .voice-hint {
+      position: absolute;
+      bottom: 120px;
+    }
+
+    #phase-voice .skip-voice {
+      bottom: 60px;
+    }
+  </style>
+</head>
+<body>
+  <!-- THE UNIVERSE -->
+  <canvas id="genesis-canvas"></canvas>
+
+  <!-- CLOSE BUTTON -->
+  <button class="close-btn" onclick="closeWindow()" title="Close">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="18" y1="6" x2="6" y2="18"/>
+      <line x1="6" y1="6" x2="18" y2="18"/>
+    </svg>
+  </button>
+
+  <!-- AMBIENT PARTICLES -->
+  <div id="particles"></div>
+
+  <!-- NARRATIVE PHASES -->
+  <div id="narrative">
+
+    <!-- PHASE 0: THE VOID -->
+    <div class="phase active" id="phase-void">
+      <div class="text-reveal">In the beginning, there was silence</div>
+      <div class="prompt">Your voice will bring light to the void</div>
+      <button class="begin-trigger" onclick="beginGenesis()">Awaken</button>
+    </div>
+
+    <!-- PHASE 1: FIRST LIGHT - VOICE -->
+    <div class="phase" id="phase-voice">
+      <div class="voice-status" id="voice-status">
+        <div class="status-text" id="status-waiting">waiting</div>
+        <div class="status-text hidden" id="status-hearing">hearing you</div>
+        <div class="status-text hidden" id="status-creating">creating</div>
+      </div>
+      <div class="instruction">Your voice creates light</div>
+      <div class="voice-hint" id="voice-hint">say anything</div>
+      <button class="skip-voice" onclick="skipVoiceTest()">Skip</button>
+    </div>
+
+    <!-- PHASE 2: PERMISSION - SOUL BINDING -->
+    <div class="phase" id="phase-permission">
+      <div class="title">Grant the gift of presence</div>
+      <div class="subtitle">
+        To hear you from anywhere, kVoice needs accessibility permission.
+        This allows the Fn key to summon your voice assistant instantly.
+      </div>
+      <div class="permission-orb">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--nebula-core)">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="M9 12l2 2 4-4"/>
+        </svg>
+      </div>
+      <div class="permission-status pending" id="permission-status">
+        <span class="dot"></span>
+        <span id="permission-text">Awaiting permission</span>
+      </div>
+      <button class="btn-permission" onclick="openAccessibilitySettings()">Open System Settings</button>
+      <button class="btn-continue" onclick="continueToDownload()">Continue anyway</button>
+    </div>
+
+    <!-- PHASE 3: DOWNLOAD - CONSCIOUSNESS -->
+    <div class="phase" id="phase-download">
+      <div class="title">Forming consciousness</div>
+      <div class="subtitle">Downloading Whisper AI - Your voice interpreter</div>
+      <div class="consciousness-container">
+        <div class="neural-progress">
+          <div class="neural-progress-fill" id="download-progress"></div>
+        </div>
+        <div class="download-stats">
+          <span id="download-size">0 MB / 462 MB</span>
+          <span class="download-percent" id="download-percent">0%</span>
+        </div>
+        <div class="consciousness-visual" id="consciousness-visual"></div>
+      </div>
+      <div class="download-message" id="download-message">Initializing neural pathways...</div>
+    </div>
+
+    <!-- PHASE 4: READY - AWAKENING -->
+    <div class="phase" id="phase-ready">
+      <div class="ready-top">
+        <div class="awakening">I am ready</div>
+        <div class="subtitle">Your voice assistant has awakened</div>
+      </div>
+
+      <div class="ready-bottom">
+        <div class="instructions-container">
+          <div class="instruction-row">
+            <div class="key-visual">
+              <span class="key">Fn</span>
+              <span class="key-action">Hold</span>
+            </div>
+            <span class="instruction-text">Hold to record, release to transcribe</span>
+          </div>
+          <div class="instruction-row">
+            <div class="key-visual">
+              <span class="key">Fn</span>
+              <span class="key-action">x2</span>
+            </div>
+            <span class="instruction-text">Double-tap for hands-free mode</span>
+          </div>
+        </div>
+        <button class="btn-complete" onclick="completeGenesis()">Begin</button>
+        <div class="restart-note">kVoice will restart to complete setup</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ============================================================================
+    // STATE
+    // ============================================================================
+    const state = {
+      currentPhase: 0,
+      audioLevel: 0,
+      isListening: false,
+      permissionGranted: false,
+      downloadPercent: 0,
+      genesisProgress: 0, // 0.0 to 1.0 - controls shader evolution
+    };
+
+    const phases = ['void', 'voice', 'permission', 'download', 'ready'];
+    const downloadMessages = [
+      'Initializing neural pathways...',
+      'Forming auditory cortex...',
+      'Building language models...',
+      'Calibrating voice recognition...',
+      'Establishing consciousness matrix...',
+      'Preparing for first words...',
+      'Almost there...',
+      'Awakening...',
+    ];
+
+    // ============================================================================
+    // GENESIS RENDERER (WebGPU/WebGL2)
+    // ============================================================================
+    class GenesisRenderer {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.gl = null;
+        this.program = null;
+        this.startTime = performance.now();
+        this.uniforms = {};
+      }
+
+      async init() {
+        this.gl = this.canvas.getContext('webgl2', {
+          alpha: true,
+          antialias: true,
+          premultipliedAlpha: true,
+        });
+
+        if (!this.gl) {
+          console.error('[Genesis] WebGL2 not available');
+          return false;
+        }
+
+        this.initShaders();
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        return true;
+      }
+
+      initShaders() {
+        const gl = this.gl;
+
+        const vsSource = `#version 300 es
+          out vec2 vUv;
+          void main() {
+            vec2 pos[3] = vec2[3](vec2(-1,-1), vec2(3,-1), vec2(-1,3));
+            gl_Position = vec4(pos[gl_VertexID], 0, 1);
+            vUv = pos[gl_VertexID] * 0.5 + 0.5;
+          }
+        `;
+
+        const fsSource = `#version 300 es
+          precision highp float;
+          in vec2 vUv;
+          out vec4 fragColor;
+
+          uniform vec2 uRes;
+          uniform float uTime;
+          uniform float uGenesis;   // 0-1 progress through genesis
+          uniform float uAudio;     // audio level
+          uniform float uPhase;     // current phase (0-4)
+
+          #define PI 3.14159265359
+
+          float hash(vec2 p) {
+            vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+            p3 += dot(p3, p3.yzx + 33.33);
+            return fract((p3.x + p3.y) * p3.z);
+          }
+
+          float noise(vec2 p) {
+            vec2 i = floor(p);
+            vec2 f = fract(p);
+            f = f * f * (3.0 - 2.0 * f);
+            return mix(
+              mix(hash(i), hash(i + vec2(1,0)), f.x),
+              mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x),
+              f.y
+            );
+          }
+
+          float fbm(vec2 p) {
+            float f = 0.0;
+            f += 0.5000 * noise(p); p *= 2.01;
+            f += 0.2500 * noise(p); p *= 2.02;
+            f += 0.1250 * noise(p); p *= 2.03;
+            f += 0.0625 * noise(p);
+            return f;
+          }
+
+          vec3 palette(float t) {
+            // Warm fire palette - orange, red, yellow
+            vec3 a = vec3(0.5, 0.2, 0.1);
+            vec3 b = vec3(0.5, 0.3, 0.2);
+            vec3 c = vec3(1.0, 1.0, 0.5);
+            vec3 d = vec3(0.0, 0.15, 0.2);
+            return a + b * cos(6.28318 * (c * t + d));
+          }
+
+          void main() {
+            vec2 uv = vUv;
+            float aspect = uRes.x / uRes.y;
+            uv.x = (uv.x - 0.5) * aspect + 0.5;
+
+            vec2 center = vec2(0.5);
+            float t = uTime;
+            float genesis = uGenesis;
+            float audio = uAudio;
+            float phase = uPhase;
+
+            vec3 col = vec3(0.0);
+            float d = length(uv - center);
+
+            // === PHASE 0: THE VOID ===
+            // Just a tiny spark, breathing
+            if (phase < 0.5) {
+              float spark = 1.0 - smoothstep(0.0, 0.008 + sin(t * 0.5) * 0.002, d);
+              float sparkGlow = 1.0 - smoothstep(0.0, 0.05, d);
+              col = vec3(0.97, 0.45, 0.09) * spark * 2.0;  // Orange core
+              col += vec3(0.9, 0.3, 0.1) * sparkGlow * 0.3; // Red glow
+
+              // Subtle nebula hints in the void
+              float nebula = fbm(uv * 3.0 + t * 0.02) * 0.05;
+              col += palette(nebula) * nebula * 0.1;
+            }
+            // === PHASE 1: VOICE - First Light ===
+            else if (phase < 1.5) {
+              // Growing orb responds to audio
+              float orbSize = 0.03 + audio * 0.15 + genesis * 0.1;
+              float orb = 1.0 - smoothstep(0.0, orbSize, d);
+              float glow = 1.0 - smoothstep(0.0, orbSize * 3.0, d);
+
+              // Audio ripples - warm colors
+              for (float i = 0.0; i < 3.0; i++) {
+                float ripple = 0.1 + audio * 0.4 + i * 0.15;
+                float ring = smoothstep(0.02, 0.0, abs(d - ripple));
+                col += vec3(0.97, 0.45, 0.09) * ring * (1.0 - i * 0.3) * audio;
+              }
+
+              col += vec3(0.97, 0.45, 0.09) * orb * 1.5;  // Orange core
+              col += palette(0.5 + audio * 0.5) * glow * 0.4;
+
+              // Particle burst on audio - yellow/orange
+              float burstAngle = atan(uv.y - 0.5, uv.x - 0.5);
+              float burstDist = d;
+              float burst = sin(burstAngle * 8.0 + t * 3.0) * 0.5 + 0.5;
+              burst *= smoothstep(orbSize * 2.0, orbSize, burstDist) * audio * 0.5;
+              col += vec3(1.0, 0.7, 0.2) * burst;  // Yellow burst
+            }
+            // === PHASE 2: PERMISSION - Soul Binding ===
+            else if (phase < 2.5) {
+              float orbSize = 0.12 + sin(t * 0.5) * 0.02;
+              float orb = 1.0 - smoothstep(0.0, orbSize, d);
+              float glow = 1.0 - smoothstep(0.0, orbSize * 2.5, d);
+
+              // Shield pattern
+              float shield = 0.0;
+              for (float i = 0.0; i < 6.0; i++) {
+                float angle = i * PI / 3.0 + t * 0.2;
+                vec2 shieldPos = center + vec2(cos(angle), sin(angle)) * 0.2;
+                float sd = length(uv - shieldPos);
+                shield += smoothstep(0.03, 0.0, sd) * 0.5;
+              }
+
+              // Permission granted glow - orange to green
+              float granted = genesis > 0.5 ? 1.0 : 0.0;
+              vec3 permColor = mix(vec3(0.97, 0.45, 0.09), vec3(0.2, 0.8, 0.4), granted);
+
+              col += permColor * orb * 1.5;
+              col += palette(0.3) * glow * 0.3;
+              col += permColor * shield * 0.4;
+
+              // Rotating protection rings
+              float ringDist = 0.25 + sin(t * 0.3) * 0.02;
+              float ring = smoothstep(0.01, 0.0, abs(d - ringDist));
+              col += permColor * ring * 0.5;
+            }
+            // === PHASE 3: DOWNLOAD - Consciousness Forming ===
+            else if (phase < 3.5) {
+              // Neural network forming based on download progress
+              float orbSize = 0.08 + genesis * 0.12;
+              float orb = 1.0 - smoothstep(0.0, orbSize, d);
+              float glow = 1.0 - smoothstep(0.0, 0.4, d);
+
+              // Synaptic connections
+              float synapses = 0.0;
+              for (float i = 0.0; i < 12.0; i++) {
+                if (i / 12.0 > genesis) break;
+
+                float angle = i * PI * 2.0 / 12.0 + t * 0.1;
+                float dist = 0.15 + sin(t * 0.5 + i) * 0.05;
+                vec2 nodePos = center + vec2(cos(angle), sin(angle)) * dist;
+                float nd = length(uv - nodePos);
+
+                // Node
+                float node = smoothstep(0.015, 0.0, nd);
+                synapses += node;
+
+                // Connection to center
+                vec2 toCenter = center - nodePos;
+                float along = dot(uv - nodePos, normalize(toCenter));
+                float perp = length((uv - nodePos) - normalize(toCenter) * along);
+                float conn = smoothstep(0.003, 0.0, perp) *
+                            step(0.0, along) * step(along, length(toCenter));
+                synapses += conn * 0.3;
+              }
+
+              // Core getting brighter with progress - warm orange
+              col += vec3(0.97, 0.45, 0.09) * orb * (1.0 + genesis);
+              col += palette(0.5 + genesis * 0.3) * glow * 0.3 * (0.5 + genesis * 0.5);
+              col += vec3(1.0, 0.6, 0.2) * synapses;  // Yellow-orange synapses
+
+              // Data stream particles - red/orange
+              float stream = fbm(uv * 10.0 - vec2(0.0, t * 2.0)) * genesis;
+              col += vec3(0.9, 0.3, 0.1) * stream * 0.2 * smoothstep(0.5, 0.2, d);
+            }
+            // === PHASE 4: READY - Full Awakening ===
+            else {
+              // Full nebula orb, alive and breathing - FIRE
+              float breathe = sin(t * 0.5) * 0.02;
+              float orbSize = 0.15 + breathe + audio * 0.1;
+
+              // Multi-layer orb
+              float core = 1.0 - smoothstep(0.0, orbSize * 0.3, d);
+              float inner = 1.0 - smoothstep(0.0, orbSize * 0.6, d);
+              float outer = 1.0 - smoothstep(0.0, orbSize, d);
+              float glow = 1.0 - smoothstep(0.0, orbSize * 2.5, d);
+
+              // Nebula clouds
+              float clouds = 0.0;
+              for (float i = 0.0; i < 7.0; i++) {
+                float angle = i * PI * 2.0 / 7.0 + t * (0.3 + i * 0.05);
+                float dist = orbSize * 0.7 + sin(t * 0.5 + i) * 0.03;
+                vec2 cloudPos = center + vec2(cos(angle), sin(angle)) * dist;
+                float cd = length(uv - cloudPos);
+                float cloud = 1.0 - smoothstep(0.0, 0.06 + audio * 0.03, cd);
+                clouds += cloud * 0.3;
+              }
+
+              // Particle sparkles
+              float sparkle = 0.0;
+              for (float i = 0.0; i < 30.0; i++) {
+                float seed = sin(i * 12.9898) * 43758.5453;
+                float pAngle = fract(seed) * PI * 2.0 + t * (0.1 + fract(seed * 2.3) * 0.2);
+                float pDist = fract(seed * 3.7) * 0.35 + 0.05;
+                vec2 pPos = center + vec2(cos(pAngle), sin(pAngle)) * pDist;
+                float twinkle = sin(t * (2.0 + fract(seed * 5.1) * 3.0) + i);
+                float pAlpha = max(0.0, twinkle) * 0.5;
+                float pd = length(uv - pPos);
+                sparkle += smoothstep(0.004, 0.0, pd) * pAlpha;
+              }
+
+              // Compose final color - warm fire tones
+              col += vec3(1.0, 0.95, 0.8) * core * 2.0;        // White-yellow core
+              col += vec3(1.0, 0.6, 0.2) * inner * 0.8;        // Orange inner
+              col += palette(0.5 + sin(t * 0.1) * 0.2) * outer * 0.5;
+              col += palette(0.3) * glow * 0.25;
+              col += palette(0.6 + t * 0.05) * clouds;
+              col += vec3(1.0, 0.9, 0.7) * sparkle;            // Warm sparkles
+
+              // Subtle outer ring - orange
+              float ring = smoothstep(0.01, 0.0, abs(d - orbSize * 1.3));
+              col += vec3(0.97, 0.45, 0.09) * ring * 0.3;
+            }
+
+            // Deep space background with stars
+            float stars = step(0.997, hash(uv * 500.0 + floor(t * 0.5))) * 0.4;
+            col += vec3(stars);
+
+            // Vignette darkening toward edges
+            col *= 1.0 - smoothstep(0.3, 0.9, d * 1.2);
+
+            // Calculate distance from center for alpha fade
+            // Use screen-space UV for proper corner fade
+            vec2 screenUv = vUv;
+            vec2 fromCenter = abs(screenUv - 0.5) * 2.0; // 0 at center, 1 at edges
+
+            // Soft elliptical fade - corners are most transparent
+            float edgeDist = length(fromCenter * vec2(1.0, 1.0));
+
+            // Create smooth alpha: fully opaque in center, transparent at edges
+            // Start fading at 0.5, fully transparent at 1.0+
+            float alpha = 1.0 - smoothstep(0.4, 1.0, edgeDist);
+
+            // Boost alpha where there's actual content (orb, stars, etc)
+            float contentAlpha = length(col) * 2.0;
+            alpha = max(alpha, min(contentAlpha, 1.0) * (1.0 - smoothstep(0.6, 1.1, edgeDist)));
+
+            // Ensure stars are visible but fade at edges
+            alpha = max(alpha, stars * (1.0 - smoothstep(0.5, 0.95, edgeDist)));
+
+            // Premultiplied alpha output
+            fragColor = vec4(col * alpha, alpha);
+          }
+        `;
+
+        const vs = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vs, vsSource);
+        gl.compileShader(vs);
+
+        const fs = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fs, fsSource);
+        gl.compileShader(fs);
+
+        if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
+          console.error('[Genesis] Fragment shader error:', gl.getShaderInfoLog(fs));
+        }
+
+        this.program = gl.createProgram();
+        gl.attachShader(this.program, vs);
+        gl.attachShader(this.program, fs);
+        gl.linkProgram(this.program);
+
+        this.uniforms = {
+          res: gl.getUniformLocation(this.program, 'uRes'),
+          time: gl.getUniformLocation(this.program, 'uTime'),
+          genesis: gl.getUniformLocation(this.program, 'uGenesis'),
+          audio: gl.getUniformLocation(this.program, 'uAudio'),
+          phase: gl.getUniformLocation(this.program, 'uPhase'),
+        };
+
+        this.vao = gl.createVertexArray();
+      }
+
+      resize() {
+        const dpr = window.devicePixelRatio || 1;
+        this.canvas.width = window.innerWidth * dpr;
+        this.canvas.height = window.innerHeight * dpr;
+        this.canvas.style.width = window.innerWidth + 'px';
+        this.canvas.style.height = window.innerHeight + 'px';
+      }
+
+      render() {
+        const gl = this.gl;
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+        const time = (performance.now() - this.startTime) / 1000;
+
+        gl.viewport(0, 0, w, h);
+        gl.clearColor(0, 0, 0, 0); // Fully transparent clear
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        // Enable blending for transparency
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); // Premultiplied alpha
+
+        gl.useProgram(this.program);
+        gl.bindVertexArray(this.vao);
+
+        gl.uniform2f(this.uniforms.res, w, h);
+        gl.uniform1f(this.uniforms.time, time);
+        gl.uniform1f(this.uniforms.genesis, state.genesisProgress);
+        gl.uniform1f(this.uniforms.audio, state.audioLevel);
+        gl.uniform1f(this.uniforms.phase, state.currentPhase);
+
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      }
+
+      start() {
+        const loop = () => {
+          this.render();
+          this.animationId = requestAnimationFrame(loop);
+        };
+        loop();
+      }
+
+      stop() {
+        if (this.animationId) {
+          cancelAnimationFrame(this.animationId);
+        }
+      }
+    }
+
+    // ============================================================================
+    // PARTICLES
+    // ============================================================================
+    function createParticles() {
+      const container = document.getElementById('particles');
+      const count = 50;
+
+      for (let i = 0; i < count; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'particle';
+        particle.style.left = Math.random() * 100 + '%';
+        particle.style.animationDelay = Math.random() * 15 + 's';
+        particle.style.animationDuration = (10 + Math.random() * 10) + 's';
+        particle.style.opacity = 0.3 + Math.random() * 0.4;
+        container.appendChild(particle);
+      }
+    }
+
+    // ============================================================================
+    // SYNAPSE VISUALIZATION (for download phase)
+    // ============================================================================
+    function createSynapses() {
+      const container = document.getElementById('consciousness-visual');
+      if (!container) return;
+
+      container.innerHTML = '';
+      const positions = [
+        [20, 30], [50, 10], [80, 30],
+        [10, 60], [30, 50], [50, 45], [70, 50], [90, 60],
+        [20, 80], [40, 90], [60, 90], [80, 80],
+        [35, 70], [65, 70], [50, 75]
+      ];
+
+      positions.forEach((pos, i) => {
+        const synapse = document.createElement('div');
+        synapse.className = 'synapse';
+        synapse.style.left = pos[0] + '%';
+        synapse.style.top = pos[1] + '%';
+        synapse.style.animationDelay = (i * 0.2) + 's';
+        container.appendChild(synapse);
+      });
+    }
+
+    // ============================================================================
+    // PHASE NAVIGATION
+    // ============================================================================
+    function goToPhase(phaseIndex) {
+      const currentPhaseEl = document.querySelector('.phase.active');
+      if (currentPhaseEl) {
+        currentPhaseEl.classList.remove('active');
+      }
+
+      state.currentPhase = phaseIndex;
+      const nextPhaseEl = document.getElementById(`phase-${phases[phaseIndex]}`);
+
+      setTimeout(() => {
+        nextPhaseEl.classList.add('active');
+      }, 500);
+
+      // Phase-specific initialization
+      if (phaseIndex === 2) {
+        // Permission phase - start checking
+        checkPermissionLoop();
+      } else if (phaseIndex === 3) {
+        // Download phase
+        createSynapses();
+        startDownload();
+      }
+    }
+
+    // ============================================================================
+    // PHASE ACTIONS
+    // ============================================================================
+    let renderer;
+    let tauriReady = false;
+
+    window.beginGenesis = function() {
+      // Animate genesis progress for voice phase
+      state.genesisProgress = 0.1;
+      goToPhase(1);
+
+      // Start listening for audio
+      startAudioVisualization();
+    };
+
+    window.skipVoiceTest = function() {
+      stopAudioVisualization();
+      state.genesisProgress = 0.3;
+      goToPhase(2);
+    };
+
+    window.openAccessibilitySettings = async function() {
+      try {
+        await window.__TAURI__.core.invoke('open_accessibility_settings');
+      } catch (e) {
+        console.error('[Genesis] Failed to open settings:', e);
+      }
+    };
+
+    window.continueToDownload = function() {
+      state.genesisProgress = 0.4;
+      goToPhase(3);
+    };
+
+    window.completeGenesis = async function() {
+      try {
+        await window.__TAURI__.core.invoke('complete_onboarding_and_exit');
+      } catch (e) {
+        console.error('[Genesis] Failed to complete:', e);
+      }
+    };
+
+    window.closeWindow = async function() {
+      try {
+        const { getCurrentWindow } = window.__TAURI__.window;
+        await getCurrentWindow().close();
+      } catch (e) {
+        console.error('[Genesis] Failed to close:', e);
+        // Fallback
+        window.close();
+      }
+    };
+
+    // ============================================================================
+    // AUDIO VISUALIZATION
+    // ============================================================================
+    let audioStream = null;
+    let audioContext = null;
+    let analyser = null;
+    let audioVisualizationInterval = null;
+
+    async function startAudioVisualization() {
+      try {
+        audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioContext = new AudioContext();
+        const source = audioContext.createMediaStreamSource(audioStream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+
+        const statusWaiting = document.getElementById('status-waiting');
+        const statusHearing = document.getElementById('status-hearing');
+        const statusCreating = document.getElementById('status-creating');
+        const hint = document.getElementById('voice-hint');
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        let voiceDetectedCount = 0;
+        let peakLevel = 0;
+
+        audioVisualizationInterval = setInterval(() => {
+          analyser.getByteFrequencyData(dataArray);
+          const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+          const level = avg / 255;
+
+          // Smooth audio level for shader
+          state.audioLevel = state.audioLevel * 0.7 + level * 0.3;
+
+          // Track peak for genesis progress
+          if (level > peakLevel) peakLevel = level;
+
+          // Update status based on audio level
+          if (level > 0.1) {
+            statusWaiting.classList.add('hidden');
+            statusHearing.classList.remove('hidden');
+            statusHearing.classList.add('active');
+            hint.style.opacity = '0';
+            voiceDetectedCount++;
+
+            // Evolve genesis progress based on sustained voice
+            state.genesisProgress = Math.min(0.3, 0.1 + (voiceDetectedCount / 60) * 0.2);
+
+            if (voiceDetectedCount > 40) {
+              // Voice sustained! Show creating
+              statusHearing.classList.add('hidden');
+              statusCreating.classList.remove('hidden');
+              statusCreating.classList.add('active');
+            }
+
+            if (voiceDetectedCount > 60) {
+              // Success - proceed to next phase
+              clearInterval(audioVisualizationInterval);
+
+              setTimeout(() => {
+                stopAudioVisualization();
+                state.genesisProgress = 0.3;
+                goToPhase(2);
+              }, 1000);
+            }
+          } else if (voiceDetectedCount > 0 && voiceDetectedCount < 40) {
+            // Voice stopped but not enough - keep listening
+            voiceDetectedCount = Math.max(0, voiceDetectedCount - 1);
+            if (voiceDetectedCount === 0) {
+              statusHearing.classList.add('hidden');
+              statusWaiting.classList.remove('hidden');
+              hint.style.opacity = '';
+            }
+          }
+        }, 50);
+
+      } catch (e) {
+        console.warn('[Genesis] Audio not available:', e);
+        // No mic access - show message and auto-proceed
+        const hint = document.getElementById('voice-hint');
+        hint.textContent = 'microphone not available';
+        setTimeout(() => {
+          state.genesisProgress = 0.3;
+          goToPhase(2);
+        }, 3000);
+      }
+    }
+
+    function stopAudioVisualization() {
+      if (audioVisualizationInterval) {
+        clearInterval(audioVisualizationInterval);
+        audioVisualizationInterval = null;
+      }
+      if (audioStream) {
+        audioStream.getTracks().forEach(track => track.stop());
+        audioStream = null;
+      }
+      if (audioContext) {
+        audioContext.close();
+        audioContext = null;
+      }
+      // Fade out audio level smoothly
+      const fadeAudio = () => {
+        state.audioLevel *= 0.9;
+        if (state.audioLevel > 0.01) {
+          requestAnimationFrame(fadeAudio);
+        } else {
+          state.audioLevel = 0;
+        }
+      };
+      fadeAudio();
+    }
+
+    // ============================================================================
+    // PERMISSION CHECK
+    // ============================================================================
+    let permissionCheckInterval = null;
+
+    async function checkPermissionLoop() {
+      const check = async () => {
+        try {
+          const granted = await window.__TAURI__.core.invoke('check_accessibility_permission');
+          const statusEl = document.getElementById('permission-status');
+          const textEl = document.getElementById('permission-text');
+
+          if (granted && !state.permissionGranted) {
+            state.permissionGranted = true;
+            state.genesisProgress = 0.5;
+            statusEl.classList.remove('pending');
+            statusEl.classList.add('granted');
+            textEl.textContent = 'Permission granted';
+
+            // Auto-advance after a moment
+            setTimeout(() => {
+              goToPhase(3);
+            }, 2000);
+          }
+        } catch (e) {
+          console.error('[Genesis] Permission check failed:', e);
+        }
+      };
+
+      check();
+      permissionCheckInterval = setInterval(check, 1000);
+    }
+
+    // ============================================================================
+    // DOWNLOAD
+    // ============================================================================
+    async function startDownload() {
+      const progressEl = document.getElementById('download-progress');
+      const sizeEl = document.getElementById('download-size');
+      const percentEl = document.getElementById('download-percent');
+      const messageEl = document.getElementById('download-message');
+
+      let downloadComplete = false;
+
+      // Helper to show completion and advance
+      const completeDownload = () => {
+        if (downloadComplete) return;
+        downloadComplete = true;
+
+        state.genesisProgress = 1.0;
+        progressEl.style.width = '100%';
+        percentEl.textContent = '100%';
+        sizeEl.textContent = 'Complete';
+        messageEl.textContent = 'Consciousness formed';
+
+        setTimeout(() => {
+          goToPhase(4);
+        }, 1500);
+      };
+
+      try {
+        // Listen for progress events
+        await window.__TAURI__.event.listen('download-progress', (event) => {
+          const { downloaded, total, percent } = event.payload;
+
+          state.downloadPercent = percent;
+          state.genesisProgress = 0.5 + (percent / 100) * 0.4;
+
+          progressEl.style.width = percent + '%';
+          percentEl.textContent = Math.round(percent) + '%';
+
+          if (total > 0 && total < 1000) {
+            // Already downloaded case - backend sends 100/100
+            sizeEl.textContent = 'Already downloaded';
+          } else {
+            sizeEl.textContent = `${(downloaded / 1024 / 1024).toFixed(1)} MB / ${(total / 1024 / 1024).toFixed(1)} MB`;
+          }
+
+          // Update message based on progress
+          const msgIndex = Math.floor((percent / 100) * (downloadMessages.length - 1));
+          messageEl.textContent = downloadMessages[msgIndex];
+
+          // If we got 100%, mark as complete
+          if (percent >= 100) {
+            completeDownload();
+          }
+        });
+
+        // Small delay to ensure listener is fully registered
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        const result = await window.__TAURI__.core.invoke('download_whisper_model');
+
+        // If invoke returned success, ensure we complete
+        // (handles case where event arrives before/after invoke returns)
+        if (result && result.success) {
+          // Give event a moment to process, then force complete
+          setTimeout(() => {
+            completeDownload();
+          }, 500);
+        }
+
+      } catch (e) {
+        console.error('[Genesis] Download failed:', e);
+        messageEl.textContent = 'Download failed. Please try again.';
+      }
+    }
+
+    // ============================================================================
+    // INITIALIZATION
+    // ============================================================================
+    async function init() {
+      console.log('[Genesis] Initializing...');
+
+      // Create ambient particles
+      createParticles();
+
+      // Initialize renderer
+      renderer = new GenesisRenderer(document.getElementById('genesis-canvas'));
+      await renderer.init();
+      renderer.start();
+
+      // Wait for Tauri
+      if (typeof window.__TAURI__ !== 'undefined') {
+        tauriReady = true;
+        console.log('[Genesis] Tauri ready');
+      } else {
+        const waitForTauri = () => {
+          if (typeof window.__TAURI__ !== 'undefined') {
+            tauriReady = true;
+            console.log('[Genesis] Tauri ready (polled)');
+          } else {
+            setTimeout(waitForTauri, 50);
+          }
+        };
+        waitForTauri();
+      }
+
+      console.log('[Genesis] Ready');
+    }
+
+    // Start
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</body>
+</html>

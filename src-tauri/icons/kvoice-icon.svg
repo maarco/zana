@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <!-- Main gradient - cosmic fire theme -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="50%" style="stop-color:#16213e"/>
+      <stop offset="100%" style="stop-color:#0f0f23"/>
+    </linearGradient>
+
+    <!-- Fire/energy gradient -->
+    <linearGradient id="fireGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#ff4444"/>
+      <stop offset="50%" style="stop-color:#ff6b35"/>
+      <stop offset="100%" style="stop-color:#ffaa00"/>
+    </linearGradient>
+
+    <!-- Glow effect -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="20" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Inner glow -->
+    <filter id="innerGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Radial gradient for orb -->
+    <radialGradient id="orbGrad" cx="30%" cy="30%" r="70%">
+      <stop offset="0%" style="stop-color:#ffcc00"/>
+      <stop offset="40%" style="stop-color:#ff6b35"/>
+      <stop offset="70%" style="stop-color:#ff4444"/>
+      <stop offset="100%" style="stop-color:#cc0000"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background rounded square -->
+  <rect x="0" y="0" width="1024" height="1024" rx="220" ry="220" fill="url(#bgGrad)"/>
+
+  <!-- Subtle star field -->
+  <circle cx="150" cy="200" r="2" fill="rgba(255,255,255,0.4)"/>
+  <circle cx="850" cy="180" r="3" fill="rgba(255,255,255,0.3)"/>
+  <circle cx="200" cy="750" r="2" fill="rgba(255,255,255,0.5)"/>
+  <circle cx="820" cy="820" r="2" fill="rgba(255,255,255,0.4)"/>
+  <circle cx="180" cy="500" r="1.5" fill="rgba(255,255,255,0.3)"/>
+  <circle cx="870" cy="550" r="2" fill="rgba(255,255,255,0.35)"/>
+  <circle cx="300" cy="150" r="1.5" fill="rgba(255,255,255,0.4)"/>
+  <circle cx="750" cy="880" r="1.5" fill="rgba(255,255,255,0.3)"/>
+
+  <!-- Outer glow ring -->
+  <circle cx="512" cy="512" r="280" fill="none" stroke="url(#fireGrad)" stroke-width="3" opacity="0.3" filter="url(#glow)"/>
+
+  <!-- Main orb with fire gradient -->
+  <circle cx="512" cy="512" r="240" fill="url(#orbGrad)" filter="url(#glow)"/>
+
+  <!-- Inner highlight -->
+  <ellipse cx="420" cy="420" rx="80" ry="60" fill="rgba(255,255,255,0.3)" transform="rotate(-30 420 420)"/>
+
+  <!-- Sound waves emanating from orb -->
+  <g stroke="url(#fireGrad)" fill="none" stroke-linecap="round" opacity="0.8">
+    <!-- Left waves -->
+    <path d="M 220 512 Q 180 420, 220 350" stroke-width="12" opacity="0.9"/>
+    <path d="M 170 512 Q 120 400, 170 300" stroke-width="10" opacity="0.7"/>
+    <path d="M 120 512 Q 60 380, 120 260" stroke-width="8" opacity="0.5"/>
+
+    <!-- Right waves -->
+    <path d="M 804 512 Q 844 420, 804 350" stroke-width="12" opacity="0.9"/>
+    <path d="M 854 512 Q 904 400, 854 300" stroke-width="10" opacity="0.7"/>
+    <path d="M 904 512 Q 964 380, 904 260" stroke-width="8" opacity="0.5"/>
+
+    <!-- Bottom waves -->
+    <path d="M 512 804 Q 420 844, 350 804" stroke-width="12" opacity="0.9"/>
+    <path d="M 512 854 Q 400 904, 300 854" stroke-width="10" opacity="0.7"/>
+  </g>
+
+  <!-- Center "K" letter stylized -->
+  <g transform="translate(512, 512)">
+    <text x="-85" y="55" font-family="SF Pro Display, -apple-system, Helvetica Neue, Arial" font-size="280" font-weight="700" fill="white" filter="url(#innerGlow)">K</text>
+  </g>
+</svg>

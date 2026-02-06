@@ -1,0 +1,136 @@
+{
+  "$schema": "https://schema.tauri.app/config/2.0",
+  "productName": "kVoice",
+  "version": "1.0.0",
+  "identifier": "app.kvoice",
+  "build": {
+    "frontendDist": "../src-ui"
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "app"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "Utility",
+    "copyright": "Copyright © 2025 kVoice",
+    "shortDescription": "Speech-to-text with beautiful visualizations",
+    "longDescription": "kVoice is a privacy-first speech-to-text application with beautiful audio visualizations. Uses local Whisper models for transcription - your voice never leaves your device.",
+    "macOS": {
+      "entitlements": "./entitlements.plist",
+      "exceptionDomain": "",
+      "frameworks": [],
+      "providerShortName": null,
+      "signingIdentity": null,
+      "minimumSystemVersion": "10.15",
+      "dmg": {
+        "appPosition": {
+          "x": 180,
+          "y": 170
+        },
+        "applicationFolderPosition": {
+          "x": 480,
+          "y": 170
+        },
+        "windowSize": {
+          "width": 660,
+          "height": 400
+        },
+        "background": null
+      }
+    },
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "",
+      "wix": {
+        "language": "en-US"
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": []
+      }
+    }
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "macOSPrivateApi": true,
+    "windows": [],
+    "security": {
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPDATA/**", "$RESOURCE/**"]
+      },
+      "capabilities": [
+        {
+          "identifier": "main-capability",
+          "description": "Main window capabilities",
+          "windows": ["main"],
+          "permissions": [
+            "core:event:allow-listen",
+            "core:event:allow-emit",
+            "core:event:default",
+            "core:window:allow-show",
+            "core:window:allow-hide",
+            "core:window:allow-close",
+            "core:window:allow-minimize",
+            "core:window:allow-maximize",
+            "core:window:allow-unmaximize",
+            "dialog:allow-open",
+            "dialog:default",
+            "shell:allow-open"
+          ]
+        },
+        {
+          "identifier": "orb-capability",
+          "description": "Orb window display capabilities",
+          "windows": ["orb"],
+          "permissions": [
+            "core:event:allow-listen",
+            "core:event:allow-emit",
+            "core:window:allow-show",
+            "core:window:allow-hide",
+            "core:window:allow-close"
+          ]
+        },
+        {
+          "identifier": "onboarding-capability",
+          "description": "Onboarding window capabilities",
+          "windows": ["onboarding"],
+          "permissions": [
+            "core:event:allow-listen",
+            "core:event:allow-emit",
+            "core:window:allow-close",
+            "shell:allow-open"
+          ]
+        }
+      ]
+    },
+    "trayIcon": {
+      "iconPath": "icons/tray-icon-template.png",
+      "iconAsTemplate": true
+    }
+  },
+  "plugins": {
+    "fs": {},
+    "shell": {
+      "open": true
+    },
+    "log": {
+      "level": "info",
+      "targets": [
+        {
+          "kind": "file",
+          "name": "kvoice.log",
+          "level": "info"
+        }
+      ]
+    }
+  }
+}

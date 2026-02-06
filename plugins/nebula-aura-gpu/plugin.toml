@@ -1,0 +1,94 @@
+# Nebula Aura GPU - Hardware Accelerated Visualization
+# A cosmic nebula rendered entirely on the GPU using WebGPU/WGSL shaders
+
+[plugin]
+id = "nebula-aura-gpu"
+name = "Nebula Aura (GPU)"
+version = "1.0.0"
+description = "GPU-accelerated cosmic nebula visualization with real-time shader effects"
+author = "kVoice Team"
+license = "MIT"
+homepage = "https://kvoice.app/plugins/nebula-aura-gpu"
+
+[plugin.type]
+kind = "orb-style"
+renderer = "webgpu"  # Indicates GPU rendering
+
+[plugin.capabilities]
+audio_level = true
+audio_fft = true
+transcription_events = false
+settings_read = true
+settings_write = false
+network = false
+filesystem = false
+
+[plugin.ui]
+default_width = 500
+default_height = 500
+transparent = true
+resizable = true
+min_width = 200
+min_height = 200
+
+[[plugin.config.options]]
+key = "cloud_count"
+label = "Cloud Count"
+description = "Number of swirling nebula clouds"
+type = "number"
+default = 7
+min = 3
+max = 15
+
+[[plugin.config.options]]
+key = "particle_count"
+label = "Particle Count"
+description = "Number of sparkle particles (GPU instanced)"
+type = "number"
+default = 200
+min = 50
+max = 1000
+
+[[plugin.config.options]]
+key = "glow_intensity"
+label = "Glow Intensity"
+description = "Brightness of the nebula glow"
+type = "number"
+default = 1.0
+min = 0.3
+max = 2.5
+
+[[plugin.config.options]]
+key = "color_scheme"
+label = "Color Scheme"
+description = "Color palette for the visualization"
+type = "select"
+default = "purple"
+options = ["purple", "cyan", "fire", "aurora", "cosmic"]
+
+[[plugin.config.options]]
+key = "rotation_speed"
+label = "Rotation Speed"
+description = "Speed of cloud rotation"
+type = "number"
+default = 1.0
+min = 0.1
+max = 3.0
+
+[[plugin.config.options]]
+key = "bloom_enabled"
+label = "Bloom Effect"
+description = "Enable HDR bloom post-processing"
+type = "boolean"
+default = true
+
+[[plugin.config.options]]
+key = "quality"
+label = "Render Quality"
+description = "Shader quality level"
+type = "select"
+default = "high"
+options = ["low", "medium", "high", "ultra"]
+
+[plugin.dev]
+debug = false

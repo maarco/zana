@@ -1,0 +1,81 @@
+[package]
+name = "kvoice"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Cross-platform speech-to-text with beautiful audio visualizations"
+
+[lib]
+name = "kvoice"
+path = "lib.rs"
+
+[[bin]]
+name = "kvoice"
+path = "main.rs"
+
+[dependencies]
+# GUI Framework
+eframe.workspace = true
+egui.workspace = true
+egui-wgpu.workspace = true
+wgpu.workspace = true
+winit.workspace = true
+
+# Workspace dependencies
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+log.workspace = true
+env_logger.workspace = true
+cpal.workspace = true
+hound.workspace = true
+whisper-rs.workspace = true
+audiopus.workspace = true
+symphonia.workspace = true
+webm-iterable.workspace = true
+futures-util.workspace = true
+async-trait.workspace = true
+reqwest.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+dirs.workspace = true
+notify.workspace = true
+wasmtime.workspace = true
+
+# Additional dependencies for egui/wgpu
+bytemuck = { version = "1.21", features = ["derive"] }
+raw-window-handle = "0.6"
+pollster = "0.3"
+
+[dev-dependencies]
+# Testing
+criterion = "0.5"
+tempfile = "3"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+cocoa = "0.26"
+objc = "0.2"
+block = "0.1"
+
+[dependencies.arboard]
+version = "3"
+
+[dependencies.enigo]
+version = "0.2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.58", features = ["Win32_UI_WindowsAndMessaging"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[profile.dev]
+opt-level = 0

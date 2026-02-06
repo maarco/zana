@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>kVoice Orb</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      overflow: hidden;
+      -webkit-app-region: drag;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .status {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255,255,255,0.6);
+      font-family: system-ui, sans-serif;
+      font-size: 12px;
+      text-align: center;
+      pointer-events: none;
+      -webkit-app-region: no-drag;
+    }
+    .status.recording { color: rgba(255,100,100,0.9); }
+    .status.processing { color: rgba(100,200,255,0.9); }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="status" class="status"></div>
+
+  <!-- Notifications system -->
+  <script src="notifications.js"></script>
+  <!-- Load orb renderer - change this to switch between nebula/fire -->
+  <script src="orb-fire-v8.js"></script>
+</body>
+</html>

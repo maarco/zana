@@ -1,0 +1,78 @@
+# Nebula Aura - kVoice Default Visualization
+# A cosmic nebula with swirling particles that respond to your voice
+
+[plugin]
+id = "nebula-aura"
+name = "Nebula Aura"
+version = "1.0.0"
+description = "Cosmic nebula visualization with swirling particles that respond to your voice"
+author = "kVoice Team"
+license = "MIT"
+homepage = "https://kvoice.app/plugins/nebula-aura"
+
+[plugin.type]
+kind = "orb-style"
+
+[plugin.capabilities]
+audio_level = true
+audio_fft = true
+transcription_events = false
+settings_read = true
+settings_write = false
+network = false
+filesystem = false
+
+[plugin.ui]
+default_width = 500
+default_height = 500
+transparent = true
+resizable = true
+min_width = 200
+min_height = 200
+
+[[plugin.config.options]]
+key = "particle_density"
+label = "Particle Density"
+description = "Number of nebula particles (affects performance)"
+type = "number"
+default = 1.0
+min = 0.5
+max = 2.0
+
+[[plugin.config.options]]
+key = "glow_intensity"
+label = "Glow Intensity"
+description = "Brightness of the nebula glow"
+type = "number"
+default = 1.0
+min = 0.5
+max = 2.0
+
+[[plugin.config.options]]
+key = "color_scheme"
+label = "Color Scheme"
+description = "Color palette for the visualization"
+type = "select"
+default = "purple"
+options = ["purple", "cyan", "fire", "rainbow"]
+
+[[plugin.config.options]]
+key = "sparkle_count"
+label = "Sparkle Count"
+description = "Number of sparkle particles"
+type = "number"
+default = 40
+min = 0
+max = 100
+
+[[plugin.config.options]]
+key = "cloud_count"
+label = "Cloud Count"
+description = "Number of swirling clouds"
+type = "number"
+default = 7
+min = 3
+max = 12
+
+[plugin.dev]
+debug = false

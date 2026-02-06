@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>kVoice</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Main orb visualization -->
+  <div id="orb-container">
+    <canvas id="orb-canvas"></canvas>
+
+    <!-- Controls overlay -->
+    <div id="controls">
+      <!-- Record button (center) -->
+      <button id="btn-record" class="orb-btn btn-primary" title="Record">
+        <svg id="icon-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+        <svg id="icon-stop" viewBox="0 0 24 24" fill="currentColor" style="display:none;">
+          <rect x="6" y="6" width="12" height="12" rx="2"/>
+        </svg>
+        <svg id="icon-spinner" class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;">
+          <circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="12"/>
+        </svg>
+      </button>
+
+      <!-- Settings button (top) -->
+      <button id="btn-settings" class="orb-btn btn-secondary btn-top" title="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+
+      <!-- Close button (bottom) -->
+      <button id="btn-close" class="orb-btn btn-secondary btn-bottom" title="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Transcription output -->
+    <div id="transcription" class="hidden">
+      <div id="transcription-text"></div>
+      <button id="btn-copy" title="Copy to clipboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Status indicator -->
+    <div id="status"></div>
+  </div>
+
+  <!-- Settings panel -->
+  <div id="settings-panel" class="hidden">
+    <div class="settings-header">
+      <h2>Settings</h2>
+      <button id="btn-close-settings">&times;</button>
+    </div>
+
+    <div class="settings-content">
+      <!-- Whisper Model -->
+      <div class="setting-group">
+        <label>Whisper Model</label>
+        <select id="select-model">
+          <option value="tiny">Tiny (39 MB)</option>
+          <option value="base">Base (140 MB)</option>
+          <option value="small" selected>Small (466 MB)</option>
+          <option value="medium">Medium (1.5 GB)</option>
+          <option value="large">Large v3 (2.9 GB)</option>
+        </select>
+        <div id="model-status"></div>
+        <button id="btn-download-model" class="btn-small">Download</button>
+      </div>
+
+      <!-- Audio Device -->
+      <div class="setting-group">
+        <label>Audio Device</label>
+        <select id="select-device">
+          <option value="">System Default</option>
+        </select>
+      </div>
+
+      <!-- Color Scheme -->
+      <div class="setting-group">
+        <label>Color Scheme</label>
+        <select id="select-color">
+          <option value="purple" selected>Purple</option>
+          <option value="cyan">Cyan</option>
+          <option value="fire">Fire</option>
+          <option value="aurora">Aurora</option>
+          <option value="cosmic">Cosmic</option>
+        </select>
+      </div>
+
+      <!-- Quality -->
+      <div class="setting-group">
+        <label>Render Quality</label>
+        <select id="select-quality">
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high" selected>High</option>
+          <option value="ultra">Ultra</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts - cache bust with timestamp -->
+  <script>
+    // Force reload JS to avoid WebKit caching
+    const script = document.createElement('script');
+    script.type = 'module';
+    script.src = 'app.js?v=' + Date.now();
+    document.body.appendChild(script);
+  </script>
+</body>
+</html>

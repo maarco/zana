@@ -1,0 +1,58 @@
+[package]
+name = "kvoice-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Cross-platform speech-to-text with beautiful audio visualizations"
+build = "build.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+# Tauri
+tauri = { version = "2.0", features = ["macos-private-api", "tray-icon", "protocol-asset"] }
+tauri-plugin-fs = "2.0"
+tauri-plugin-shell = "2.0"
+tauri-plugin-dialog = "2.0"
+tauri-plugin-log = "2.0"
+tauri-plugin-updater = "2.0"
+
+# Workspace dependencies
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+log.workspace = true
+env_logger.workspace = true
+cpal.workspace = true
+hound.workspace = true
+whisper-rs.workspace = true
+audiopus.workspace = true
+symphonia.workspace = true
+webm-iterable.workspace = true
+futures-util.workspace = true
+async-trait.workspace = true
+reqwest.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+dirs.workspace = true
+notify.workspace = true
+wasmtime.workspace = true
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+cocoa = "0.26"
+objc = "0.2"
+block = "0.1"
+tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2.1" }
+arboard = "3"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.58", features = ["Win32_UI_WindowsAndMessaging"] }
