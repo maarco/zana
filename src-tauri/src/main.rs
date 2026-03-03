@@ -12,10 +12,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex as StdMutex;
 use std::time::Instant;
 use tauri::Manager;
-#[cfg(not(target_os = "macos"))]
+#[allow(unused_imports)]
 use tauri::Emitter;
+use tauri::Listener;
 use tauri::menu::{Menu, MenuBuilder, MenuItem, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
-use tauri::tray::TrayIconBuilder;
 
 #[cfg(target_os = "macos")]
 mod panel;
@@ -119,6 +119,10 @@ static FN_KEY_MONITORS: StdMutex<Option<(usize, usize)>> = StdMutex::new(None);
 // Cancel flag for pending hide operations
 #[cfg(target_os = "macos")]
 static HIDE_CANCELLED: AtomicBool = AtomicBool::new(false);
+
+// Windows orb window label
+#[cfg(target_os = "windows")]
+static WIN_ORB_VISIBLE: AtomicBool = AtomicBool::new(false);
 
 /// Create application menu with standard shortcuts
 fn create_app_menu(app: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, tauri::Error> {
@@ -342,27 +346,66 @@ fn main() {
                 setup_fn_key_monitor(app_handle);
             }
 
+            // Setup Ctrl key monitor (Windows)
+            #[cfg(target_os = "windows")]
+            {
+                let app_handle = app.handle().clone();
+                setup_ctrl_key_monitor(app_handle);
+            }
+
             // Setup config file watcher for hot reload
-            #[cfg(target_os = "macos")]
             {
                 setup_config_watcher(app.handle().clone());
             }
 
-            // Setup system tray icon and menu
+            // Listen for orb style changes and relay to the orb panel/window
             {
-                let quit = MenuItem::with_id(app, "quit", "Quit kVoice", true, Some("Cmd+Q"))?;
+                #[cfg(not(target_os = "macos"))]
+                let app_handle = app.handle().clone();
+                app.listen("orb-style-changed", move |event: tauri::Event| {
+                    let style = event.payload().trim_matches('"').to_string();
+                    log::info!("[OrbStyle] Style change received: {}", style);
+
+                    // macOS: push directly to NSPanel via eval_js
+                    #[cfg(target_os = "macos")]
+                    {
+                        let panel_guard = ORB_PANEL.lock().unwrap();
+                        if let Some(ref panel) = *panel_guard {
+                            let escaped = style.replace('\\', "\\\\").replace('"', "\\\"");
+                            let js = format!(
+                                "localStorage.setItem('kvoice_orb_style', '{}'); location.reload()",
+                                escaped
+                            );
+                            eval_js_in_panel(panel, &js);
+                            log::info!("[OrbStyle] Pushed style to NSPanel");
+                        }
+                    }
+
+                    // Windows: emit to the orb window
+                    #[cfg(not(target_os = "macos"))]
+                    {
+                        let _ = app_handle.emit("apply-orb-style", &style);
+                    }
+                });
+            }
+
+            // Setup system tray menu (tray icon created via config in tauri.conf.json)
+            {
+                let quit = MenuItem::with_id(app, "quit", "Quit kVoice", true, Some("CmdOrCtrl+Q"))?;
                 let about = MenuItem::with_id(app, "about", "About kVoice", true, None::<&str>)?;
-                let preferences = MenuItem::with_id(app, "preferences", "Preferences...", true, Some("Cmd+,"))?;
+                let preferences = MenuItem::with_id(app, "preferences", "Preferences...", true, Some("CmdOrCtrl+,"))?;
                 let separator = tauri::menu::PredefinedMenuItem::separator(app)?;
                 let separator2 = tauri::menu::PredefinedMenuItem::separator(app)?;
 
                 let menu = Menu::with_items(app, &[&about, &separator, &preferences, &separator2, &quit])?;
 
-                let _tray = TrayIconBuilder::new()
-                    .icon(app.default_window_icon().cloned().unwrap())
-                    .menu(&menu)
-                    .tooltip("kVoice - Voice to Text")
-                    .on_menu_event(|app, event| {
+                // Try to get the config-created tray icon and add menu
+                if let Some(tray) = app.tray_by_id("main") {
+                    let _ = tray.set_menu(Some(menu));
+                    log::info!("System tray menu attached to config tray icon");
+
+                    // Set up menu event handler on the tray icon
+                    tray.on_menu_event(move |app, event| {
                         match event.id.as_ref() {
                             "quit" => {
                                 log::info!("Quit requested from tray menu");
@@ -406,10 +449,12 @@ fn main() {
                             }
                             _ => {}
                         }
-                    })
-                    .build(app)?;
+                    });
+                } else {
+                    log::warn!("Could not find tray icon by id 'main'");
+                }
 
-                log::info!("System tray icon created");
+                log::info!("System tray configured");
             }
 
             log::info!("kVoice initialized successfully");
@@ -441,6 +486,11 @@ fn main() {
             commands::download_whisper_model,
             commands::mark_onboarding_complete,
             commands::complete_onboarding_and_exit,
+            // Diagnostics
+            commands::run_diagnostics,
+            // Settings
+            commands::set_orb_style,
+            commands::get_orb_style,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -622,8 +672,8 @@ fn hide_orb(app: &tauri::AppHandle) {
 }
 
 /// Setup config file watcher for hot reload
-#[cfg(target_os = "macos")]
-fn setup_config_watcher(_app: tauri::AppHandle) {
+#[allow(unused_variables)]
+fn setup_config_watcher(app: tauri::AppHandle) {
     use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
     use std::sync::mpsc::channel;
     use std::time::Duration;
@@ -683,13 +733,23 @@ fn setup_config_watcher(_app: tauri::AppHandle) {
 
                         // Read the new config
                         if let Ok(content) = std::fs::read_to_string(&config_path) {
-                            // Push to webview
-                            let panel_guard = ORB_PANEL.lock().unwrap();
-                            if let Some(ref panel) = *panel_guard {
-                                let escaped = content.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n");
-                                let js = format!("window.updateConfig && window.updateConfig(\"{}\")", escaped);
-                                eval_js_in_panel(panel, &js);
-                                log::info!("[ConfigWatcher] Config pushed to webview");
+                            // macOS: push via direct WKWebView eval (NSPanel doesn't support Tauri IPC)
+                            #[cfg(target_os = "macos")]
+                            {
+                                let panel_guard = ORB_PANEL.lock().unwrap();
+                                if let Some(ref panel) = *panel_guard {
+                                    let escaped = content.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n");
+                                    let js = format!("window.updateConfig && window.updateConfig(\"{}\")", escaped);
+                                    eval_js_in_panel(panel, &js);
+                                    log::info!("[ConfigWatcher] Config pushed to webview");
+                                }
+                            }
+
+                            // Windows/Linux: push via Tauri emit
+                            #[cfg(not(target_os = "macos"))]
+                            {
+                                let _ = app.emit("config-changed", content);
+                                log::info!("[ConfigWatcher] Config emitted to frontend");
                             }
                         }
                     }
@@ -1026,4 +1086,415 @@ fn paste_text(text: &str) {
         .output();
 
     // Transcription stays in clipboard - user can paste again if needed
+}
+
+// =============================================================================
+// WINDOWS IMPLEMENTATION
+// =============================================================================
+
+/// Setup Ctrl key double-tap monitor using Win32 low-level keyboard hook
+#[cfg(target_os = "windows")]
+fn setup_ctrl_key_monitor(app: tauri::AppHandle) {
+    use std::sync::OnceLock;
+    use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        CallNextHookEx, GetMessageW, SetWindowsHookExW, HHOOK, KBDLLHOOKSTRUCT,
+        MSG, WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
+    };
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        VK_LCONTROL, VK_RCONTROL,
+    };
+
+    static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
+    APP_HANDLE.get_or_init(|| app);
+
+    unsafe extern "system" fn keyboard_hook_proc(
+        n_code: i32,
+        w_param: WPARAM,
+        l_param: LPARAM,
+    ) -> LRESULT {
+        if n_code >= 0 {
+            let kb = &*(l_param.0 as *const KBDLLHOOKSTRUCT);
+            let vk = kb.vkCode as u16;
+            let is_ctrl = vk == VK_LCONTROL.0 || vk == VK_RCONTROL.0;
+
+            if is_ctrl {
+                let is_keydown = w_param.0 == WM_KEYDOWN as usize
+                    || w_param.0 == WM_SYSKEYDOWN as usize;
+                let is_keyup = w_param.0 == WM_KEYUP as usize
+                    || w_param.0 == WM_SYSKEYUP as usize;
+
+                let was_pressed = FN_KEY_PRESSED.load(Ordering::SeqCst);
+
+                if is_keydown && !was_pressed {
+                    FN_KEY_PRESSED.store(true, Ordering::SeqCst);
+                    *LAST_FN_PRESS.lock().unwrap() = Some(Instant::now());
+                    log::info!("[CtrlMonitor] Ctrl PRESSED (vk={})", vk);
+                    if let Some(app) = APP_HANDLE.get() {
+                        handle_ctrl_press(app);
+                    }
+                } else if is_keyup && was_pressed {
+                    FN_KEY_PRESSED.store(false, Ordering::SeqCst);
+                    log::info!("[CtrlMonitor] Ctrl RELEASED (vk={})", vk);
+                    if let Some(app) = APP_HANDLE.get() {
+                        handle_ctrl_release(app);
+                    }
+                }
+            }
+        }
+        unsafe { CallNextHookEx(HHOOK::default(), n_code, w_param, l_param) }
+    }
+
+    log::info!("Setting up Ctrl key monitor (Windows)...");
+
+    std::thread::spawn(move || {
+        unsafe {
+            let hook = SetWindowsHookExW(
+                WH_KEYBOARD_LL,
+                Some(keyboard_hook_proc),
+                None,
+                0,
+            );
+
+            match hook {
+                Ok(h) => {
+                    log::info!("[CtrlMonitor] Low-level keyboard hook installed: {:?}", h);
+                    // Message pump to keep hook alive
+                    let mut msg = MSG::default();
+                    while GetMessageW(&mut msg, None, 0, 0).as_bool() {
+                        // Just pump messages; hook callback does the work
+                    }
+                }
+                Err(e) => {
+                    log::error!("[CtrlMonitor] Failed to install keyboard hook: {}", e);
+                }
+            }
+        }
+    });
+}
+
+/// Handle Ctrl key press on Windows - mirrors macOS handle_fn_press
+#[cfg(target_os = "windows")]
+fn handle_ctrl_press(app: &tauri::AppHandle) {
+    let ms_since_release = LAST_FN_RELEASE
+        .lock()
+        .unwrap()
+        .map(|t| t.elapsed().as_millis())
+        .unwrap_or(999999);
+
+    log::info!(
+        "[CtrlPress] Ctrl pressed ({}ms since last release, IS_RECORDING={}, LATCHED={})",
+        ms_since_release,
+        IS_RECORDING.load(Ordering::SeqCst),
+        LATCHED_RECORDING.load(Ordering::SeqCst)
+    );
+
+    let is_double_tap = ms_since_release < 300;
+
+    if is_double_tap {
+        log::info!("[CtrlPress] DOUBLE-TAP DETECTED ({}ms)", ms_since_release);
+    }
+
+    // If already recording in latched mode, single tap stops it
+    if IS_RECORDING.load(Ordering::SeqCst) && LATCHED_RECORDING.load(Ordering::SeqCst) {
+        log::info!("[CtrlPress] Single tap while latched - stopping recording");
+        win_stop_recording(app);
+        return;
+    }
+
+    // If double-tap, start latched recording mode
+    if is_double_tap && !IS_RECORDING.load(Ordering::SeqCst) {
+        log::info!("[CtrlPress] STARTING LATCHED MODE");
+        LATCHED_RECORDING.store(true, Ordering::SeqCst);
+    }
+
+    // Show orb
+    win_show_orb(app);
+
+    // Start recording
+    if !IS_RECORDING.load(Ordering::SeqCst) {
+        IS_RECORDING.store(true, Ordering::SeqCst);
+        log::info!("[CtrlPress] IS_RECORDING set to true");
+
+        let app_clone = app.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            log::info!("[CtrlPress] Delay complete, emitting events");
+
+            let _ = app_clone.emit("recording-state", serde_json::json!({
+                "recording": true,
+                "transcribing": false
+            }));
+
+            // Start audio capture
+            tauri::async_runtime::spawn(async move {
+                log::info!("[CtrlPress] Starting audio capture...");
+                if let Some(state) = app_clone.try_state::<AppState>() {
+                    let capture = state.audio_capture.lock().await;
+                    match capture.start(None).await {
+                        Ok(_) => log::info!("[CtrlPress] Audio capture started"),
+                        Err(e) => log::error!("[CtrlPress] Failed to start recording: {}", e),
+                    }
+                }
+            });
+        });
+    }
+}
+
+/// Handle Ctrl key release on Windows - mirrors macOS handle_fn_release
+#[cfg(target_os = "windows")]
+fn handle_ctrl_release(app: &tauri::AppHandle) {
+    log::info!(
+        "[CtrlRelease] Ctrl released, IS_RECORDING={}, LATCHED={}",
+        IS_RECORDING.load(Ordering::SeqCst),
+        LATCHED_RECORDING.load(Ordering::SeqCst)
+    );
+
+    *LAST_FN_RELEASE.lock().unwrap() = Some(Instant::now());
+
+    // In latched mode, ignore release
+    if LATCHED_RECORDING.load(Ordering::SeqCst) {
+        log::info!("[CtrlRelease] Latched mode - ignoring release");
+        return;
+    }
+
+    // Check minimum hold duration (300ms)
+    let held_long_enough = LAST_FN_PRESS
+        .lock()
+        .unwrap()
+        .map(|t| t.elapsed().as_millis() >= 300)
+        .unwrap_or(false);
+
+    if !held_long_enough {
+        log::info!("[CtrlRelease] Released too quickly, ignoring");
+        win_hide_orb(app);
+        return;
+    }
+
+    if IS_RECORDING.load(Ordering::SeqCst) {
+        log::info!("[CtrlRelease] Stopping recording (hold mode)");
+        win_stop_recording(app);
+    }
+}
+
+/// Create the orb window on Windows as a transparent always-on-top Tauri window
+#[cfg(target_os = "windows")]
+fn win_create_orb_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    use tauri::{WebviewUrl, WebviewWindowBuilder};
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetWindowLongW, SetWindowLongW, GWL_EXSTYLE,
+        WS_EX_LAYERED, WS_EX_TRANSPARENT,
+    };
+
+    log::info!("[WinOrb] Creating orb window...");
+
+    let orb = WebviewWindowBuilder::new(app, "orb", WebviewUrl::App("orb.html".into()))
+        .title("kVoice Orb")
+        .inner_size(800.0, 600.0)
+        .center()
+        .resizable(false)
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .visible(false)
+        .build()?;
+
+    // Set click-through via Win32 extended window styles
+    if let Ok(hwnd) = orb.hwnd() {
+        let hwnd = HWND(hwnd.0);
+        unsafe {
+            let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE);
+            SetWindowLongW(
+                hwnd,
+                GWL_EXSTYLE,
+                ex_style | WS_EX_TRANSPARENT.0 as i32 | WS_EX_LAYERED.0 as i32,
+            );
+        }
+        log::info!("[WinOrb] Click-through styles applied");
+    }
+
+    log::info!("[WinOrb] Orb window created");
+    Ok(())
+}
+
+/// Show the orb window on Windows
+#[cfg(target_os = "windows")]
+fn win_show_orb(app: &tauri::AppHandle) {
+    // Create if not exists
+    if app.get_webview_window("orb").is_none() {
+        log::info!("[WinOrb] Creating new orb window");
+        if let Err(e) = win_create_orb_window(app) {
+            log::error!("[WinOrb] Failed to create orb: {}", e);
+            return;
+        }
+    }
+
+    if let Some(orb) = app.get_webview_window("orb") {
+        let _ = orb.show();
+        let _ = app.emit("orb-fade-in", ());
+        WIN_ORB_VISIBLE.store(true, Ordering::SeqCst);
+        log::info!("[WinOrb] Orb shown");
+    }
+}
+
+/// Hide the orb window on Windows with fade out
+#[cfg(target_os = "windows")]
+fn win_hide_orb(app: &tauri::AppHandle) {
+    log::info!("[WinOrb] Starting hide");
+    let _ = app.emit("orb-fade-out", ());
+
+    let app_clone = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+
+        if !IS_RECORDING.load(Ordering::SeqCst) {
+            if let Some(orb) = app_clone.get_webview_window("orb") {
+                let _ = orb.hide();
+                WIN_ORB_VISIBLE.store(false, Ordering::SeqCst);
+                log::info!("[WinOrb] Orb hidden");
+            }
+        }
+    });
+}
+
+/// Stop recording, transcribe, and paste on Windows
+#[cfg(target_os = "windows")]
+fn win_stop_recording(app: &tauri::AppHandle) {
+    if !IS_RECORDING.load(Ordering::SeqCst) {
+        return;
+    }
+
+    IS_RECORDING.store(false, Ordering::SeqCst);
+    LATCHED_RECORDING.store(false, Ordering::SeqCst);
+    log::info!("[WinStopRec] Stopping recording");
+
+    let _ = app.emit("recording-state", serde_json::json!({
+        "recording": false,
+        "transcribing": true
+    }));
+
+    let app_clone = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Some(state) = app_clone.try_state::<AppState>() {
+            let capture = state.audio_capture.lock().await;
+            match capture.stop().await {
+                Ok(audio) => {
+                    log::info!("[WinStopRec] Recording stopped: {} samples", audio.samples.len());
+
+                    let whisper = state.whisper_engine.lock().await;
+                    match whisper
+                        .transcribe(&audio.samples, kvoice_app::WhisperModel::Small)
+                        .await
+                    {
+                        Ok(result) => {
+                            log::info!("[WinStopRec] Transcription: {}", result.text);
+
+                            let _ = app_clone.emit("transcription-complete", serde_json::json!({
+                                "text": result.text
+                            }));
+
+                            if !result.text.trim().is_empty() {
+                                win_paste_text(&result.text);
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("[WinStopRec] Transcription failed: {}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::error!("[WinStopRec] Failed to stop recording: {}", e);
+                }
+            }
+        }
+
+        // Wait for animation, then hide
+        tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
+        if !IS_RECORDING.load(Ordering::SeqCst) {
+            win_hide_orb(&app_clone);
+        }
+    });
+}
+
+/// Paste text on Windows using clipboard + SendInput(Ctrl+V)
+#[cfg(target_os = "windows")]
+fn win_paste_text(text: &str) {
+    use arboard::Clipboard;
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP,
+        VK_CONTROL, VK_V,
+    };
+
+    log::info!("[WinPaste] Pasting {} chars", text.len());
+
+    if let Ok(mut clipboard) = Clipboard::new() {
+        if clipboard.set_text(text).is_err() {
+            log::error!("[WinPaste] Failed to set clipboard");
+            return;
+        }
+    }
+
+    std::thread::sleep(std::time::Duration::from_millis(50));
+
+    unsafe {
+        let inputs = [
+            // Ctrl down
+            INPUT {
+                r#type: INPUT_KEYBOARD,
+                Anonymous: INPUT_0 {
+                    ki: KEYBDINPUT {
+                        wVk: VK_CONTROL,
+                        wScan: 0,
+                        dwFlags: Default::default(),
+                        time: 0,
+                        dwExtraInfo: 0,
+                    },
+                },
+            },
+            // V down
+            INPUT {
+                r#type: INPUT_KEYBOARD,
+                Anonymous: INPUT_0 {
+                    ki: KEYBDINPUT {
+                        wVk: VK_V,
+                        wScan: 0,
+                        dwFlags: Default::default(),
+                        time: 0,
+                        dwExtraInfo: 0,
+                    },
+                },
+            },
+            // V up
+            INPUT {
+                r#type: INPUT_KEYBOARD,
+                Anonymous: INPUT_0 {
+                    ki: KEYBDINPUT {
+                        wVk: VK_V,
+                        wScan: 0,
+                        dwFlags: KEYEVENTF_KEYUP,
+                        time: 0,
+                        dwExtraInfo: 0,
+                    },
+                },
+            },
+            // Ctrl up
+            INPUT {
+                r#type: INPUT_KEYBOARD,
+                Anonymous: INPUT_0 {
+                    ki: KEYBDINPUT {
+                        wVk: VK_CONTROL,
+                        wScan: 0,
+                        dwFlags: KEYEVENTF_KEYUP,
+                        time: 0,
+                        dwExtraInfo: 0,
+                    },
+                },
+            },
+        ];
+
+        let sent = SendInput(&inputs, std::mem::size_of::<INPUT>() as i32);
+        log::info!("[WinPaste] SendInput sent {} events", sent);
+    }
 }

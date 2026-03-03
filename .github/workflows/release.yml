@@ -62,21 +62,57 @@ jobs:
           name: kVoice-macos-universal
           path: kVoice-*.dmg
 
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build Windows installer
+        run: cargo tauri build
+
+      - name: Upload NSIS installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: kVoice-windows-nsis
+          path: target/release/bundle/nsis/*.exe
+
   create-release:
-    needs: build-macos
+    needs: [build-macos, build-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Download artifacts
+      - name: Download macOS artifacts
         uses: actions/download-artifact@v4
         with:
           name: kVoice-macos-universal
 
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: kVoice-windows-nsis
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: kVoice-*.dmg
+          files: |
+            kVoice-*.dmg
+            *.exe
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') }}

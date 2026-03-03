@@ -176,10 +176,10 @@ pub async fn set_model(state: State<'_, AppState>, model_id: String) -> Result<R
 /// Transcribe the last recorded audio
 #[tauri::command]
 pub async fn transcribe(state: State<'_, AppState>) -> Result<TranscriptionResponse, String> {
-    // Get captured audio
+    // Take captured audio (moves it out, freeing the memory after transcription)
     let audio = {
-        let audio = state.captured_audio.lock().await;
-        audio.clone()
+        let mut audio = state.captured_audio.lock().await;
+        audio.take()
     };
 
     let audio = match audio {

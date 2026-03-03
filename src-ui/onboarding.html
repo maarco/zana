@@ -741,7 +741,7 @@
     <!-- PHASE 2: PERMISSION - SOUL BINDING -->
     <div class="phase" id="phase-permission">
       <div class="title">Grant the gift of presence</div>
-      <div class="subtitle">
+      <div class="subtitle" id="permission-subtitle">
         To hear you from anywhere, kVoice needs accessibility permission.
         This allows the Fn key to summon your voice assistant instantly.
       </div>
@@ -784,17 +784,17 @@
       </div>
 
       <div class="ready-bottom">
-        <div class="instructions-container">
+        <div class="instructions-container" id="key-instructions">
           <div class="instruction-row">
             <div class="key-visual">
-              <span class="key">Fn</span>
+              <span class="key" id="key-hold">Fn</span>
               <span class="key-action">Hold</span>
             </div>
             <span class="instruction-text">Hold to record, release to transcribe</span>
           </div>
           <div class="instruction-row">
             <div class="key-visual">
-              <span class="key">Fn</span>
+              <span class="key" id="key-double">Fn</span>
               <span class="key-action">x2</span>
             </div>
             <span class="instruction-text">Double-tap for hands-free mode</span>
@@ -810,6 +810,10 @@
     // ============================================================================
     // STATE
     // ============================================================================
+    // Platform detection
+    const isWindows = navigator.platform.indexOf('Win') !== -1
+      || navigator.userAgent.indexOf('Windows') !== -1;
+
     const state = {
       currentPhase: 0,
       audioLevel: 0,
@@ -1256,7 +1260,13 @@
 
       // Phase-specific initialization
       if (phaseIndex === 2) {
-        // Permission phase - start checking
+        if (isWindows) {
+          // Windows doesn't need accessibility permission - skip to download
+          state.genesisProgress = 0.4;
+          setTimeout(() => goToPhase(3), 500);
+          return;
+        }
+        // macOS: Permission phase - start checking
         checkPermissionLoop();
       } else if (phaseIndex === 3) {
         // Download phase
@@ -1544,6 +1554,12 @@
     // ============================================================================
     async function init() {
       console.log('[Genesis] Initializing...');
+
+      // Platform-specific key labels
+      if (isWindows) {
+        document.getElementById('key-hold').textContent = 'Ctrl';
+        document.getElementById('key-double').textContent = 'Ctrl';
+      }
 
       // Create ambient particles
       createParticles();

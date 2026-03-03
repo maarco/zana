@@ -242,9 +242,15 @@
           <div class="setting-desc">Visual style for the recording indicator</div>
         </div>
         <select id="orb-style">
-          <option value="fire" selected>Cosmic Fire</option>
+          <option value="fire-v8" selected>Cosmic Fire V8 (Latest)</option>
+          <option value="fire-v7">Cosmic Fire V7</option>
+          <option value="fire-v6">Cosmic Fire V6</option>
+          <option value="fire-v5">Cosmic Fire V5</option>
+          <option value="fire-v4">Cosmic Fire V4</option>
+          <option value="fire-v3">Cosmic Fire V3</option>
+          <option value="fire-v2">Cosmic Fire V2</option>
+          <option value="fire">Cosmic Fire V1</option>
           <option value="nebula">Nebula Aura</option>
-          <option value="blackhole">Black Hole</option>
         </select>
       </div>
 
@@ -254,6 +260,23 @@
           <div class="setting-desc">Display kVoice icon in menu bar</div>
         </div>
         <div class="toggle active" id="menubar-toggle"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Diagnostics</div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Run Health Check</div>
+          <div class="setting-desc">Check permissions, audio, and keyboard setup</div>
+        </div>
+        <button class="btn-primary" onclick="runDoctor()">Doctor</button>
+      </div>
+
+      <div id="doctor-results" style="display: none; margin-top: 12px; padding: 12px; background: #181825; border-radius: 8px; font-family: monospace; font-size: 12px;">
+        <div style="margin-bottom: 8px; font-weight: 600;" id="doctor-status">running checks...</div>
+        <div id="doctor-output"></div>
       </div>
     </div>
 
@@ -271,7 +294,65 @@
       });
     });
 
-    function savePreferences() {
+    async function runDoctor() {
+      const results = document.getElementById('doctor-results');
+      const status = document.getElementById('doctor-status');
+      const output = document.getElementById('doctor-output');
+
+      results.style.display = 'block';
+      status.textContent = 'running checks...';
+      output.innerHTML = '';
+
+      if (!window.__TAURI__) {
+        status.textContent = 'not running in tauri';
+        output.innerHTML = 'doctor only works in the installed app';
+        return;
+      }
+
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const { open } = await import('@tauri-apps/api/shell');
+
+        const diagnostics = await invoke('run_diagnostics');
+
+        let html = '';
+        let allGood = true;
+
+        for (const [key, value] of Object.entries(diagnostics)) {
+          const isGood = value.status === 'ok';
+          allGood = allGood && isGood;
+          const icon = isGood ? '✔' : '✖';
+          const color = isGood ? '#a6e3a1' : '#f38ba8';
+
+          html += `<div style="margin-bottom: 8px;">
+            <span style="color: ${color}">${icon}</span>
+            <strong style="color: #cdd6f4">${value.name}</strong>
+            <div style="color: #a6adc8; margin-left: 20px;">${value.message}</div>
+          </div>`;
+
+          if (value.fix) {
+            html += `<div style="margin-left: 20px; margin-bottom: 8px;">
+              <button onclick="${value.fix_action}" style="padding: 4px 12px; font-size: 11px; background: #89b4fa; border: none; border-radius: 4px; cursor: pointer;">${value.fix}</button>
+            </div>`;
+          }
+        }
+
+        output.innerHTML = html;
+        status.textContent = allGood ? 'all systems go' : 'issues found';
+        status.style.color = allGood ? '#a6e3a1' : '#f38ba8';
+
+      } catch (e) {
+        status.textContent = 'error running diagnostics';
+        output.innerHTML = `<div style="color: #f38ba8">${e}</div>`;
+      }
+    }
+
+    async function openAccessibilitySettings() {
+      const { open } = await import('@tauri-apps/api/shell');
+      open('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
+    }
+
+    async function savePreferences() {
       const prefs = {
         whisperModel: document.getElementById('whisper-model').value,
         language: document.getElementById('language').value,
@@ -284,10 +365,34 @@
         showInMenuBar: document.getElementById('menubar-toggle').classList.contains('active')
       };
 
-      // TODO: Save via Tauri IPC
-      console.log('Saving preferences:', prefs);
+      // Push orb style change through Rust backend
+      // (Rust relays to NSPanel via eval_js on macOS, emit on Windows)
+      if (window.__TAURI__) {
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          await invoke('set_orb_style', { style: prefs.orbStyle });
+        } catch (e) {
+          console.error('Failed to set orb style:', e);
+        }
+      }
+
+      console.log('Preferences saved:', prefs);
       window.close();
     }
+
+    // Load current orb style on page load
+    document.addEventListener('DOMContentLoaded', async () => {
+      let currentOrbStyle = 'fire-v8';
+      if (window.__TAURI__) {
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          currentOrbStyle = await invoke('get_orb_style');
+        } catch (e) {
+          console.warn('Failed to get orb style from backend:', e);
+        }
+      }
+      document.getElementById('orb-style').value = currentOrbStyle;
+    });
   </script>
 </body>
 </html>

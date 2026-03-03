@@ -78,13 +78,16 @@ pub async fn stop_recording(state: State<'_, AppState>) -> Result<StopRecordingR
 
     match capture.stop().await {
         Ok(audio) => {
-            // Store captured audio for transcription
-            *state.captured_audio.lock().await = Some(audio.clone());
+            let duration_ms = audio.duration_ms;
+            let sample_count = audio.samples.len();
+
+            // Store captured audio for transcription (move, don't clone)
+            *state.captured_audio.lock().await = Some(audio);
 
             Ok(StopRecordingResponse {
                 success: true,
-                duration_ms: audio.duration_ms,
-                sample_count: audio.samples.len(),
+                duration_ms,
+                sample_count,
                 error: None,
             })
         }

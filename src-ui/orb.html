@@ -42,7 +42,43 @@
 
   <!-- Notifications system -->
   <script src="notifications.js"></script>
-  <!-- Load orb renderer - change this to switch between nebula/fire -->
-  <script src="orb-fire-v8.js"></script>
+  <!-- Orb renderer loaded dynamically based on preference -->
+  <script id="orb-script"></script>
+  <script>
+    // Map style names to script files
+    const orbScripts = {
+      'nebula': 'orb-nebula.js',
+      'fire': 'orb-fire.js',
+      'fire-v2': 'orb-fire-v2.js',
+      'fire-v3': 'orb-fire-v3.js',
+      'fire-v4': 'orb-fire-v4.js',
+      'fire-v5': 'orb-fire-v5.js',
+      'fire-v6': 'orb-fire-v6.js',
+      'fire-v7': 'orb-fire-v7.js',
+      'fire-v8': 'orb-fire-v8.js'
+    };
+
+    // Get orb style from localStorage (set by Rust via eval_js on macOS)
+    const orbStyle = localStorage.getItem('kvoice_orb_style') || 'fire-v8';
+
+    // Load the selected orb script
+    const scriptSrc = orbScripts[orbStyle] || orbScripts['fire-v8'];
+    const scriptEl = document.getElementById('orb-script');
+    scriptEl.src = scriptSrc;
+
+    console.log('[Orb] Loaded style:', orbStyle, 'from', scriptSrc);
+
+    // Windows/Linux: listen for style changes via Tauri emit
+    // (macOS uses eval_js to set localStorage + reload directly)
+    if (window.__TAURI__) {
+      import('@tauri-apps/api/event').then(({ listen }) => {
+        listen('apply-orb-style', (event) => {
+          console.log('[Orb] Style changed via Tauri:', event.payload);
+          localStorage.setItem('kvoice_orb_style', event.payload);
+          location.reload();
+        });
+      });
+    }
+  </script>
 </body>
 </html>

@@ -41,6 +41,8 @@ pub struct CaptureConfig {
     pub fft_size: usize,
     /// Audio level smoothing factor (0-1, higher = smoother)
     pub level_smoothing: f32,
+    /// Maximum recording duration in seconds (caps memory usage)
+    pub max_duration_secs: u64,
 }
 
 impl Default for CaptureConfig {
@@ -50,6 +52,7 @@ impl Default for CaptureConfig {
             channels: 1,        // Mono
             fft_size: 64,       // 32 frequency bins
             level_smoothing: 0.8,
+            max_duration_secs: 300, // 5 minutes max (~19MB at 16kHz)
         }
     }
 }
@@ -83,6 +86,8 @@ struct CaptureState {
     sample_count: u64,
     /// Device sample rate
     device_sample_rate: u32,
+    /// Maximum samples to accumulate (prevents unbounded memory growth)
+    max_samples: u64,
 }
 
 /// Command to the audio thread
@@ -135,6 +140,10 @@ impl AudioCapture {
 
     /// Create with custom configuration
     pub fn with_config(event_bus: Arc<EventBus>, config: CaptureConfig) -> Self {
+        // Pre-calculate max samples: max_duration * max_expected_device_rate
+        // Use 48kHz as worst-case device rate for the cap
+        let max_samples = config.max_duration_secs * 48000;
+
         let state = Arc::new(RwLock::new(CaptureState {
             samples: Vec::new(),
             level: 0.0,
@@ -142,6 +151,7 @@ impl AudioCapture {
             fft_bins: vec![0.0; 32],
             sample_count: 0,
             device_sample_rate: 48000,
+            max_samples,
         }));
 
         let is_recording = Arc::new(AtomicBool::new(false));
@@ -224,10 +234,10 @@ impl AudioCapture {
             anyhow::bail!("Recording already in progress");
         }
 
-        // Clear previous state
+        // Clear previous state and free memory
         {
             let mut state = self.state.write().await;
-            state.samples.clear();
+            state.samples = Vec::new(); // Drop old allocation entirely
             state.sample_count = 0;
             state.level = 0.0;
             state.peak = 0.0;
@@ -272,24 +282,22 @@ impl AudioCapture {
                     break;
                 }
 
-                let metrics = {
+                let (level, peak, fft_bins) = {
                     let state = state.read().await;
                     (state.level, state.peak, state.fft_bins.clone())
                 };
 
                 // Emit level change event
                 event_bus
-                    .emit(HookEvent::AudioLevelChange {
-                        level: metrics.0,
-                        peak: metrics.1,
-                    })
+                    .emit(HookEvent::AudioLevelChange { level, peak })
                     .await;
 
-                // Emit FFT event
+                // Emit FFT event (move the vec instead of cloning again)
+                let bin_count = fft_bins.len();
                 event_bus
                     .emit(HookEvent::AudioFftReady {
-                        bins: metrics.2.clone(),
-                        bin_count: metrics.2.len(),
+                        bins: fft_bins,
+                        bin_count,
                     })
                     .await;
             }
@@ -388,17 +396,20 @@ async fn audio_thread_main(
                 // Drop the stream to stop capture
                 _current_stream = None;
 
-                // Get captured data and resample
+                // Get captured data, resample, then free the buffer
                 let captured = {
-                    let state = state.read().await;
+                    let mut state = state.write().await;
                     let duration_ms = (state.sample_count as f64 / state.device_sample_rate as f64 * 1000.0) as u64;
 
                     // Resample to 16kHz if needed (for Whisper)
                     let resampled = if state.device_sample_rate != 16000 {
                         resample(&state.samples, state.device_sample_rate, 16000)
                     } else {
-                        state.samples.clone()
+                        std::mem::take(&mut state.samples)
                     };
+
+                    // Free the samples buffer immediately (don't hold ~100s of MB)
+                    state.samples = Vec::new();
 
                     CapturedAudio {
                         samples: resampled,
@@ -564,8 +575,12 @@ fn process_samples(
 
     // Update state (blocking in audio thread - keep it fast)
     if let Ok(mut state) = state.try_write() {
-        // Accumulate samples for transcription
-        state.samples.extend_from_slice(&mono_samples);
+        // Accumulate samples for transcription (capped to prevent unbounded growth)
+        if (state.samples.len() as u64) < state.max_samples {
+            let remaining = (state.max_samples - state.samples.len() as u64) as usize;
+            let to_add = mono_samples.len().min(remaining);
+            state.samples.extend_from_slice(&mono_samples[..to_add]);
+        }
         state.sample_count += mono_samples.len() as u64;
 
         // Smooth level
