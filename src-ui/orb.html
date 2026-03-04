@@ -11,7 +11,6 @@
       height: 100%;
       background: transparent;
       overflow: hidden;
-      -webkit-app-region: drag;
     }
     canvas {
       display: block;
@@ -19,6 +18,7 @@
       height: 100%;
       -webkit-user-select: none;
       user-select: none;
+      pointer-events: none;
     }
     .status {
       position: absolute;
@@ -30,7 +30,6 @@
       font-size: 12px;
       text-align: center;
       pointer-events: none;
-      -webkit-app-region: no-drag;
     }
     .status.recording { color: rgba(255,100,100,0.9); }
     .status.processing { color: rgba(100,200,255,0.9); }
@@ -42,6 +41,8 @@
 
   <!-- Notifications system -->
   <script src="notifications.js"></script>
+  <!-- Orb lifecycle framework (activates only for migrated renderers) -->
+  <script src="orb-lifecycle.js"></script>
   <!-- Orb renderer loaded dynamically based on preference -->
   <script id="orb-script"></script>
   <script>
@@ -64,18 +65,85 @@
     // Load the selected orb script
     const scriptSrc = orbScripts[orbStyle] || orbScripts['fire-v8'];
     const scriptEl = document.getElementById('orb-script');
+
+    // When renderer loads, check if it registered as a lifecycle renderer
+    scriptEl.onload = function() {
+      console.log('[Orb] Script loaded:', scriptSrc, '__orbRenderer:', !!window.__orbRenderer);
+      if (window.__orbRenderer) {
+        const canvas = document.getElementById('canvas');
+        const opts = window.__orbRendererOptions || {};
+        window.__lifecycle = new OrbLifecycle(canvas, window.__orbRenderer, opts);
+        console.log('[Orb] Lifecycle renderer activated');
+      } else {
+        console.log('[Orb] Legacy renderer (no lifecycle)');
+      }
+    };
+
     scriptEl.src = scriptSrc;
+    console.log('[Orb] Loading style:', orbStyle, 'from', scriptSrc);
 
-    console.log('[Orb] Loaded style:', orbStyle, 'from', scriptSrc);
+    // Window position save/restore
+    if (window.__TAURI__) {
+      import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
+        const orbWindow = getCurrentWindow();
 
-    // Windows/Linux: listen for style changes via Tauri emit
-    // (macOS uses eval_js to set localStorage + reload directly)
+        // Restore saved position
+        const savedPos = localStorage.getItem('kvoice_orb_position');
+        if (savedPos) {
+          try {
+            const { x, y } = JSON.parse(savedPos);
+            setTimeout(() => orbWindow.setPosition({ x, y }), 100);
+            console.log('[Orb] Restored position:', x, y);
+          } catch (e) {
+            console.warn('[Orb] Failed to restore position:', e);
+          }
+        }
+
+        // Save position periodically
+        setInterval(() => {
+          orbWindow.outerPosition().then(pos => {
+            localStorage.setItem('kvoice_orb_position', JSON.stringify(pos));
+          });
+        }, 500);
+      });
+    }
+
+    // Windows/Linux: listen for Tauri events
+    // (macOS uses eval_js to call window.* directly)
     if (window.__TAURI__) {
       import('@tauri-apps/api/event').then(({ listen }) => {
         listen('apply-orb-style', (event) => {
           console.log('[Orb] Style changed via Tauri:', event.payload);
           localStorage.setItem('kvoice_orb_style', event.payload);
           location.reload();
+        });
+
+        listen('recording-state', (event) => {
+          const { recording, processing } = event.payload;
+          if (window.setRecordingState) {
+            window.setRecordingState(recording, processing);
+          }
+        });
+
+        listen('audio-level', (event) => {
+          if (window.setAudioLevel) {
+            window.setAudioLevel(event.payload);
+          }
+        });
+
+        listen('transcription-complete', () => {
+          if (window.setTranscriptionComplete) {
+            window.setTranscriptionComplete();
+          }
+        });
+
+        listen('orb-fade-in', () => {
+          if (window.resetOrb) window.resetOrb();
+          if (window.fadeIn) window.fadeIn();
+        });
+
+        listen('orb-fade-out', () => {
+          if (window.fadeOut) window.fadeOut();
         });
       });
     }

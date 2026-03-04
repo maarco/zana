@@ -310,8 +310,8 @@
       }
 
       try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const { open } = await import('@tauri-apps/api/shell');
+        const { invoke } = window.__TAURI__.core;
+        const { open } = window.__TAURI__.shell;
 
         const diagnostics = await invoke('run_diagnostics');
 
@@ -348,7 +348,7 @@
     }
 
     async function openAccessibilitySettings() {
-      const { open } = await import('@tauri-apps/api/shell');
+      const { open } = window.__TAURI__.shell;
       open('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
     }
 
@@ -369,7 +369,7 @@
       // (Rust relays to NSPanel via eval_js on macOS, emit on Windows)
       if (window.__TAURI__) {
         try {
-          const { invoke } = await import('@tauri-apps/api/core');
+          const { invoke } = window.__TAURI__.core;
           await invoke('set_orb_style', { style: prefs.orbStyle });
         } catch (e) {
           console.error('Failed to set orb style:', e);
@@ -385,7 +385,7 @@
       let currentOrbStyle = 'fire-v8';
       if (window.__TAURI__) {
         try {
-          const { invoke } = await import('@tauri-apps/api/core');
+          const { invoke } = window.__TAURI__.core;
           currentOrbStyle = await invoke('get_orb_style');
         } catch (e) {
           console.warn('Failed to get orb style from backend:', e);

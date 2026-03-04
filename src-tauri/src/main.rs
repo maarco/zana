@@ -515,11 +515,22 @@ fn create_orb_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::E
 
     log::info!("[CreateOrb] Screen size: {}x{}", screen_width, screen_height);
 
-    // Create WebviewWindow - FULLSCREEN
+    // 50% of screen size for draggable orb
+    let orb_width = (screen_width / 2.0).floor();
+    let orb_height = (screen_height / 2.0).floor();
+
+    // Position in bottom-right corner with padding
+    let padding = 20.0;
+    let pos_x = (screen_width - orb_width - padding).floor();
+    let pos_y = padding;  // macOS Y is from bottom, so small Y = bottom
+
+    log::info!("[CreateOrb] Orb size: {}x{}, position: {},{}", orb_width, orb_height, pos_x, pos_y);
+
+    // Create WebviewWindow - smaller, positioned bottom-right
     let orb = WebviewWindowBuilder::new(app, "orb", WebviewUrl::App("orb.html".into()))
         .title("kVoice Orb")
-        .inner_size(screen_width, screen_height)
-        .position(0.0, 0.0)
+        .inner_size(orb_width, orb_height)
+        .position(pos_x, pos_y)
         .resizable(false)
         .decorations(false)
         .transparent(true)
@@ -536,7 +547,28 @@ fn create_orb_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::E
     // Configure NSPanel
     panel.set_floating_panel(true);
     panel.set_hides_on_deactivate(false);
-    panel.set_movable_by_window_background(true);  // Enable drag anywhere to move
+
+    // Make NSPanel draggable and set position
+    {
+        use cocoa::base::id;
+        use cocoa::foundation::NSRect;
+        use objc::{msg_send, sel, sel_impl};
+        let ns_panel = panel.as_panel();
+        let ns_panel_ptr = ns_panel as *const _ as id;
+
+        unsafe {
+            // Enable dragging
+            let _: () = msg_send![ns_panel_ptr, setMovable: true];
+            let _: () = msg_send![ns_panel_ptr, setMovableByWindowBackground: true];
+
+            // Get current frame and set new origin
+            let frame: NSRect = msg_send![ns_panel_ptr, frame];
+            let new_origin = cocoa::foundation::NSPoint::new(pos_x, pos_y);
+            let new_frame = NSRect::new(new_origin, frame.size);
+            let _: () = msg_send![ns_panel_ptr, setFrame:new_frame display: false];
+        }
+        log::info!("[CreateOrb] NSPanel draggable, position set to {},{}", pos_x, pos_y);
+    }
 
     // NonactivatingPanel prevents focus stealing
     panel.set_style_mask(NSWindowStyleMask::NonactivatingPanel | NSWindowStyleMask::Resizable);
@@ -549,18 +581,6 @@ fn create_orb_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::E
 
     // Window level 1000 = above fullscreen
     panel.set_level(1000);
-
-    // Make panel ignore mouse events (click-through) for fullscreen overlay
-    {
-        use cocoa::base::id;
-        use objc::{msg_send, sel, sel_impl};
-        let ns_panel = panel.as_panel();
-        let ns_panel_ptr = ns_panel as *const _ as id;
-        unsafe {
-            let _: () = msg_send![ns_panel_ptr, setIgnoresMouseEvents: true];
-        }
-        log::info!("[CreateOrb] Panel set to ignore mouse events (click-through)");
-    }
 
     // Store panel reference (clone for storage)
     *ORB_PANEL.lock().unwrap() = Some(panel.clone());
@@ -592,18 +612,9 @@ fn show_orb(app: &tauri::AppHandle) {
         log::info!("[ShowOrb] Orb window already exists");
     }
 
-    // Show panel at fullscreen position (0, 0)
+    // Show panel (position is set during creation and restored from localStorage)
     if let Some(ref panel) = *ORB_PANEL.lock().unwrap() {
-        log::info!("[ShowOrb] Showing orb panel (fullscreen)");
-
-        // Position at origin for fullscreen
-        let ns_panel = panel.as_panel();
-        let ns_panel_ptr = ns_panel as *const _ as id;
-        let origin = NSPoint { x: 0.0, y: 0.0 };
-        unsafe {
-            let _: () = msg_send![ns_panel_ptr, setFrameOrigin:origin];
-        }
-        log::info!("[ShowOrb] Positioned at origin (0, 0)");
+        log::info!("[ShowOrb] Showing orb panel");
 
         // Reset orb state and trigger fade in
         eval_js_in_panel(panel, "window.resetOrb && window.resetOrb()");
@@ -1291,8 +1302,8 @@ fn win_create_orb_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::erro
 
     let orb = WebviewWindowBuilder::new(app, "orb", WebviewUrl::App("orb.html".into()))
         .title("kVoice Orb")
-        .inner_size(800.0, 600.0)
-        .center()
+        .inner_size(400.0, 300.0)
+        .position(880.0, 480.0)
         .resizable(false)
         .decorations(false)
         .transparent(true)
@@ -1300,20 +1311,6 @@ fn win_create_orb_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::erro
         .skip_taskbar(true)
         .visible(false)
         .build()?;
-
-    // Set click-through via Win32 extended window styles
-    if let Ok(hwnd) = orb.hwnd() {
-        let hwnd = HWND(hwnd.0);
-        unsafe {
-            let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE);
-            SetWindowLongW(
-                hwnd,
-                GWL_EXSTYLE,
-                ex_style | WS_EX_TRANSPARENT.0 as i32 | WS_EX_LAYERED.0 as i32,
-            );
-        }
-        log::info!("[WinOrb] Click-through styles applied");
-    }
 
     log::info!("[WinOrb] Orb window created");
     Ok(())

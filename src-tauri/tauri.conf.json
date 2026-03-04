@@ -96,7 +96,9 @@
             "core:event:allow-emit",
             "core:window:allow-show",
             "core:window:allow-hide",
-            "core:window:allow-close"
+            "core:window:allow-close",
+            "core:window:allow-set-position",
+            "core:window:allow-outer-position"
           ]
         },
         {
