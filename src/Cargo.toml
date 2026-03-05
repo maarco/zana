@@ -1,5 +1,5 @@
 [package]
-name = "kvoice"
+name = "Zana"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,11 +7,11 @@ authors.workspace = true
 description = "Cross-platform speech-to-text with beautiful audio visualizations"
 
 [lib]
-name = "kvoice"
+name = "Zana"
 path = "lib.rs"
 
 [[bin]]
-name = "kvoice"
+name = "Zana"
 path = "main.rs"
 
 [dependencies]

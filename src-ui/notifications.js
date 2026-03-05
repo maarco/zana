@@ -1,10 +1,10 @@
-// kVoice Notification System
+// Zana Notification System
 // Provides toast notifications for user feedback
 
 (function() {
   // Create notification container
   const container = document.createElement('div');
-  container.id = 'kvoice-notifications';
+  container.id = 'Zana-notifications';
   container.style.cssText = `
     position: fixed;
     top: 20px;
@@ -26,7 +26,7 @@
   };
 
   // Show notification
-  window.kvoiceNotify = function(message, type = 'info', duration = 3000) {
+  window.ZanaNotify = function(message, type = 'info', duration = 3000) {
     const style = types[type] || types.info;
 
     const notification = document.createElement('div');
@@ -70,28 +70,28 @@
   };
 
   // Convenience methods
-  window.kvoiceSuccess = (msg, duration) => window.kvoiceNotify(msg, 'success', duration);
-  window.kvoiceError = (msg, duration) => window.kvoiceNotify(msg, 'error', duration);
-  window.kvoiceWarning = (msg, duration) => window.kvoiceNotify(msg, 'warning', duration);
-  window.kvoiceInfo = (msg, duration) => window.kvoiceNotify(msg, 'info', duration);
+  window.ZanaSuccess = (msg, duration) => window.ZanaNotify(msg, 'success', duration);
+  window.ZanaError = (msg, duration) => window.ZanaNotify(msg, 'error', duration);
+  window.ZanaWarning = (msg, duration) => window.ZanaNotify(msg, 'warning', duration);
+  window.ZanaInfo = (msg, duration) => window.ZanaNotify(msg, 'info', duration);
 
   // Listen for Tauri events
   if (window.__TAURI__) {
     window.__TAURI__.event.listen('notification', (event) => {
       const { message, type, duration } = event.payload;
-      window.kvoiceNotify(message, type, duration);
+      window.ZanaNotify(message, type, duration);
     });
 
     window.__TAURI__.event.listen('error', (event) => {
-      window.kvoiceError(event.payload.message || 'An error occurred');
+      window.ZanaError(event.payload.message || 'An error occurred');
     });
 
     window.__TAURI__.event.listen('transcription-complete', (event) => {
-      window.kvoiceSuccess('Transcribed and pasted!', 2000);
+      window.ZanaSuccess('Transcribed and pasted!', 2000);
     });
 
     window.__TAURI__.event.listen('recording-started', () => {
-      window.kvoiceInfo('Recording...', 1500);
+      window.ZanaInfo('Recording...', 1500);
     });
   }
 })();

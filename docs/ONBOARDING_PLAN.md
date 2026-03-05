@@ -1,4 +1,4 @@
-# kVoice First-Run Onboarding - Implementation Plan
+# Zana First-Run Onboarding - Implementation Plan
 
 ## Vision
 
@@ -7,7 +7,7 @@
 ## User Flow
 
 ```
-Download kVoice
+Download Zana
     ↓
 Launch App
     ↓
@@ -43,7 +43,7 @@ Success! App is ready
 ```
 ┌─────────────────────────────────────┐
 │                                     │
-│         🎙️  Welcome to kVoice      │
+│         🎙️  Welcome to Zana      │
 │                                     │
 │   Voice-to-text transcription      │
 │   powered by local Whisper AI      │
@@ -63,7 +63,7 @@ Success! App is ready
 │                                     │
 │    🔐  Accessibility Permission     │
 │                                     │
-│  kVoice needs accessibility access  │
+│  Zana needs accessibility access  │
 │  to monitor the Fn key globally.    │
 │                                     │
 │  This lets you record from any app. │
@@ -79,7 +79,7 @@ Success! App is ready
 **Auto-detection:**
 - Poll `AXIsProcessTrusted()` every second
 - When granted: Status changes to [✅ Granted], Continue button enables
-- Show inline instructions: "Find kvoice-app in the list and toggle ON"
+- Show inline instructions: "Find Zana-app in the list and toggle ON"
 
 #### Screen 3: Download Whisper Model
 ```
@@ -112,7 +112,7 @@ Success! App is ready
 │                                     │
 │         🎉  You're All Set!         │
 │                                     │
-│  kVoice is ready to transcribe!     │
+│  Zana is ready to transcribe!     │
 │                                     │
 │  ━━━━━━━━━━━ How to Use ━━━━━━━━━━━ │
 │                                     │
@@ -141,7 +141,7 @@ Success! App is ready
 pub fn is_first_run() -> bool {
     let config_dir = dirs::config_dir()
         .unwrap()
-        .join("kvoice");
+        .join("Zana");
 
     let marker = config_dir.join(".onboarding_complete");
     !marker.exists()
@@ -151,7 +151,7 @@ pub fn is_first_run() -> bool {
 pub fn mark_onboarding_complete() -> Result<()> {
     let config_dir = dirs::config_dir()
         .unwrap()
-        .join("kvoice");
+        .join("Zana");
 
     fs::create_dir_all(&config_dir)?;
     fs::write(config_dir.join(".onboarding_complete"), "")?;
@@ -207,7 +207,7 @@ impl ModelDownloader {
     pub fn new() -> Self {
         let model_dir = dirs::data_dir()
             .unwrap()
-            .join("kvoice")
+            .join("Zana")
             .join("models");
 
         Self {
@@ -340,7 +340,7 @@ fn main() {
                     "onboarding",
                     tauri::WebviewUrl::App("onboarding.html".into())
                 )
-                .title("Welcome to kVoice")
+                .title("Welcome to Zana")
                 .inner_size(600.0, 500.0)
                 .center()
                 .resizable(false)
@@ -382,7 +382,7 @@ fn main() {
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Welcome to kVoice</title>
+    <title>Welcome to Zana</title>
     <style>
         * {
             margin: 0;
@@ -495,7 +495,7 @@ fn main() {
         <!-- Screen 1: Welcome -->
         <div class="screen active" id="screen-welcome">
             <div class="icon">🎙️</div>
-            <h1>Welcome to kVoice</h1>
+            <h1>Welcome to Zana</h1>
             <p>Voice-to-text transcription powered by local Whisper AI</p>
             <p>✓ Works offline<br>✓ Private (local processing)<br>✓ Fast & accurate</p>
             <button onclick="nextScreen()">Get Started →</button>
@@ -505,7 +505,7 @@ fn main() {
         <div class="screen" id="screen-accessibility">
             <div class="icon">🔐</div>
             <h1>Accessibility Permission</h1>
-            <p>kVoice needs accessibility access to monitor the Fn key globally.</p>
+            <p>Zana needs accessibility access to monitor the Fn key globally.</p>
             <div id="permission-status" class="status pending">
                 ⚠️ Not Granted
             </div>
@@ -528,7 +528,7 @@ fn main() {
         <div class="screen" id="screen-ready">
             <div class="icon">🎉</div>
             <h1>You're All Set!</h1>
-            <p>kVoice is ready to transcribe!</p>
+            <p>Zana is ready to transcribe!</p>
             <p><strong>How to Use:</strong></p>
             <p>Press & Hold: Hold Fn to record<br>Double-Tap: Tap Fn twice for hands-free mode</p>
             <button onclick="finishOnboarding()">Try Your First Recording →</button>

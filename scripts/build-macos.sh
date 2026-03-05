@@ -1,10 +1,10 @@
 #!/bin/bash
 set -e
 
-# kVoice macOS Build Script
+# Zana macOS Build Script
 # Builds a universal binary (Intel + Apple Silicon)
 
-echo "=== kVoice macOS Build ==="
+echo "=== Zana macOS Build ==="
 
 # Colors
 RED='\033[0;31m'
@@ -63,18 +63,18 @@ if [ "$UNIVERSAL" = true ]; then
 
     # Create universal binary
     echo "Creating universal binary..."
-    ARM_APP="target/aarch64-apple-darwin/release/bundle/macos/kVoice.app"
-    INTEL_APP="target/x86_64-apple-darwin/release/bundle/macos/kVoice.app"
-    UNIVERSAL_APP="target/universal-apple-darwin/release/bundle/macos/kVoice.app"
+    ARM_APP="target/aarch64-apple-darwin/release/bundle/macos/Zana.app"
+    INTEL_APP="target/x86_64-apple-darwin/release/bundle/macos/Zana.app"
+    UNIVERSAL_APP="target/universal-apple-darwin/release/bundle/macos/Zana.app"
 
     mkdir -p "$(dirname "$UNIVERSAL_APP")"
     cp -R "$ARM_APP" "$UNIVERSAL_APP"
 
     # Merge binaries with lipo
     lipo -create \
-        "$ARM_APP/Contents/MacOS/kVoice" \
-        "$INTEL_APP/Contents/MacOS/kVoice" \
-        -output "$UNIVERSAL_APP/Contents/MacOS/kVoice"
+        "$ARM_APP/Contents/MacOS/Zana" \
+        "$INTEL_APP/Contents/MacOS/Zana" \
+        -output "$UNIVERSAL_APP/Contents/MacOS/Zana"
 
     echo -e "${GREEN}Universal binary created at: $UNIVERSAL_APP${NC}"
 else

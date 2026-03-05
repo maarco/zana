@@ -1,6 +1,6 @@
 //! GUI Module
 //!
-//! Implements the egui-based user interface for kVoice.
+//! Implements the egui-based user interface for Zana.
 
 mod app;
 mod dialogs;
@@ -14,7 +14,7 @@ mod shortcuts;
 mod tests;
 
 pub use app::{
-    KVoiceApp, RecordingCommand, RecordingEvent, TranscriptionCommand, TranscriptionEvent,
+    ZanaApp, RecordingCommand, RecordingEvent, TranscriptionCommand, TranscriptionEvent,
 };
 pub use dialogs::DialogState;
 pub use event_handler::GuiEventHandler;

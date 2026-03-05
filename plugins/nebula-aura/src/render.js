@@ -1,5 +1,5 @@
 /**
- * Nebula Aura - kVoice Default Visualization
+ * Nebula Aura - Zana Default Visualization
  *
  * A cosmic nebula with swirling particles that respond to your voice.
  * Ported from kollabor-app-v1 NebulaAuraOrb.vue

@@ -1,6 +1,6 @@
-//! kVoice - Cross-platform Speech-to-Text with Beautiful Visualizations
+//! Zana - Cross-platform Speech-to-Text with Beautiful Visualizations
 //!
-//! kVoice is a desktop application that provides:
+//! Zana is a desktop application that provides:
 //! - Local speech-to-text using whisper.cpp (no cloud required)
 //! - Beautiful, customizable audio visualizations (GPU-accelerated)
 //! - Extensible plugin system
@@ -8,7 +8,7 @@
 //!
 //! # Architecture
 //!
-//! kVoice is built on a hook-based architecture that allows plugins to
+//! Zana is built on a hook-based architecture that allows plugins to
 //! intercept and respond to events throughout the application.
 //!
 //! ## Core Modules
@@ -23,9 +23,9 @@
 //! # Example
 //!
 //! ```rust,ignore
-//! use kvoice::hooks::EventBus;
-//! use kvoice::stt::WhisperEngine;
-//! use kvoice::audio::AudioCapture;
+//! use Zana::hooks::EventBus;
+//! use Zana::stt::WhisperEngine;
+//! use Zana::audio::AudioCapture;
 //! use std::sync::Arc;
 //!
 //! // Create event bus

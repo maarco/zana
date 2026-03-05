@@ -1,4 +1,4 @@
-# kVoice QA Release Checklist
+# Zana QA Release Checklist
 
 ## Pre-Release Testing
 
@@ -31,7 +31,7 @@
 - [ ] Quit menu exits application
 
 ### App Menu
-- [ ] About kVoice shows system about dialog
+- [ ] About Zana shows system about dialog
 - [ ] Preferences opens settings
 - [ ] Hide/Show All work correctly
 - [ ] Quit exits application

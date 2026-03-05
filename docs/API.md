@@ -1,6 +1,6 @@
-# kVoice API Reference
+# Zana API Reference
 
-This document describes the public API of kVoice for developers who want to use it as a library or extend it.
+This document describes the public API of Zana for developers who want to use it as a library or extend it.
 
 ---
 
@@ -19,15 +19,15 @@ This document describes the public API of kVoice for developers who want to use 
 
 ## Overview
 
-kVoice is organized into several modules, each with a specific responsibility:
+Zana is organized into several modules, each with a specific responsibility:
 
 ```rust
-use kvoice::{
+use Zana::{
     // Audio capture
     audio::{AudioCapture, AudioDevice, AudioMetrics, CapturedAudio},
 
     // GUI
-    gui::{KVoiceApp, RecordingCommand, RecordingEvent, TranscriptionCommand, TranscriptionEvent},
+    gui::{ZanaApp, RecordingCommand, RecordingEvent, TranscriptionCommand, TranscriptionEvent},
 
     // Event system
     hooks::{EventBus, HookEvent, HookEventType, HookHandler, HookResult},
@@ -270,7 +270,7 @@ impl EventBus {
 
 ### HookEvent
 
-Events emitted by kVoice.
+Events emitted by Zana.
 
 ```rust
 pub enum HookEvent {
@@ -496,21 +496,21 @@ pub struct PluginRegistry {
 
 ## GUI API
 
-### KVoiceApp
+### ZanaApp
 
 Main egui application.
 
 ```rust
-pub struct KVoiceApp {
+pub struct ZanaApp {
     // Private fields
 }
 
-impl KVoiceApp {
+impl ZanaApp {
     /// Create new app (called by eframe)
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self;
 }
 
-impl eframe::App for KVoiceApp {
+impl eframe::App for ZanaApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame);
     fn save(&mut self, storage: &mut dyn eframe::Storage);
 }
@@ -688,12 +688,12 @@ pub struct RenderContext {
 ### Basic Recording and Transcription
 
 ```rust
-use kvoice::{AudioCapture, WhisperEngine, WhisperModel};
+use Zana::{AudioCapture, WhisperEngine, WhisperModel};
 use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let event_bus = Arc::new(kvoice::EventBus::new());
+    let event_bus = Arc::new(Zana::EventBus::new());
 
     // Create audio capture
     let capture = AudioCapture::new(event_bus.clone());
@@ -724,7 +724,7 @@ async fn main() -> anyhow::Result<()> {
 ### Subscribing to Events
 
 ```rust
-use kvoice::{EventBus, HookEvent, HookEventType};
+use Zana::{EventBus, HookEvent, HookEventType};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -751,7 +751,7 @@ async fn main() -> anyhow::Result<()> {
 ### Creating a Custom Handler
 
 ```rust
-use kvoice::{HookHandler, HookEvent, HookResult, HookEventType};
+use Zana::{HookHandler, HookEvent, HookResult, HookEventType};
 use async_trait::async_trait;
 use std::sync::Arc;
 
@@ -794,7 +794,7 @@ event_bus.register(handler).await?;
 
 ## Error Handling
 
-Most kVoice functions return `anyhow::Result<T>`:
+Most Zana functions return `anyhow::Result<T>`:
 
 ```rust
 pub async fn transcribe(&self, samples: &[f32], model: WhisperModel)
@@ -811,7 +811,7 @@ Common errors:
 
 ## Thread Safety
 
-Most kVoice types use `Arc` with interior mutability:
+Most Zana types use `Arc` with interior mutability:
 
 ```rust
 pub struct AudioCapture { /* ... */ }

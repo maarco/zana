@@ -1,6 +1,6 @@
 //! System Hook Handlers
 //!
-//! Built-in handlers that provide core functionality for the kVoice hook system.
+//! Built-in handlers that provide core functionality for the Zana hook system.
 //! These handlers are automatically registered during application startup.
 
 use super::event::{HookEvent, HookEventType};

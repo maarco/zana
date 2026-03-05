@@ -152,7 +152,7 @@ pub fn mark_onboarding_complete() -> Result<OnboardingResponse, String> {
 /// Complete onboarding and exit app
 ///
 /// Marks onboarding as complete and exits the application.
-/// User should restart the app to use kVoice normally.
+/// User should restart the app to use Zana normally.
 #[tauri::command]
 pub fn complete_onboarding_and_exit(app: tauri::AppHandle) -> Result<OnboardingResponse, String> {
     log::info!("Onboarding complete - exiting application");
@@ -166,7 +166,7 @@ pub fn complete_onboarding_and_exit(app: tauri::AppHandle) -> Result<OnboardingR
         });
     }
 
-    // Exit the app - user will restart to use kVoice
+    // Exit the app - user will restart to use Zana
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(500));
         app.exit(0);

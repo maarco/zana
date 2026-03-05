@@ -1,5 +1,5 @@
 /**
- * kVoice - Main Application
+ * Zana - Main Application
  *
  * Two orb modes:
  * - Nebula (purple) - classic always-alive orb
@@ -49,6 +49,7 @@ const state = {
 
 const elements = {
   canvas: document.getElementById('orb-canvas'),
+  dragHandle: document.getElementById('drag-handle'),
   btnRecord: document.getElementById('btn-record'),
   btnSettings: document.getElementById('btn-settings'),
   btnClose: document.getElementById('btn-close'),
@@ -964,10 +965,10 @@ async function initRenderers() {
         });
 
         sharedGPU = { device, context, format };
-        console.log('[kVoice] Shared WebGPU initialized');
+        console.log('[Zana] Shared WebGPU initialized');
       }
     } catch (e) {
-      console.warn('[kVoice] WebGPU failed, using WebGL2:', e);
+      console.warn('[Zana] WebGPU failed, using WebGL2:', e);
     }
   }
 
@@ -1004,7 +1005,7 @@ function toggleOrbMode() {
     state.orbMode = 'nebula';
     showStatus('Nebula Mode (purple)', 'success');
   }
-  console.log(`[kVoice] Switched to ${state.orbMode} mode`);
+  console.log(`[Zana] Switched to ${state.orbMode} mode`);
 }
 
 // ============================================================================
@@ -1277,6 +1278,33 @@ function setupEventListeners() {
   // Record button
   elements.btnRecord.addEventListener('click', toggleRecording);
 
+  // Window drag functionality
+  let isDragging = false;
+  let dragOffset = { x: 0, y: 0 };
+
+  elements.dragHandle.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    dragOffset.x = e.clientX;
+    dragOffset.y = e.clientY;
+    elements.dragHandle.style.background = 'rgba(255,255,255,0.15)';
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (isDragging) {
+      appWindow.setPosition({
+        x: e.screenX - dragOffset.x,
+        y: e.screenY - dragOffset.y
+      });
+    }
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (isDragging) {
+      isDragging = false;
+      elements.dragHandle.style.background = '';
+    }
+  });
+
   // Settings
   elements.btnSettings.addEventListener('click', showSettings);
   elements.btnCloseSettings.addEventListener('click', hideSettings);
@@ -1355,7 +1383,7 @@ function setupEventListeners() {
 // ============================================================================
 
 async function init() {
-  console.log('[kVoice] Initializing with dual orb modes...');
+  console.log('[Zana] Initializing with dual orb modes...');
 
   // Initialize both renderers
   await initRenderers();
@@ -1370,7 +1398,7 @@ async function init() {
   await loadDevices();
   await loadModels();
 
-  console.log('[kVoice] Ready - Press Ctrl+S to toggle between Nebula (purple) and Genesis (fire) modes');
+  console.log('[Zana] Ready - Press Ctrl+S to toggle between Nebula (purple) and Genesis (fire) modes');
 }
 
 // Start when DOM is ready

@@ -1,7 +1,7 @@
-# kVoice UX Polish Implementation
+# Zana UX Polish Implementation
 
 ## Overview
-This document describes the UX polish features implemented for kVoice to provide a professional, polished user experience.
+This document describes the UX polish features implemented for Zana to provide a professional, polished user experience.
 
 ## Implementation Status: COMPLETE
 
@@ -31,7 +31,7 @@ All planned UX features have been successfully implemented and integrated. The l
 - Maximum 5 notifications displayed at once
 - Positioned in top-right corner
 
-**Usage in kVoice**:
+**Usage in Zana**:
 - Success notification after transcription completes with processing time and text preview
 - Warning notification when trying to transcribe without recording
 
@@ -70,7 +70,7 @@ self.notification_manager.success(format!(
   - "Cancel" and "Confirm" buttons
   - Optional callback on confirmation
 
-**Usage in kVoice**:
+**Usage in Zana**:
 - Error dialog when transcription fails
 - Error dialog when recording fails
 
@@ -102,7 +102,7 @@ self.dialog_state.show_error_dialog(
   - `T`: Transcribe audio
   - `,`: Open settings
 
-**Usage in kVoice**:
+**Usage in Zana**:
 - Integrated into main app's `update()` method
 - Shortcut hints displayed in button tooltips
 
@@ -226,9 +226,9 @@ Peak: 72%
 
 ### Integration Points
 
-1. **KVoiceApp Structure** (`src/gui/app.rs`):
+1. **ZanaApp Structure** (`src/gui/app.rs`):
 ```rust
-pub struct KVoiceApp {
+pub struct ZanaApp {
     // ... existing fields ...
     notification_manager: NotificationManager,
     dialog_state: DialogState,
@@ -339,7 +339,7 @@ Current approach: Status message warning when saving settings.
 Future consideration: Pass callback or `DialogState` reference for full modal confirmation.
 
 ### Parallel Agent Collaboration
-This implementation was completed with assistance from parallel GLM agents working on the kVoice codebase:
+This implementation was completed with assistance from parallel GLM agents working on the Zana codebase:
 - Phase4B_Polish agent: Concurrent UX implementation
 - Multiple other agents: Foundation and integration work
 

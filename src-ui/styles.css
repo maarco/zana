@@ -1,4 +1,4 @@
-/* kVoice - Minimal Dark UI */
+/* Zana - Minimal Dark UI */
 
 * {
   margin: 0;
@@ -27,6 +27,37 @@ html, body {
   color: var(--text-primary);
   user-select: none;
   -webkit-user-select: none;
+}
+
+/* Drag handle for window */
+.drag-handle {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100px;
+  height: 30px;
+  cursor: move;
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.05);
+  border: 1px dashed rgba(255,255,255,0.2);
+  border-radius: 15px;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.drag-handle:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.4);
+}
+
+.drag-handle::after {
+  content: '::::';
+  color: rgba(255,255,255,0.4);
+  font-size: 12px;
+  letter-spacing: 2px;
 }
 
 /* Orb Container */

@@ -8,11 +8,11 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 
-/// Get the kVoice config directory
+/// Get the Zana config directory
 fn config_dir() -> PathBuf {
     dirs::config_dir()
         .unwrap_or_else(|| panic!("Failed to get config directory"))
-        .join("kvoice")
+        .join("Zana")
 }
 
 /// Get the onboarding completion marker file path
@@ -109,13 +109,13 @@ mod tests {
     #[test]
     fn test_config_dir() {
         let dir = config_dir();
-        assert!(dir.ends_with("kvoice"));
+        assert!(dir.ends_with("Zana"));
     }
 
     #[test]
     fn test_marker_path() {
         let marker = marker_path();
         assert!(marker.ends_with(".onboarding_complete"));
-        assert!(marker.ends_with("kvoice/.onboarding_complete"));
+        assert!(marker.ends_with("Zana/.onboarding_complete"));
     }
 }

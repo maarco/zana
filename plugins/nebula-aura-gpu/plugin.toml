@@ -6,9 +6,9 @@ id = "nebula-aura-gpu"
 name = "Nebula Aura (GPU)"
 version = "1.0.0"
 description = "GPU-accelerated cosmic nebula visualization with real-time shader effects"
-author = "kVoice Team"
+author = "Zana Team"
 license = "MIT"
-homepage = "https://kvoice.app/plugins/nebula-aura-gpu"
+homepage = "https://Zana.app/plugins/nebula-aura-gpu"
 
 [plugin.type]
 kind = "orb-style"

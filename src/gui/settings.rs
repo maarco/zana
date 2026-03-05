@@ -1,6 +1,6 @@
 //! Settings Panel
 //!
-//! UI for configuring kVoice settings.
+//! UI for configuring Zana settings.
 
 use crate::audio::AudioCapture;
 use crate::state::{AppState, Settings};
@@ -516,11 +516,11 @@ impl SettingsPanel {
     fn show_about_section(&mut self, ui: &mut egui::Ui) {
         ui.collapsing("About", |ui| {
             ui.vertical_centered(|ui| {
-                ui.label(egui::RichText::new("kVoice").size(18.0).strong());
+                ui.label(egui::RichText::new("Zana").size(18.0).strong());
                 ui.label("Cross-platform speech-to-text");
                 ui.label("Version 0.1.0");
                 ui.add_space(5.0);
-                ui.hyperlink_to("https://github.com/kvoice/kvoice", "https://github.com/kvoice/kvoice");
+                ui.hyperlink_to("https://github.com/Zana/Zana", "https://github.com/Zana/Zana");
             });
         });
     }

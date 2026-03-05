@@ -1,4 +1,4 @@
-# kVoice Architecture Specification
+# Zana Architecture Specification
 
 ## Build Status (Jan 2026)
 
@@ -9,7 +9,7 @@ change: Removing Tauri/HTML/JS, going pure Rust with egui+wgpu
 
 ## Overview
 
-kVoice is a cross-platform speech-to-text application with a beautiful, extensible visualization system. Built entirely in Rust with no web technologies, it provides native performance and a true desktop experience.
+Zana is a cross-platform speech-to-text application with a beautiful, extensible visualization system. Built entirely in Rust with no web technologies, it provides native performance and a true desktop experience.
 
 ## Core Philosophy
 
@@ -44,7 +44,7 @@ kVoice is a cross-platform speech-to-text application with a beautiful, extensib
 
 ```
 +------------------------------------------------------------------+
-|                           kVoice App                              |
+|                           Zana App                              |
 +------------------------------------------------------------------+
 |                                                                   |
 |  +--------------------+    +----------------------------------+   |
@@ -96,7 +96,7 @@ kVoice is a cross-platform speech-to-text application with a beautiful, extensib
 
 ## Hook System Design
 
-The hook system is the foundation of kVoice's extensibility. Every significant operation emits events that plugins can subscribe to.
+The hook system is the foundation of Zana's extensibility. Every significant operation emits events that plugins can subscribe to.
 
 ### Event Categories
 
@@ -202,9 +202,9 @@ id = "nebula-aura"
 name = "Nebula Aura"
 version = "1.0.0"
 description = "Cosmic nebula visualization with swirling particles"
-author = "kVoice Team"
+author = "Zana Team"
 license = "MIT"
-homepage = "https://kvoice.app/plugins/nebula-aura"
+homepage = "https://Zana.app/plugins/nebula-aura"
 
 [plugin.type]
 kind = "orb-style"
@@ -303,7 +303,7 @@ pub enum DrawCommand {
 Plugins are distributed as packages containing:
 
 ```
-nebula-aura-1.0.0.kvoice/
+nebula-aura-1.0.0.Zana/
   plugin.toml          # Manifest
   plugin.wasm          # WASM binary (optional, for custom logic)
   assets/
@@ -345,7 +345,7 @@ impl MarketplaceClient {
 ## Directory Structure
 
 ```
-kVoice/
+Zana/
   Cargo.toml                 # Workspace manifest
 
   src/                        # Main Rust application
@@ -557,14 +557,14 @@ impl PluginManager {
 
 ### Overview
 
-kVoice uses egui for immediate-mode GUI rendering combined with wgpu for high-performance GPU-accelerated orb visualization. This pure Rust approach eliminates the webview overhead and provides direct GPU access.
+Zana uses egui for immediate-mode GUI rendering combined with wgpu for high-performance GPU-accelerated orb visualization. This pure Rust approach eliminates the webview overhead and provides direct GPU access.
 
 ### Application Structure
 
 The main application (`src/gui/app.rs`) coordinates all GUI components:
 
 ```rust
-pub struct KVoiceApp {
+pub struct ZanaApp {
     /// Core application state
     state: Arc<AppState>,
 
@@ -598,7 +598,7 @@ pub struct KVoiceApp {
 
 ### Async-to-Sync Bridge
 
-Since egui is synchronous but audio/transcription are async, kVoice uses a channel bridge:
+Since egui is synchronous but audio/transcription are async, Zana uses a channel bridge:
 
 ```rust
 /// Commands sent from GUI to async recording task
@@ -711,7 +711,7 @@ struct Uniforms {
 ### egui Event Loop
 
 ```rust
-impl eframe::App for KVoiceApp {
+impl eframe::App for ZanaApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // 1. Poll channel events
         while let Ok(event) = self.channels.recording_event_rx.try_recv() {
@@ -802,7 +802,7 @@ fn process_events_from_bus(&mut self, ctx: &egui::Context) {
 
 ### Pipeline Architecture
 
-kVoice uses a direct wgpu rendering pipeline for the orb visualization, bypassing egui for the GPU-intensive rendering:
+Zana uses a direct wgpu rendering pipeline for the orb visualization, bypassing egui for the GPU-intensive rendering:
 
 ```
 Audio Data (samples)

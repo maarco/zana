@@ -1,11 +1,11 @@
 //! Hook Event Types
 //!
-//! Defines all events that flow through the kVoice hook system.
+//! Defines all events that flow through the Zana hook system.
 //! Every significant operation emits events that plugins can intercept.
 
 use serde::{Deserialize, Serialize};
 
-/// All event types in the kVoice system
+/// All event types in the Zana system
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload")]
 pub enum HookEvent {

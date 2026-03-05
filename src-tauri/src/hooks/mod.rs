@@ -1,6 +1,6 @@
 //! Hook System
 //!
-//! The kVoice hook system enables extensibility by allowing plugins
+//! The Zana hook system enables extensibility by allowing plugins
 //! and components to intercept and respond to events throughout the
 //! application.
 //!
@@ -15,7 +15,7 @@
 //! # Example
 //!
 //! ```rust
-//! use kvoice::hooks::{EventBus, HookEvent, HookEventType, HookHandler, HookResult};
+//! use Zana::hooks::{EventBus, HookEvent, HookEventType, HookHandler, HookResult};
 //! use std::sync::Arc;
 //!
 //! // Create the event bus

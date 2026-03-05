@@ -1,6 +1,6 @@
 //! Event Bus
 //!
-//! Central hub for event routing in kVoice.
+//! Central hub for event routing in Zana.
 //! Manages handler registration, event emission, and subscriptions.
 
 use super::event::{HookEvent, HookEventType};
@@ -12,7 +12,7 @@ use tokio::sync::{broadcast, RwLock};
 /// Maximum number of events buffered in broadcast channels
 const CHANNEL_CAPACITY: usize = 256;
 
-/// The central event bus for kVoice
+/// The central event bus for Zana
 ///
 /// Routes events through registered handlers and notifies subscribers.
 /// Thread-safe and designed for async usage.

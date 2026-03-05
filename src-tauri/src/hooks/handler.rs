@@ -26,12 +26,12 @@ pub enum HookResult {
 /// Trait for hook event handlers
 ///
 /// Implement this trait to create a hook handler that can intercept
-/// and respond to events in the kVoice system.
+/// and respond to events in the Zana system.
 ///
 /// # Example
 ///
 /// ```rust
-/// use kvoice::hooks::{HookHandler, HookEvent, HookEventType, HookResult};
+/// use Zana::hooks::{HookHandler, HookEvent, HookEventType, HookResult};
 /// use async_trait::async_trait;
 ///
 /// struct LoggingHandler;

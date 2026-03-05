@@ -1,8 +1,8 @@
-//! kVoice - Cross-platform Speech-to-Text with Beautiful Visualizations
+//! Zana - Cross-platform Speech-to-Text with Beautiful Visualizations
 #![allow(dead_code)]
 #![allow(unused_imports)]
 //!
-//! kVoice is a desktop application that provides:
+//! Zana is a desktop application that provides:
 //! - Local speech-to-text using whisper.cpp (no cloud required)
 //! - Beautiful, customizable audio visualizations (GPU-accelerated)
 //! - Extensible plugin system
@@ -10,7 +10,7 @@
 //!
 //! # Architecture
 //!
-//! kVoice is built on a hook-based architecture that allows plugins to
+//! Zana is built on a hook-based architecture that allows plugins to
 //! intercept and respond to events throughout the application.
 //!
 //! ## Core Modules
@@ -25,9 +25,9 @@
 //! # Example
 //!
 //! ```rust,ignore
-//! use kvoice::hooks::EventBus;
-//! use kvoice::stt::WhisperEngine;
-//! use kvoice::audio::AudioCapture;
+//! use Zana::hooks::EventBus;
+//! use Zana::stt::WhisperEngine;
+//! use Zana::audio::AudioCapture;
 //! use std::sync::Arc;
 //!
 //! // Create event bus
@@ -61,8 +61,8 @@ pub mod stt;
 
 // Re-exports for convenience
 pub use audio::{AudioCapture, AudioDevice, AudioMetrics, CapturedAudio};
-pub use errors::{AudioError, GpuError, KVoiceError, PluginError, Result, SettingsError, WhisperError};
-pub use gui::{KVoiceApp, RecordingCommand, RecordingEvent, TranscriptionCommand, TranscriptionEvent};
+pub use errors::{AudioError, GpuError, ZanaError, PluginError, Result, SettingsError, WhisperError};
+pub use gui::{ZanaApp, RecordingCommand, RecordingEvent, TranscriptionCommand, TranscriptionEvent};
 pub use hooks::{EventBus, HookEvent, HookEventType, HookHandler, HookResult};
 pub use plugins::{Plugin, PluginManifest, PluginRegistry};
 pub use state::{AppState, Settings};

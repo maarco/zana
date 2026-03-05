@@ -114,7 +114,7 @@ impl Settings {
     pub fn settings_path() -> std::path::PathBuf {
         dirs::config_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join("kvoice")
+            .join("Zana")
             .join("settings.json")
     }
 

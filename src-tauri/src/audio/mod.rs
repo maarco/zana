@@ -1,6 +1,6 @@
 //! Audio Module
 //!
-//! Audio capture and processing for kVoice.
+//! Audio capture and processing for Zana.
 
 mod capture;
 

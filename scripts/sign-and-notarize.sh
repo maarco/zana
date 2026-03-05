@@ -1,10 +1,10 @@
 #!/bin/bash
 set -e
 
-# kVoice macOS Code Signing and Notarization Script
+# Zana macOS Code Signing and Notarization Script
 # Requires Apple Developer account and certificates
 
-echo "=== kVoice Code Signing & Notarization ==="
+echo "=== Zana Code Signing & Notarization ==="
 
 # Colors
 RED='\033[0;31m'
@@ -24,14 +24,14 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # Find the app bundle
 APP_PATH=""
-if [ -d "$PROJECT_ROOT/target/universal-apple-darwin/release/bundle/macos/kVoice.app" ]; then
-    APP_PATH="$PROJECT_ROOT/target/universal-apple-darwin/release/bundle/macos/kVoice.app"
-elif [ -d "$PROJECT_ROOT/target/release/bundle/macos/kVoice.app" ]; then
-    APP_PATH="$PROJECT_ROOT/target/release/bundle/macos/kVoice.app"
-elif [ -d "$PROJECT_ROOT/target/aarch64-apple-darwin/release/bundle/macos/kVoice.app" ]; then
-    APP_PATH="$PROJECT_ROOT/target/aarch64-apple-darwin/release/bundle/macos/kVoice.app"
+if [ -d "$PROJECT_ROOT/target/universal-apple-darwin/release/bundle/macos/Zana.app" ]; then
+    APP_PATH="$PROJECT_ROOT/target/universal-apple-darwin/release/bundle/macos/Zana.app"
+elif [ -d "$PROJECT_ROOT/target/release/bundle/macos/Zana.app" ]; then
+    APP_PATH="$PROJECT_ROOT/target/release/bundle/macos/Zana.app"
+elif [ -d "$PROJECT_ROOT/target/aarch64-apple-darwin/release/bundle/macos/Zana.app" ]; then
+    APP_PATH="$PROJECT_ROOT/target/aarch64-apple-darwin/release/bundle/macos/Zana.app"
 else
-    echo -e "${RED}Error: Could not find kVoice.app bundle${NC}"
+    echo -e "${RED}Error: Could not find Zana.app bundle${NC}"
     echo "Run ./scripts/build-macos.sh first"
     exit 1
 fi
@@ -60,7 +60,7 @@ sign_app() {
     # Sign the main executable
     codesign --force --options runtime --sign "$DEVELOPER_ID" \
         --entitlements "$PROJECT_ROOT/src-tauri/entitlements.plist" \
-        "$APP_PATH/Contents/MacOS/kVoice"
+        "$APP_PATH/Contents/MacOS/Zana"
 
     # Sign the entire app bundle
     codesign --force --deep --options runtime --sign "$DEVELOPER_ID" \
@@ -79,13 +79,13 @@ create_dmg() {
     echo -e "${YELLOW}Creating DMG...${NC}"
 
     DMG_PATH="${APP_PATH%%.app}.dmg"
-    TEMP_DMG="/tmp/kVoice-temp.dmg"
+    TEMP_DMG="/tmp/Zana-temp.dmg"
 
     # Remove existing
     rm -f "$DMG_PATH" "$TEMP_DMG"
 
     # Create DMG
-    hdiutil create -srcfolder "$APP_PATH" -volname "kVoice" -fs HFS+ \
+    hdiutil create -srcfolder "$APP_PATH" -volname "Zana" -fs HFS+ \
         -fsargs "-c c=64,a=16,e=16" -format UDRW "$TEMP_DMG"
 
     # Convert to compressed DMG

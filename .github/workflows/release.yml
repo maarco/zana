@@ -36,31 +36,31 @@ jobs:
 
       - name: Create Universal Binary
         run: |
-          ARM_APP="target/aarch64-apple-darwin/release/bundle/macos/kVoice.app"
-          INTEL_APP="target/x86_64-apple-darwin/release/bundle/macos/kVoice.app"
-          UNIVERSAL_APP="target/universal-apple-darwin/release/bundle/macos/kVoice.app"
+          ARM_APP="target/aarch64-apple-darwin/release/bundle/macos/Zana.app"
+          INTEL_APP="target/x86_64-apple-darwin/release/bundle/macos/Zana.app"
+          UNIVERSAL_APP="target/universal-apple-darwin/release/bundle/macos/Zana.app"
 
           mkdir -p "$(dirname "$UNIVERSAL_APP")"
           cp -R "$ARM_APP" "$UNIVERSAL_APP"
 
           lipo -create \
-            "$ARM_APP/Contents/MacOS/kVoice" \
-            "$INTEL_APP/Contents/MacOS/kVoice" \
-            -output "$UNIVERSAL_APP/Contents/MacOS/kVoice"
+            "$ARM_APP/Contents/MacOS/Zana" \
+            "$INTEL_APP/Contents/MacOS/Zana" \
+            -output "$UNIVERSAL_APP/Contents/MacOS/Zana"
 
       - name: Create DMG
         run: |
-          UNIVERSAL_APP="target/universal-apple-darwin/release/bundle/macos/kVoice.app"
-          hdiutil create -srcfolder "$UNIVERSAL_APP" -volname "kVoice" -fs HFS+ \
-            -fsargs "-c c=64,a=16,e=16" -format UDRW /tmp/kVoice-temp.dmg
-          hdiutil convert /tmp/kVoice-temp.dmg -format UDZO -imagekey zlib-level=9 \
-            -o kVoice-${{ github.ref_name }}-universal.dmg
+          UNIVERSAL_APP="target/universal-apple-darwin/release/bundle/macos/Zana.app"
+          hdiutil create -srcfolder "$UNIVERSAL_APP" -volname "Zana" -fs HFS+ \
+            -fsargs "-c c=64,a=16,e=16" -format UDRW /tmp/Zana-temp.dmg
+          hdiutil convert /tmp/Zana-temp.dmg -format UDZO -imagekey zlib-level=9 \
+            -o Zana-${{ github.ref_name }}-universal.dmg
 
       - name: Upload DMG
         uses: actions/upload-artifact@v4
         with:
-          name: kVoice-macos-universal
-          path: kVoice-*.dmg
+          name: Zana-macos-universal
+          path: Zana-*.dmg
 
   build-windows:
     runs-on: windows-latest
@@ -88,7 +88,7 @@ jobs:
       - name: Upload NSIS installer
         uses: actions/upload-artifact@v4
         with:
-          name: kVoice-windows-nsis
+          name: Zana-windows-nsis
           path: target/release/bundle/nsis/*.exe
 
   create-release:
@@ -100,18 +100,18 @@ jobs:
       - name: Download macOS artifacts
         uses: actions/download-artifact@v4
         with:
-          name: kVoice-macos-universal
+          name: Zana-macos-universal
 
       - name: Download Windows artifacts
         uses: actions/download-artifact@v4
         with:
-          name: kVoice-windows-nsis
+          name: Zana-windows-nsis
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            kVoice-*.dmg
+            Zana-*.dmg
             *.exe
           generate_release_notes: true
           draft: false

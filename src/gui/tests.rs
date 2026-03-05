@@ -1,6 +1,6 @@
 //! Comprehensive GUI Unit Tests
 //!
-//! Phase 3B tests per KVOICE_COMPLETION_SPEC.md
+//! Phase 3B tests per Zana_COMPLETION_SPEC.md
 //! Tests OrbRenderer, channels, event handler, settings, state management, error handling.
 //!
 //! Coverage Target: >80% for GUI module

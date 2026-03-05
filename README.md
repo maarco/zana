@@ -1,10 +1,10 @@
-# kVoice
+# Zana
 
 **Voice-to-text transcription powered by local Whisper AI**
 
-kVoice is a macOS menubar app that provides instant voice transcription using the Fn key. Press Fn to record, release to transcribe and paste - all processed locally with no cloud dependency.
+Zana is a macOS menubar app that provides instant voice transcription using the Fn key. Press Fn to record, release to transcribe and paste - all processed locally with no cloud dependency.
 
-![kVoice Demo](docs/demo.gif)
+![Zana Demo](docs/demo.gif)
 
 ## Features
 
@@ -27,9 +27,9 @@ kVoice is a macOS menubar app that provides instant voice transcription using th
 
 ### Option 1: Download Pre-built Binary (Coming Soon)
 
-1. Download `kVoice.dmg` from [Releases](https://github.com/kvoice/kvoice/releases)
-2. Open the DMG and drag kVoice to Applications
-3. Launch kVoice from Applications folder
+1. Download `Zana.dmg` from [Releases](https://github.com/Zana/Zana/releases)
+2. Open the DMG and drag Zana to Applications
+3. Launch Zana from Applications folder
 4. Grant accessibility permissions (required for Fn key monitoring)
 
 ### Option 2: Build from Source
@@ -56,28 +56,28 @@ kVoice is a macOS menubar app that provides instant voice transcription using th
 
 ```bash
 # Clone the repository
-git clone https://github.com/kvoice/kvoice.git
-cd kVoice
+git clone https://github.com/Zana/Zana.git
+cd Zana
 
 # Build the app (debug mode - faster compile)
-cargo build -p kvoice-app
+cargo build -p Zana-app
 
 # Or build optimized release
-cargo build -p kvoice-app --release
+cargo build -p Zana-app --release
 
 # Run the app
-cargo run -p kvoice-app
+cargo run -p Zana-app
 ```
 
 The compiled binary will be at:
-- Debug: `target/debug/kvoice-app`
-- Release: `target/release/kvoice-app`
+- Debug: `target/debug/Zana-app`
+- Release: `target/release/Zana-app`
 
 ## First Run Setup
 
 ### 1. Grant Accessibility Permissions
 
-kVoice needs accessibility access to monitor the Fn key globally.
+Zana needs accessibility access to monitor the Fn key globally.
 
 **On first launch, you'll see:**
 ```
@@ -88,17 +88,17 @@ Grant access in System Settings > Privacy & Security > Accessibility
 **To grant access:**
 1. Open **System Settings** > **Privacy & Security** > **Accessibility**
 2. Click the **lock icon** and authenticate
-3. Find **kvoice-app** in the list and toggle it **ON**
-4. Restart kVoice
+3. Find **Zana-app** in the list and toggle it **ON**
+4. Restart Zana
 
 ### 2. Download Whisper Model
 
-On first transcription, kVoice will automatically download the Whisper model:
+On first transcription, Zana will automatically download the Whisper model:
 - **Small model** (~500MB) - Default, best balance of speed and accuracy
 - **Tiny model** (~75MB) - Faster, less accurate
 - **Base/Medium/Large** - Available via settings (coming soon)
 
-Models are cached in: `~/Library/Application Support/kvoice/models/`
+Models are cached in: `~/Library/Application Support/Zana/models/`
 
 ## Usage
 
@@ -156,7 +156,7 @@ Plugins are automatically loaded on startup. See [docs/HOOK_HANDLER_GUIDE.md](do
 ## Architecture
 
 ```
-kVoice
+Zana
 ├── src-tauri/          Rust backend (Tauri app)
 │   ├── src/
 │   │   ├── audio/      Audio capture via cpal
@@ -180,8 +180,8 @@ kVoice
 
 1. Check if Fn is mapped to system functions:
    - System Settings > Keyboard > Keyboard Shortcuts > Function Keys
-2. Restart kVoice after granting accessibility permissions
-3. Check logs: `tail -f /tmp/kvoice-run.log`
+2. Restart Zana after granting accessibility permissions
+3. Check logs: `tail -f /tmp/Zana-run.log`
 
 ### Orb disappears immediately after double-tap
 
@@ -193,7 +193,7 @@ kVoice
 
 1. Check microphone permissions:
    - System Settings > Privacy & Security > Microphone
-   - Enable for kvoice-app
+   - Enable for Zana-app
 2. Check audio device in logs
 
 ### Transcription is inaccurate
@@ -212,14 +212,14 @@ kVoice
 
 ```bash
 # Run with info logs
-cargo run -p kvoice-app
+cargo run -p Zana-app
 
 # Run with debug logs (shows all events)
-RUST_LOG=debug cargo run -p kvoice-app
+RUST_LOG=debug cargo run -p Zana-app
 
 # Run in tmux for background operation
-tmux new-session -d -s kvoice "cargo run -p kvoice-app 2>&1 | tee /tmp/kvoice-run.log"
-tmux attach -t kvoice
+tmux new-session -d -s Zana "cargo run -p Zana-app 2>&1 | tee /tmp/Zana-run.log"
+tmux attach -t Zana
 ```
 
 ### Running Tests
@@ -239,7 +239,7 @@ cargo test -- --nocapture
 
 ```bash
 # Build optimized binary
-cargo build -p kvoice-app --release
+cargo build -p Zana-app --release
 
 # Create macOS app bundle
 cargo tauri build
@@ -302,10 +302,10 @@ MIT License - see [LICENSE](LICENSE) for details
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/kvoice/kvoice/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/kvoice/kvoice/discussions)
-- **Email**: support@kvoice.dev
+- **Issues**: [GitHub Issues](https://github.com/Zana/Zana/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Zana/Zana/discussions)
+- **Email**: support@Zana.dev
 
 ---
 
-Made with ❤️ by the kVoice team
+Made with ❤️ by the Zana team

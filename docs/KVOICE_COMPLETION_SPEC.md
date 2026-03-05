@@ -1,7 +1,7 @@
-# kVoice Completion Specification
+# Zana Completion Specification
 ## Multi-Agent Parallel Development Plan
 
-**Objective**: Complete kVoice speech-to-text application with GPU orb visualizations
+**Objective**: Complete Zana speech-to-text application with GPU orb visualizations
 
 **Timeline**: Complete end-to-end in single session via parallel agents
 
@@ -114,7 +114,7 @@
    - TranscriptionComplete → display transcription text
    - ErrorOccurred → show error dialog
 3. Create thread-safe event queue for GUI updates
-4. Process events in `KVoiceApp::update()` method
+4. Process events in `ZanaApp::update()` method
 5. Update UI components based on events:
    - Show "Recording..." status
    - Display real-time audio level

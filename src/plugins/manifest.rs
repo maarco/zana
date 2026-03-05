@@ -1,6 +1,6 @@
 //! Plugin Manifest
 //!
-//! Defines the plugin.toml manifest format for kVoice plugins.
+//! Defines the plugin.toml manifest format for Zana plugins.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -359,7 +359,7 @@ id = "nebula-aura"
 name = "Nebula Aura"
 version = "1.0.0"
 description = "Cosmic nebula visualization"
-author = "kVoice Team"
+author = "Zana Team"
 license = "MIT"
 
 [plugin.type]

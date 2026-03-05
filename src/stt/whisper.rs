@@ -150,7 +150,7 @@ impl WhisperEngine {
                 path: PathBuf::from("unknown"),
                 source: None,
             })?
-            .join("kvoice")
+            .join("Zana")
             .join("whisper-models");
 
         std::fs::create_dir_all(&data_dir).map_err(|e| WhisperError::ModelsDirCreationFailed {

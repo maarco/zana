@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>kVoice Orb</title>
+  <title>Zana Orb</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
@@ -16,9 +16,9 @@
       display: block;
       width: 100%;
       height: 100%;
-      -webkit-user-select: none;
-      user-select: none;
       pointer-events: none;
+      position: relative;
+      z-index: 1;
     }
     .status {
       position: absolute;
@@ -60,7 +60,7 @@
     };
 
     // Get orb style from localStorage (set by Rust via eval_js on macOS)
-    const orbStyle = localStorage.getItem('kvoice_orb_style') || 'fire-v8';
+    const orbStyle = localStorage.getItem('Zana_orb_style') || 'fire-v8';
 
     // Load the selected orb script
     const scriptSrc = orbScripts[orbStyle] || orbScripts['fire-v8'];
@@ -80,33 +80,7 @@
     };
 
     scriptEl.src = scriptSrc;
-    console.log('[Orb] Loading style:', orbStyle, 'from', scriptSrc);
-
-    // Window position save/restore
-    if (window.__TAURI__) {
-      import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
-        const orbWindow = getCurrentWindow();
-
-        // Restore saved position
-        const savedPos = localStorage.getItem('kvoice_orb_position');
-        if (savedPos) {
-          try {
-            const { x, y } = JSON.parse(savedPos);
-            setTimeout(() => orbWindow.setPosition({ x, y }), 100);
-            console.log('[Orb] Restored position:', x, y);
-          } catch (e) {
-            console.warn('[Orb] Failed to restore position:', e);
-          }
-        }
-
-        // Save position periodically
-        setInterval(() => {
-          orbWindow.outerPosition().then(pos => {
-            localStorage.setItem('kvoice_orb_position', JSON.stringify(pos));
-          });
-        }, 500);
-      });
-    }
+    console.log('[Orb] Loaded style:', orbStyle, 'from', scriptSrc);
 
     // Windows/Linux: listen for Tauri events
     // (macOS uses eval_js to call window.* directly)
@@ -114,7 +88,7 @@
       import('@tauri-apps/api/event').then(({ listen }) => {
         listen('apply-orb-style', (event) => {
           console.log('[Orb] Style changed via Tauri:', event.payload);
-          localStorage.setItem('kvoice_orb_style', event.payload);
+          localStorage.setItem('Zana_orb_style', event.payload);
           location.reload();
         });
 

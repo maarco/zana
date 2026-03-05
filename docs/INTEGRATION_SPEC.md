@@ -1,7 +1,7 @@
-# kVoice Plugin & Hook Integration Spec
+# Zana Plugin & Hook Integration Spec
 
 ## Overview
-Complete the integration of three partially-implemented systems in kVoice to enable full plugin functionality.
+Complete the integration of three partially-implemented systems in Zana to enable full plugin functionality.
 
 ## Current State Analysis
 

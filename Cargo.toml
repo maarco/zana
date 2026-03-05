@@ -6,8 +6,8 @@ resolver = "2"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-authors = ["kVoice Team"]
-repository = "https://github.com/kvoice/kvoice"
+authors = ["Zana Team"]
+repository = "https://github.com/Zana/Zana"
 
 [workspace.dependencies]
 # GUI Framework

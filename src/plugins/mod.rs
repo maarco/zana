@@ -1,6 +1,6 @@
 //! Plugin System
 //!
-//! The kVoice plugin system enables extensibility through loadable plugins
+//! The Zana plugin system enables extensibility through loadable plugins
 //! that provide audio visualizations, audio processing, and integrations.
 //!
 //! # Plugin Types
@@ -29,7 +29,7 @@
 //! # Example
 //!
 //! ```rust
-//! use kvoice::plugins::{PluginManager, PluginManifest};
+//! use Zana::plugins::{PluginManager, PluginManifest};
 //!
 //! // Load all plugins from the plugins directory
 //! let mut manager = PluginManager::new(event_bus, plugins_dir);

@@ -1,12 +1,12 @@
-# kVoice Plugin Development Guide
+# Zana Plugin Development Guide
 
-This guide explains how to create plugins for kVoice. All plugins are written in Rust and use wgpu for GPU rendering.
+This guide explains how to create plugins for Zana. All plugins are written in Rust and use wgpu for GPU rendering.
 
 ---
 
 ## Plugin Types
 
-kVoice supports several plugin types:
+Zana supports several plugin types:
 
 | Type | Description | Capabilities |
 |------|-------------|--------------|
@@ -28,7 +28,7 @@ Orb style plugins create visual representations of audio. You have two rendering
 
 ### Option 1: Canvas2D Plugin (Simple)
 
-Canvas2D plugins return a list of draw commands that kVoice executes on a 2D canvas.
+Canvas2D plugins return a list of draw commands that Zana executes on a 2D canvas.
 
 ### 1. Create Plugin Crate
 
@@ -46,7 +46,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-kvoice = { path = "../.." }
+Zana = { path = "../.." }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 async-trait = "0.1"
@@ -99,7 +99,7 @@ tags = ["particles", "audio-reactive"]
 ### 4. Create Plugin (src/lib.rs)
 
 ```rust
-use kvoice::plugins::{
+use Zana::plugins::{
     DrawCommand, Color, OrbStylePlugin, Plugin, PluginContext, PluginManifest,
     RenderContext,
 };
@@ -232,7 +232,7 @@ Same as Canvas2D, but add wgpu dependency:
 
 ```toml
 [dependencies]
-kvoice = { path = "../.." }
+Zana = { path = "../.." }
 wgpu = "0.18"
 bytemuck = { version = "1.14", features = ["derive"] }
 ```
@@ -288,7 +288,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 ### 3. Create Plugin (src/lib.rs)
 
 ```rust
-use kvoice::plugins::{Plugin, PluginContext, PluginManifest, RenderContext};
+use Zana::plugins::{Plugin, PluginContext, PluginManifest, RenderContext};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -652,7 +652,7 @@ fn on_config_change(&mut self, config: &HashMap<String, Value>) {
 
 ## Hook System Integration
 
-Plugins can subscribe to kVoice events via the EventBus.
+Plugins can subscribe to Zana events via the EventBus.
 
 ### Subscribing to Events
 
@@ -704,12 +704,12 @@ async fn init(&mut self, ctx: PluginContext) -> anyhow::Result<()> {
    cargo build
    ```
 
-2. Copy to kVoice plugins directory:
+2. Copy to Zana plugins directory:
    ```bash
-   cp -r . ~/.kvoice/plugins/my-orb-style
+   cp -r . ~/.Zana/plugins/my-orb-style
    ```
 
-3. Restart kVoice
+3. Restart Zana
 
 4. Select your plugin from Settings > Orb Style
 
@@ -718,13 +718,13 @@ async fn init(&mut self, ctx: PluginContext) -> anyhow::Result<()> {
 Enable logging:
 
 ```bash
-RUST_LOG=debug kvoice
+RUST_LOG=debug Zana
 ```
 
 Check plugin output:
 
 ```bash
-kvoice --dev
+Zana --dev
 ```
 
 ---
@@ -740,20 +740,20 @@ kvoice --dev
 ### 2. Validate Plugin
 
 ```bash
-kvoice plugin validate ./my-orb-style
+Zana plugin validate ./my-orb-style
 ```
 
 ### 3. Package
 
 ```bash
-kvoice plugin pack ./my-orb-style
-# Creates: my-orb-style-1.0.0.kvoice
+Zana plugin pack ./my-orb-style
+# Creates: my-orb-style-1.0.0.Zana
 ```
 
 ### 4. Submit
 
 ```bash
-kvoice plugin publish ./my-orb-style-1.0.0.kvoice
+Zana plugin publish ./my-orb-style-1.0.0.Zana
 ```
 
 ---
@@ -867,6 +867,6 @@ impl OrbStylePlugin for FrequencyBars {
 
 ## Support
 
-- Documentation: https://kvoice.app/docs/plugins
-- Discord: https://discord.gg/kvoice
-- Issues: https://github.com/kvoice/kvoice/issues
+- Documentation: https://Zana.app/docs/plugins
+- Discord: https://discord.gg/Zana
+- Issues: https://github.com/Zana/Zana/issues

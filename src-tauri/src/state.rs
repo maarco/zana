@@ -67,7 +67,7 @@ impl Settings {
     fn settings_path() -> std::path::PathBuf {
         dirs::config_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join("kvoice")
+            .join("Zana")
             .join("settings.json")
     }
 
@@ -109,6 +109,23 @@ impl AppState {
         let whisper_engine = WhisperEngine::new(event_bus.clone())?;
         let settings = Settings::load();
 
+        // Preload whisper model in background
+        let whisper_engine_clone = whisper_engine.clone();
+        let preload_model = settings.whisper_model.clone();
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async move {
+                if let Some(model_str) = preload_model {
+                    if let Some(model) = crate::stt::WhisperModel::from_str(&model_str) {
+                        log::info!("Preloading whisper model: {}", model_str);
+                        if let Err(e) = whisper_engine_clone.preload_model(model).await {
+                            log::warn!("Failed to preload whisper model: {}", e);
+                        }
+                    }
+                }
+            });
+        });
+
         // Create plugin registry
         let plugin_registry = Arc::new(RwLock::new(PluginRegistry::new()));
 
@@ -120,7 +137,7 @@ impl AppState {
             // Production: use $APP_DATA/plugins
             dirs::config_dir()
                 .unwrap_or_else(|| PathBuf::from("."))
-                .join("kvoice")
+                .join("Zana")
                 .join("plugins")
         };
 

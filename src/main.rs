@@ -1,4 +1,4 @@
-//! kVoice Main Entry Point
+//! Zana Main Entry Point
 #![allow(dead_code)]
 #![allow(unused_imports)]
 //!
@@ -26,7 +26,7 @@ fn main() -> eframe::Result<()> {
         .format_timestamp_millis()
         .init();
 
-    log::info!("Starting kVoice v0.1.0");
+    log::info!("Starting Zana v0.1.0");
     log::info!("Platform: {} {}", env::consts::OS, env::consts::ARCH);
     log::debug!("Debug logging enabled");
 
@@ -35,7 +35,7 @@ fn main() -> eframe::Result<()> {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([300.0, 300.0])
             .with_min_inner_size([200.0, 200.0])
-            .with_title("kVoice")
+            .with_title("Zana")
             .with_always_on_top()
             .with_decorations(false)  // No title bar
             .with_visible(false),     // Start hidden, show on Fn key
@@ -46,7 +46,7 @@ fn main() -> eframe::Result<()> {
 
     // Run the app
     let result = eframe::run_native(
-        "kVoice",
+        "Zana",
         window_options,
         Box::new(|cc| {
             // Configure egui with dark visuals
@@ -54,15 +54,15 @@ fn main() -> eframe::Result<()> {
             log::trace!("egui context configured with dark visuals");
 
             // Create the app (it creates its own tokio runtime)
-            log::info!("Creating KVoiceApp instance");
-            Ok(Box::new(gui::KVoiceApp::new(cc)))
+            log::info!("Creating ZanaApp instance");
+            Ok(Box::new(gui::ZanaApp::new(cc)))
         }),
     );
 
     // Log shutdown
     match &result {
-        Ok(_) => log::info!("kVoice shut down successfully"),
-        Err(e) => log::error!("kVoice shut down with error: {}", e),
+        Ok(_) => log::info!("Zana shut down successfully"),
+        Err(e) => log::error!("Zana shut down with error: {}", e),
     }
 
     result

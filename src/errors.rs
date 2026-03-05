@@ -1,4 +1,4 @@
-//! Centralized error types for kVoice
+//! Centralized error types for Zana
 //!
 //! This module provides structured, user-friendly error types using thiserror.
 //! All errors include helpful messages explaining what went wrong and how to fix it.
@@ -6,12 +6,12 @@
 use std::error::Error;
 use std::path::PathBuf;
 
-/// kVoice result type
-pub type Result<T> = std::result::Result<T, KVoiceError>;
+/// Zana result type
+pub type Result<T> = std::result::Result<T, ZanaError>;
 
-/// Main kVoice error type
+/// Main Zana error type
 #[derive(Debug, thiserror::Error)]
-pub enum KVoiceError {
+pub enum ZanaError {
     /// Audio capture errors
     #[error("Audio Error: {message}")]
     Audio {
@@ -95,9 +95,9 @@ pub enum AudioError {
     NotRecording,
 }
 
-impl From<AudioError> for KVoiceError {
+impl From<AudioError> for ZanaError {
     fn from(err: AudioError) -> Self {
-        KVoiceError::Audio {
+        ZanaError::Audio {
             message: err.to_string(),
             source: None,
         }
@@ -174,9 +174,9 @@ pub enum WhisperError {
     },
 }
 
-impl From<WhisperError> for KVoiceError {
+impl From<WhisperError> for ZanaError {
     fn from(err: WhisperError) -> Self {
-        KVoiceError::Whisper {
+        ZanaError::Whisper {
             message: err.to_string(),
             source: None,
         }
@@ -228,9 +228,9 @@ pub enum GpuError {
     DeviceLost,
 }
 
-impl From<GpuError> for KVoiceError {
+impl From<GpuError> for ZanaError {
     fn from(err: GpuError) -> Self {
-        KVoiceError::Gpu {
+        ZanaError::Gpu {
             message: err.to_string(),
             source: None,
         }
@@ -289,9 +289,9 @@ pub enum SettingsError {
     },
 }
 
-impl From<SettingsError> for KVoiceError {
+impl From<SettingsError> for ZanaError {
     fn from(err: SettingsError) -> Self {
-        KVoiceError::Settings {
+        ZanaError::Settings {
             message: err.to_string(),
             source: None,
         }
@@ -366,9 +366,9 @@ pub enum PluginError {
     },
 }
 
-impl From<PluginError> for KVoiceError {
+impl From<PluginError> for ZanaError {
     fn from(err: PluginError) -> Self {
-        KVoiceError::Plugin {
+        ZanaError::Plugin {
             message: err.to_string(),
             source: None,
         }

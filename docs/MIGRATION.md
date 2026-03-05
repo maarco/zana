@@ -118,7 +118,7 @@ tokio = { workspace = true }
 
 **Before:**
 ```
-kVoice/
+Zana/
   src-tauri/
     src/
       main.rs
@@ -139,7 +139,7 @@ kVoice/
 
 **After:**
 ```
-kVoice/
+Zana/
   src/
     main.rs          # New entry point
     lib.rs           # Library code
@@ -173,7 +173,7 @@ rm build.rs  # No more tauri-build
 **src/main.rs** (new):
 ```rust
 use eframe::egui;
-use kvoice::gui::KVoiceApp;
+use Zana::gui::ZanaApp;
 
 fn main() -> Result<(), eframe::Error> {
     env_logger::init();
@@ -188,13 +188,13 @@ fn main() -> Result<(), eframe::Error> {
     };
 
     eframe::run_native(
-        "kVoice",
+        "Zana",
         options,
         Box::new(|cc| {
             // Set up egui style
             cc.egui_ctx.set_visuals(egui::Visuals::dark());
 
-            Box::new(KVoiceApp::new(cc))
+            Box::new(ZanaApp::new(cc))
         }),
     )
 }
@@ -209,13 +209,13 @@ use crate::state::AppState;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-pub struct KVoiceApp {
+pub struct ZanaApp {
     state: Arc<RwLock<AppState>>,
     orb_renderer: OrbRenderer,
     settings_open: bool,
 }
 
-impl KVoiceApp {
+impl ZanaApp {
     pub fn new(cc: &eframe::CreationContext) -> Self {
         let state = Arc::new(RwLock::new(
             AppState::new().expect("Failed to create app state")
@@ -229,7 +229,7 @@ impl KVoiceApp {
     }
 }
 
-impl eframe::App for KVoiceApp {
+impl eframe::App for ZanaApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         egui::CentralPanel::default()
             .frame(egui::Frame::none())
@@ -331,7 +331,7 @@ fn main() {
 
 **After (Direct function calls):**
 ```rust
-impl KVoiceApp {
+impl ZanaApp {
     fn toggle_recording(&mut self) {
         let state = self.state.clone();
         tokio::spawn(async move {

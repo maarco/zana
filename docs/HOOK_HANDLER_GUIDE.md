@@ -2,7 +2,7 @@
 
 ## Overview
 
-The kVoice hook system provides a powerful event-driven architecture that allows plugins and system components to intercept, modify, and respond to application events. The system consists of three core components:
+The Zana hook system provides a powerful event-driven architecture that allows plugins and system components to intercept, modify, and respond to application events. The system consists of three core components:
 
 - **EventBus**: Central hub that routes events to registered handlers
 - **HookHandler**: Trait interface for event handlers
@@ -27,7 +27,7 @@ Handlers are called in priority order (lowest first). Each handler can:
 Implement the `HookHandler` trait to create a custom handler:
 
 ```rust
-use kvoice::hooks::{HookHandler, HookEvent, HookEventType, HookResult};
+use Zana::hooks::{HookHandler, HookEvent, HookEventType, HookResult};
 use async_trait::async_trait;
 
 #[derive(Debug)]
@@ -71,7 +71,7 @@ impl HookHandler for MyHandler {
 For simple cases, use `FnHookHandler`:
 
 ```rust
-use kvoice::hooks::handler::FnHookHandler;
+use Zana::hooks::handler::FnHookHandler;
 
 let handler = FnHookHandler::new(
     "quick-handler",
@@ -326,7 +326,7 @@ Handlers with equal priority are executed in registration order (first registere
 Logs all events at DEBUG level:
 
 ```rust
-use kvoice::hooks::{HookHandler, HookEvent, HookEventType, HookResult};
+use Zana::hooks::{HookHandler, HookEvent, HookEventType, HookResult};
 use async_trait::async_trait;
 
 #[derive(Debug)]
@@ -512,8 +512,8 @@ impl HookHandler for ConditionalHandler {
 Plugins integrate with the hook system through the `hook_handler()` method:
 
 ```rust
-use kvoice::plugins::{Plugin, PluginContext, PluginManifest};
-use kvoice::hooks::{HookHandler, HookEvent, HookEventType, HookResult};
+use Zana::plugins::{Plugin, PluginContext, PluginManifest};
+use Zana::hooks::{HookHandler, HookEvent, HookEventType, HookResult};
 use async_trait::async_trait;
 
 #[derive(Debug)]

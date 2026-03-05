@@ -14,6 +14,6 @@ src-tauri/target/
 *.swp
 *.swo
 
-# kVoice specific
-.kvoice/
+# Zana specific
+.Zana/
 models/

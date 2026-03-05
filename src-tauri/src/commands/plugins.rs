@@ -172,7 +172,7 @@ pub async fn install_plugin(
     } else {
         dirs::config_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join("kvoice")
+            .join("Zana")
             .join("plugins")
     };
 
@@ -219,7 +219,7 @@ pub async fn uninstall_plugin(
     } else {
         dirs::config_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join("kvoice")
+            .join("Zana")
             .join("plugins")
     };
 

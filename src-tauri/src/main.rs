@@ -1,4 +1,4 @@
-//! kVoice Main Entry Point
+//! Zana Main Entry Point
 //!
 //! Initializes the Tauri application with NSPanel overlay for fullscreen support.
 
@@ -6,8 +6,8 @@
 #![allow(deprecated)]
 #![allow(unexpected_cfgs)]
 
-use kvoice_app::state::AppState;
-use kvoice_app::HookEvent;
+use Zana_app::state::AppState;
+use Zana_app::HookEvent;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex as StdMutex;
 use std::time::Instant;
@@ -98,7 +98,7 @@ unsafe fn find_wkwebview_cocoa(view: cocoa::base::id) -> Option<cocoa::base::id>
 
 // Re-export commands for tauri::generate_handler! macro
 mod commands {
-    pub use kvoice_app::commands::*;
+    pub use Zana_app::commands::*;
 }
 
 // Global state for Fn key handling
@@ -127,7 +127,7 @@ static WIN_ORB_VISIBLE: AtomicBool = AtomicBool::new(false);
 /// Create application menu with standard shortcuts
 fn create_app_menu(app: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, tauri::Error> {
     // App menu (macOS standard)
-    let app_menu = SubmenuBuilder::new(app, "kVoice")
+    let app_menu = SubmenuBuilder::new(app, "Zana")
         .item(&PredefinedMenuItem::about(app, None, None)?)
         .separator()
         .item(
@@ -167,7 +167,7 @@ fn create_app_menu(app: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, tauri::Er
     // Help menu
     let help_menu = SubmenuBuilder::new(app, "Help")
         .item(
-            &MenuItemBuilder::with_id("show_help", "kVoice Help")
+            &MenuItemBuilder::with_id("show_help", "Zana Help")
                 .accelerator("CmdOrCtrl+?")
                 .build(app)?,
         )
@@ -188,7 +188,7 @@ fn main() {
     std::panic::set_hook(Box::new(|panic_info| {
         let crash_log = dirs::data_local_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join("kvoice")
+            .join("Zana")
             .join("crash.log");
 
         let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
@@ -224,7 +224,7 @@ fn main() {
     // Initialize logging - whisper logs will go through here now
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info,whisper_rs=warn")).init();
 
-    log::info!("Starting kVoice...");
+    log::info!("Starting Zana...");
 
     let mut builder = tauri::Builder::default();
 
@@ -242,7 +242,7 @@ fn main() {
         // .plugin(tauri_plugin_updater::Builder::new().build())
         .menu(|app| create_app_menu(app))
         .setup(|app| {
-            let is_first_run = kvoice_app::onboarding::is_first_run();
+            let is_first_run = Zana_app::onboarding::is_first_run();
 
             // ALWAYS create application state (needed for commands)
             log::info!("Initializing application state...");
@@ -265,7 +265,7 @@ fn main() {
                     "onboarding",
                     WebviewUrl::App("onboarding.html".into())
                 )
-                .title("kVoice Genesis")
+                .title("Zana Genesis")
                 .inner_size(900.0, 700.0)
                 .center()
                 .resizable(false)
@@ -297,7 +297,7 @@ fn main() {
             });
 
             // Forward audio level events to frontend
-            use kvoice_app::hooks::HookEventType;
+            use Zana_app::hooks::HookEventType;
             #[cfg(not(target_os = "macos"))]
             let app_handle_for_events = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -373,7 +373,7 @@ fn main() {
                         if let Some(ref panel) = *panel_guard {
                             let escaped = style.replace('\\', "\\\\").replace('"', "\\\"");
                             let js = format!(
-                                "localStorage.setItem('kvoice_orb_style', '{}'); location.reload()",
+                                "localStorage.setItem('Zana_orb_style', '{}'); location.reload()",
                                 escaped
                             );
                             eval_js_in_panel(panel, &js);
@@ -391,8 +391,8 @@ fn main() {
 
             // Setup system tray menu (tray icon created via config in tauri.conf.json)
             {
-                let quit = MenuItem::with_id(app, "quit", "Quit kVoice", true, Some("CmdOrCtrl+Q"))?;
-                let about = MenuItem::with_id(app, "about", "About kVoice", true, None::<&str>)?;
+                let quit = MenuItem::with_id(app, "quit", "Quit Zana", true, Some("CmdOrCtrl+Q"))?;
+                let about = MenuItem::with_id(app, "about", "About Zana", true, None::<&str>)?;
                 let preferences = MenuItem::with_id(app, "preferences", "Preferences...", true, Some("CmdOrCtrl+,"))?;
                 let separator = tauri::menu::PredefinedMenuItem::separator(app)?;
                 let separator2 = tauri::menu::PredefinedMenuItem::separator(app)?;
@@ -420,7 +420,7 @@ fn main() {
                                         "about",
                                         WebviewUrl::App("about.html".into())
                                     )
-                                    .title("About kVoice")
+                                    .title("About Zana")
                                     .inner_size(400.0, 500.0)
                                     .center()
                                     .resizable(false)
@@ -438,7 +438,7 @@ fn main() {
                                         "preferences",
                                         WebviewUrl::App("preferences.html".into())
                                     )
-                                    .title("kVoice Preferences")
+                                    .title("Zana Preferences")
                                     .inner_size(500.0, 600.0)
                                     .center()
                                     .resizable(false)
@@ -457,7 +457,13 @@ fn main() {
                 log::info!("System tray configured");
             }
 
-            log::info!("kVoice initialized successfully");
+            log::info!("Zana initialized successfully");
+
+            // Warm up orb window (create, show, hide to preload NSPanel and webview)
+            #[cfg(target_os = "macos")]
+            {
+                warmup_orb(app.handle());
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -528,7 +534,7 @@ fn create_orb_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::E
 
     // Create WebviewWindow - smaller, positioned bottom-right
     let orb = WebviewWindowBuilder::new(app, "orb", WebviewUrl::App("orb.html".into()))
-        .title("kVoice Orb")
+        .title("Zana Orb")
         .inner_size(orb_width, orb_height)
         .position(pos_x, pos_y)
         .resizable(false)
@@ -551,19 +557,19 @@ fn create_orb_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::E
     // Make NSPanel draggable and set position
     {
         use cocoa::base::id;
-        use cocoa::foundation::NSRect;
+        use cocoa::foundation::{NSPoint, NSRect};
         use objc::{msg_send, sel, sel_impl};
         let ns_panel = panel.as_panel();
         let ns_panel_ptr = ns_panel as *const _ as id;
 
         unsafe {
-            // Enable dragging
+            // Enable dragging by window background
             let _: () = msg_send![ns_panel_ptr, setMovable: true];
             let _: () = msg_send![ns_panel_ptr, setMovableByWindowBackground: true];
 
             // Get current frame and set new origin
             let frame: NSRect = msg_send![ns_panel_ptr, frame];
-            let new_origin = cocoa::foundation::NSPoint::new(pos_x, pos_y);
+            let new_origin = NSPoint::new(pos_x, pos_y);
             let new_frame = NSRect::new(new_origin, frame.size);
             let _: () = msg_send![ns_panel_ptr, setFrame:new_frame display: false];
         }
@@ -571,7 +577,9 @@ fn create_orb_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::E
     }
 
     // NonactivatingPanel prevents focus stealing
-    panel.set_style_mask(NSWindowStyleMask::NonactivatingPanel | NSWindowStyleMask::Resizable);
+    panel.set_style_mask(
+        NSWindowStyleMask::NonactivatingPanel | NSWindowStyleMask::Resizable
+    );
 
     // FullScreenAuxiliary allows appearing over fullscreen apps
     panel.set_collection_behavior(
@@ -592,10 +600,6 @@ fn create_orb_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::E
 /// Show the orb window with fade in
 #[cfg(target_os = "macos")]
 fn show_orb(app: &tauri::AppHandle) {
-    use cocoa::base::id;
-    use cocoa::foundation::NSPoint;
-    use objc::{msg_send, sel, sel_impl};
-
     // Cancel any pending hide operations
     HIDE_CANCELLED.store(true, Ordering::SeqCst);
     log::info!("[ShowOrb] Cancelled any pending hide operations");
@@ -682,6 +686,73 @@ fn hide_orb(app: &tauri::AppHandle) {
     });
 }
 
+/// Warm up the orb window by creating, showing, and hiding it during startup
+/// This ensures the NSPanel and webview are fully initialized before first use
+#[cfg(target_os = "macos")]
+fn warmup_orb(app: &tauri::AppHandle) {
+    log::info!("[OrbWarmup] Starting orb warmup");
+
+    let app1 = app.clone();
+    let app2 = app.clone();
+    let app3 = app.clone();
+    let app4 = app.clone();
+
+    std::thread::spawn(move || {
+        // Step 1: Create the orb window (on main thread)
+        let app1a = app1.clone();
+        let _ = app1.run_on_main_thread(move || {
+            if let Err(e) = create_orb_window(&app1a) {
+                log::warn!("[OrbWarmup] Failed to create orb: {}", e);
+                return;
+            }
+            log::info!("[OrbWarmup] Orb created");
+        });
+
+        // Wait for creation
+        std::thread::sleep(std::time::Duration::from_millis(200));
+
+        // Step 2: Show the orb (on main thread)
+        let _ = app2.run_on_main_thread(move || {
+            if let Some(ref panel) = *ORB_PANEL.lock().unwrap() {
+                eval_js_in_panel(panel, "window.resetOrb && window.resetOrb()");
+                eval_js_in_panel(panel, "window.fadeIn && window.fadeIn()");
+                panel.show();
+                panel.order_front_regardless();
+                log::info!("[OrbWarmup] Orb shown for warmup");
+            }
+        });
+
+        // Wait for fade in
+        std::thread::sleep(std::time::Duration::from_millis(1200));
+
+        // Step 3: Trigger fade out (on main thread)
+        let _ = app3.run_on_main_thread(move || {
+            if let Some(ref panel) = *ORB_PANEL.lock().unwrap() {
+                eval_js_in_panel(panel, "window.fadeOut && window.fadeOut()");
+                log::info!("[OrbWarmup] Orb fade out triggered");
+            }
+        });
+
+        // Wait for fade out
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+
+        // Step 4: Hide the panel (on main thread)
+        let _ = app4.run_on_main_thread(move || {
+            use cocoa::base::id;
+            use objc::{msg_send, sel, sel_impl};
+
+            if let Some(ref panel) = *ORB_PANEL.lock().unwrap() {
+                let ns_panel = panel.as_panel();
+                let ns_panel_ptr = ns_panel as *const _ as id;
+                unsafe {
+                    let _: () = msg_send![ns_panel_ptr, orderOut: std::ptr::null::<objc::runtime::Object>()];
+                }
+                log::info!("[OrbWarmup] Orb warmup complete, panel hidden");
+            }
+        });
+    });
+}
+
 /// Setup config file watcher for hot reload
 #[allow(unused_variables)]
 fn setup_config_watcher(app: tauri::AppHandle) {
@@ -696,7 +767,7 @@ fn setup_config_watcher(app: tauri::AppHandle) {
             std::path::PathBuf::from("src-ui/orb_config.json"),
             std::path::PathBuf::from("../src-ui/orb_config.json"),
             // Absolute dev path
-            std::path::PathBuf::from("/Users/malmazan/dev/kVoice/src-ui/orb_config.json"),
+            std::path::PathBuf::from("/Users/malmazan/dev/Zana/src-ui/orb_config.json"),
         ];
 
         let config_path = possible_paths
@@ -1027,7 +1098,7 @@ fn stop_recording(app: &tauri::AppHandle) {
                     // Transcribe
                     let whisper = state.whisper_engine.lock().await;
                     match whisper
-                        .transcribe(&audio.samples, kvoice_app::WhisperModel::Small)
+                        .transcribe(&audio.samples, Zana_app::WhisperModel::Small)
                         .await
                     {
                         Ok(result) => {
@@ -1301,7 +1372,7 @@ fn win_create_orb_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::erro
     log::info!("[WinOrb] Creating orb window...");
 
     let orb = WebviewWindowBuilder::new(app, "orb", WebviewUrl::App("orb.html".into()))
-        .title("kVoice Orb")
+        .title("Zana Orb")
         .inner_size(400.0, 300.0)
         .position(880.0, 480.0)
         .resizable(false)
@@ -1382,7 +1453,7 @@ fn win_stop_recording(app: &tauri::AppHandle) {
 
                     let whisper = state.whisper_engine.lock().await;
                     match whisper
-                        .transcribe(&audio.samples, kvoice_app::WhisperModel::Small)
+                        .transcribe(&audio.samples, Zana_app::WhisperModel::Small)
                         .await
                     {
                         Ok(result) => {

@@ -1,6 +1,6 @@
-# kVoice Installation Guide
+# Zana Installation Guide
 
-Quick guide to get kVoice running on your Mac.
+Quick guide to get Zana running on your Mac.
 
 ## Prerequisites
 
@@ -35,42 +35,42 @@ xcode-select --install
 
 Click "Install" in the popup dialog.
 
-### 3. Clone kVoice
+### 3. Clone Zana
 
 ```bash
-git clone https://github.com/kvoice/kvoice.git
-cd kVoice
+git clone https://github.com/Zana/Zana.git
+cd Zana
 ```
 
-### 4. Build kVoice
+### 4. Build Zana
 
 **Quick build (debug mode, faster compile):**
 ```bash
-cargo build -p kvoice-app
+cargo build -p Zana-app
 ```
 
 **Optimized build (release mode, slower compile but faster runtime):**
 ```bash
-cargo build -p kvoice-app --release
+cargo build -p Zana-app --release
 ```
 
 Build time: 5-15 minutes depending on your Mac.
 
-### 5. Run kVoice
+### 5. Run Zana
 
 **Debug mode:**
 ```bash
-cargo run -p kvoice-app
+cargo run -p Zana-app
 ```
 
 **Release mode:**
 ```bash
-cargo run -p kvoice-app --release
+cargo run -p Zana-app --release
 ```
 
 ### 6. Grant Accessibility Permissions
 
-When you first run kVoice, you'll see this warning in the terminal:
+When you first run Zana, you'll see this warning in the terminal:
 ```
 Accessibility permissions not granted - Fn key monitoring disabled
 Grant access in System Settings > Privacy & Security > Accessibility
@@ -81,9 +81,9 @@ Grant access in System Settings > Privacy & Security > Accessibility
 1. Open **System Settings** (⚙️ in Dock or Apple menu > System Settings)
 2. Go to **Privacy & Security** > **Accessibility**
 3. Click the **lock icon** 🔒 at bottom left and enter your password
-4. Find **kvoice-app** in the list
+4. Find **Zana-app** in the list
 5. Toggle the switch **ON** ✅
-6. **Restart kVoice**
+6. **Restart Zana**
 
 ### 7. First Transcription
 
@@ -113,7 +113,7 @@ source $HOME/.cargo/env
 ### Fn key doesn't work
 
 1. Check accessibility permissions (step 6 above)
-2. Restart kVoice
+2. Restart Zana
 3. Check if Fn is used for system functions:
    - System Settings > Keyboard > Dictation
    - Change "Press Fn Key Twice" to a different shortcut
@@ -127,59 +127,59 @@ https://huggingface.co/ggerganov/whisper.cpp
 
 Models are cached in:
 ```
-~/Library/Application Support/kvoice/models/
+~/Library/Application Support/Zana/models/
 ```
 
 ### Audio not recording
 
 1. Grant microphone permissions:
    - System Settings > Privacy & Security > Microphone
-   - Enable for kvoice-app
+   - Enable for Zana-app
 2. Check default microphone in:
    - System Settings > Sound > Input
 
 ## Running in Background
 
-To run kVoice in the background (keeps running after closing terminal):
+To run Zana in the background (keeps running after closing terminal):
 
 ```bash
 # Install tmux if not installed
 brew install tmux
 
 # Run in tmux session
-tmux new-session -d -s kvoice "cargo run -p kvoice-app 2>&1 | tee /tmp/kvoice-run.log"
+tmux new-session -d -s Zana "cargo run -p Zana-app 2>&1 | tee /tmp/Zana-run.log"
 
 # View logs
-tail -f /tmp/kvoice-run.log
+tail -f /tmp/Zana-run.log
 
 # Attach to session
-tmux attach -t kvoice
+tmux attach -t Zana
 
 # Detach: Press Ctrl+B, then D
 
-# Stop kVoice
-tmux kill-session -t kvoice
+# Stop Zana
+tmux kill-session -t Zana
 ```
 
-## Updating kVoice
+## Updating Zana
 
 ```bash
-cd kVoice
+cd Zana
 git pull
-cargo build -p kvoice-app --release
+cargo build -p Zana-app --release
 ```
 
 ## Uninstalling
 
 ```bash
-# Remove kVoice directory
-rm -rf ~/path/to/kVoice
+# Remove Zana directory
+rm -rf ~/path/to/Zana
 
 # Remove cached models (optional)
-rm -rf ~/Library/Application\ Support/kvoice
+rm -rf ~/Library/Application\ Support/Zana
 
 # Revoke accessibility permissions
-# System Settings > Privacy & Security > Accessibility > Remove kvoice-app
+# System Settings > Privacy & Security > Accessibility > Remove Zana-app
 ```
 
 ## Next Steps
@@ -191,6 +191,6 @@ rm -rf ~/Library/Application\ Support/kvoice
 
 ## Get Help
 
-- **Issues**: https://github.com/kvoice/kvoice/issues
-- **Discussions**: https://github.com/kvoice/kvoice/discussions
-- **Email**: support@kvoice.dev
+- **Issues**: https://github.com/Zana/Zana/issues
+- **Discussions**: https://github.com/Zana/Zana/discussions
+- **Email**: support@Zana.dev

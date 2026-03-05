@@ -114,6 +114,7 @@ pub struct TranscriptionSegment {
 /// Whisper STT Engine
 ///
 /// Manages whisper model loading and transcription with hook integration.
+#[derive(Clone)]
 pub struct WhisperEngine {
     /// Event bus for emitting hooks
     event_bus: Arc<EventBus>,
@@ -141,7 +142,7 @@ impl WhisperEngine {
     pub fn get_models_dir() -> Result<PathBuf> {
         let data_dir = dirs::data_local_dir()
             .context("Failed to get local data directory")?
-            .join("kvoice")
+            .join("Zana")
             .join("whisper-models");
 
         std::fs::create_dir_all(&data_dir).context("Failed to create whisper models directory")?;
@@ -157,6 +158,11 @@ impl WhisperEngine {
     /// Check if a model is downloaded
     pub fn is_model_downloaded(&self, model: WhisperModel) -> bool {
         self.get_model_path(model).exists()
+    }
+
+    /// Preload the whisper model (non-blocking)
+    pub async fn preload_model(&self, model: WhisperModel) -> Result<()> {
+        self.get_or_create_context(model).await
     }
 
     /// Get list of downloaded models

@@ -21,13 +21,13 @@ impl ModelDownloader {
     /// Create a new model downloader
     ///
     /// Models are stored in the system's data directory:
-    /// - macOS: ~/Library/Application Support/kvoice/whisper-models
-    /// - Linux: ~/.local/share/kvoice/whisper-models
-    /// - Windows: C:\Users\<user>\AppData\Local\kvoice\whisper-models
+    /// - macOS: ~/Library/Application Support/Zana/whisper-models
+    /// - Linux: ~/.local/share/Zana/whisper-models
+    /// - Windows: C:\Users\<user>\AppData\Local\Zana\whisper-models
     pub fn new() -> Result<Self> {
         let model_dir = dirs::data_local_dir()
             .context("Failed to get local data directory")?
-            .join("kvoice")
+            .join("Zana")
             .join("whisper-models");
 
         Ok(Self {

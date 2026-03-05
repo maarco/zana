@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSAccessibilityUsageDescription</key>
+    <string>Zana needs accessibility access to listen for keyboard shortcuts (Fn key) so you can start recording with a single press.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Zana needs microphone access to record your voice for transcription.</string>
+</dict>
+</plist>

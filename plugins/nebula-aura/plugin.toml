@@ -1,4 +1,4 @@
-# Nebula Aura - kVoice Default Visualization
+# Nebula Aura - Zana Default Visualization
 # A cosmic nebula with swirling particles that respond to your voice
 
 [plugin]
@@ -6,9 +6,9 @@ id = "nebula-aura"
 name = "Nebula Aura"
 version = "1.0.0"
 description = "Cosmic nebula visualization with swirling particles that respond to your voice"
-author = "kVoice Team"
+author = "Zana Team"
 license = "MIT"
-homepage = "https://kvoice.app/plugins/nebula-aura"
+homepage = "https://Zana.app/plugins/nebula-aura"
 
 [plugin.type]
 kind = "orb-style"

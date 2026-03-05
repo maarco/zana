@@ -1,4 +1,4 @@
-//! kVoice Main Application
+//! Zana Main Application
 //!
 //! Implements the egui application with audio recording, transcription, and orb visualization.
 
@@ -10,8 +10,8 @@ use crate::stt::{TranscriptionResult, WhisperModel};
 use eframe::egui;
 use std::sync::Arc;
 
-/// Main kVoice application
-pub struct KVoiceApp {
+/// Main Zana application
+pub struct ZanaApp {
     /// Core application state
     state: Arc<AppState>,
 
@@ -97,8 +97,8 @@ struct UIState {
     auto_transcribe: bool,
 }
 
-impl KVoiceApp {
-    /// Create a new KVoiceApp
+impl ZanaApp {
+    /// Create a new ZanaApp
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // Create tokio runtime FIRST - before any async operations
         let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -807,7 +807,7 @@ impl KVoiceApp {
     }
 }
 
-impl eframe::App for KVoiceApp {
+impl eframe::App for ZanaApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Configure overlay window once on first frame (must run on main thread)
         if !self.overlay_configured {
@@ -1028,7 +1028,7 @@ impl eframe::App for KVoiceApp {
         }
 
         // Note: Tokio runtime and background tasks will be automatically cleaned up
-        // when KVoiceApp is dropped. The channel senders will be dropped, causing
+        // when ZanaApp is dropped. The channel senders will be dropped, causing
         // the receiver loops in background tasks to end.
     }
 }

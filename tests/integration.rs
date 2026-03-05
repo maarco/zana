@@ -1,14 +1,14 @@
-//! Integration Tests for kVoice
+//! Integration Tests for Zana
 //!
 //! Tests the end-to-end flow: record -> transcribe -> display
 
-use kvoice::audio::{AudioCapture, CapturedAudio};
-use kvoice::gui::app::{
+use Zana::audio::{AudioCapture, CapturedAudio};
+use Zana::gui::app::{
     RecordingCommand, RecordingEvent, TranscriptionCommand, TranscriptionEvent,
 };
-use kvoice::hooks::{EventBus, HookEvent};
-use kvoice::state::{AppState, Settings};
-use kvoice::stt::WhisperModel;
+use Zana::hooks::{EventBus, HookEvent};
+use Zana::state::{AppState, Settings};
+use Zana::stt::WhisperModel;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::timeout;
@@ -21,11 +21,11 @@ async fn test_audio_capture_emits_events() {
 
     // Subscribe to audio events
     let mut audio_level_rx = event_bus
-        .subscribe(kvoice::hooks::HookEventType::AudioLevelChange)
+        .subscribe(Zana::hooks::HookEventType::AudioLevelChange)
         .await;
 
     let mut audio_fft_rx = event_bus
-        .subscribe(kvoice::hooks::HookEventType::AudioFftReady)
+        .subscribe(Zana::hooks::HookEventType::AudioFftReady)
         .await;
 
     // Create audio capture
@@ -205,7 +205,7 @@ async fn test_settings_persistence() {
     };
 
     // Save to temp file
-    let temp_dir = std::env::temp_dir().join("kvoice_test");
+    let temp_dir = std::env::temp_dir().join("Zana_test");
     std::fs::create_dir_all(&temp_dir).unwrap();
     let settings_path = temp_dir.join("settings.json");
 
@@ -455,7 +455,7 @@ async fn test_full_flow_simulation() {
 /// Test: Record audio → emit events → orb updates
 #[tokio::test]
 async fn test_recording_to_orb_updates() {
-    use kvoice::hooks::HookEventType;
+    use Zana::hooks::HookEventType;
 
     let event_bus = Arc::new(EventBus::new());
 
@@ -529,7 +529,7 @@ async fn test_settings_change_persist_reload() {
     };
 
     // Save to temp file
-    let temp_dir = std::env::temp_dir().join("kvoice_settings_test");
+    let temp_dir = std::env::temp_dir().join("Zana_settings_test");
     std::fs::create_dir_all(&temp_dir).unwrap();
     let settings_path = temp_dir.join("settings.json");
 
@@ -580,9 +580,9 @@ async fn test_settings_change_persist_reload() {
 /// Test: Load plugin → select style → render
 #[tokio::test]
 async fn test_plugin_loading_and_switching() {
-    use kvoice::plugins::{PluginManifest, PluginRegistry};
-    use kvoice::plugins::PluginKind;
-    use kvoice::plugins::manifest::{PluginMeta, PluginTypeMeta};
+    use Zana::plugins::{PluginManifest, PluginRegistry};
+    use Zana::plugins::PluginKind;
+    use Zana::plugins::manifest::{PluginMeta, PluginTypeMeta};
 
     // Create registry
     let mut registry = PluginRegistry::new();
@@ -597,7 +597,7 @@ async fn test_plugin_loading_and_switching() {
             author: "Test Author".to_string(),
             plugin_type: PluginTypeMeta {
                 kind: PluginKind::OrbStyle,
-                renderer: kvoice::plugins::GpuRendererType::WebGPU,
+                renderer: Zana::plugins::GpuRendererType::WebGPU,
             },
         },
         config: None,
@@ -623,7 +623,7 @@ async fn test_plugin_loading_and_switching() {
 #[tokio::test]
 async fn test_error_missing_model() {
     let event_bus = Arc::new(EventBus::new());
-    let engine = kvoice::stt::WhisperEngine::new(event_bus)
+    let engine = Zana::stt::WhisperEngine::new(event_bus)
         .expect("Failed to create WhisperEngine");
 
     // Create mock audio samples
@@ -631,10 +631,10 @@ async fn test_error_missing_model() {
 
     // Try to use a model that doesn't exist
     // Check if model exists first
-    let model_exists = engine.is_model_downloaded(kvoice::stt::WhisperModel::Medium);
+    let model_exists = engine.is_model_downloaded(Zana::stt::WhisperModel::Medium);
 
     if !model_exists {
-        let result = engine.transcribe(&samples, kvoice::stt::WhisperModel::Medium).await;
+        let result = engine.transcribe(&samples, Zana::stt::WhisperModel::Medium).await;
 
         assert!(result.is_err(), "Should fail when model is missing");
 
@@ -694,11 +694,11 @@ async fn test_real_audio_capture() {
 #[ignore = "Requires downloaded Whisper model"]
 async fn test_real_transcription() {
     let event_bus = Arc::new(EventBus::new());
-    let engine = kvoice::stt::WhisperEngine::new(event_bus)
+    let engine = Zana::stt::WhisperEngine::new(event_bus)
         .expect("Failed to create WhisperEngine");
 
     // Check if tiny model is available
-    if !engine.is_model_downloaded(kvoice::stt::WhisperModel::Tiny) {
+    if !engine.is_model_downloaded(Zana::stt::WhisperModel::Tiny) {
         println!("Skipping: Whisper Tiny model not downloaded");
         return;
     }
@@ -716,7 +716,7 @@ async fn test_real_transcription() {
 
     // Transcribe
     let result = engine
-        .transcribe(&samples, kvoice::stt::WhisperModel::Tiny)
+        .transcribe(&samples, Zana::stt::WhisperModel::Tiny)
         .await
         .expect("Transcription failed");
 
@@ -728,8 +728,8 @@ async fn test_real_transcription() {
 /// Test: Plugin switching simulation
 #[tokio::test]
 async fn test_plugin_switching_simulation() {
-    use kvoice::plugins::{PluginManifest, PluginKind, PluginRegistry};
-    use kvoice::plugins::manifest::{PluginMeta, PluginTypeMeta};
+    use Zana::plugins::{PluginManifest, PluginKind, PluginRegistry};
+    use Zana::plugins::manifest::{PluginMeta, PluginTypeMeta};
 
     let mut registry = PluginRegistry::new();
 
@@ -796,11 +796,11 @@ async fn benchmark_audio_capture_overhead() {
 #[ignore = "Benchmark and requires model"]
 async fn benchmark_transcription_speed() {
     let event_bus = Arc::new(EventBus::new());
-    let engine = kvoice::stt::WhisperEngine::new(event_bus)
+    let engine = Zana::stt::WhisperEngine::new(event_bus)
         .expect("Failed to create WhisperEngine");
 
     // Skip if model not available
-    if !engine.is_model_downloaded(kvoice::stt::WhisperModel::Tiny) {
+    if !engine.is_model_downloaded(Zana::stt::WhisperModel::Tiny) {
         println!("[BENCHMARK] Skipped: Whisper Tiny model not downloaded");
         return;
     }
@@ -810,7 +810,7 @@ async fn benchmark_transcription_speed() {
 
     let start = std::time::Instant::now();
     let result = engine
-        .transcribe(&samples, kvoice::stt::WhisperModel::Tiny)
+        .transcribe(&samples, Zana::stt::WhisperModel::Tiny)
         .await
         .expect("Transcription failed");
     let duration = start.elapsed();
@@ -829,7 +829,7 @@ async fn benchmark_transcription_speed() {
 #[tokio::test]
 #[ignore = "Benchmark"]
 async fn benchmark_event_bus_throughput() {
-    use kvoice::hooks::HookEventType;
+    use Zana::hooks::HookEventType;
 
     let event_bus = Arc::new(EventBus::new());
     let mut rx = event_bus
@@ -844,7 +844,7 @@ async fn benchmark_event_bus_throughput() {
     let bus_clone = event_bus.clone();
     tokio::spawn(async move {
         for i in 0..NUM_EVENTS {
-            use kvoice::hooks::HookEvent;
+            use Zana::hooks::HookEvent;
             let _ = bus_clone
                 .emit(HookEvent::AudioLevelChange {
                     level: (i as f32) / NUM_EVENTS as f32,

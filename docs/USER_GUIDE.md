@@ -1,6 +1,6 @@
-# kVoice User Guide
+# Zana User Guide
 
-Welcome to kVoice - a beautiful, extensible speech-to-text application with GPU-accelerated audio visualizations.
+Welcome to Zana - a beautiful, extensible speech-to-text application with GPU-accelerated audio visualizations.
 
 ---
 
@@ -87,23 +87,23 @@ winget install Microsoft.VisualStudio.2022.BuildTools
 **Clone and Build:**
 ```bash
 # Clone repository
-git clone https://github.com/kvoice/kvoice.git
-cd kvoice
+git clone https://github.com/Zana/Zana.git
+cd Zana
 
 # Build release version
 cargo build --release
 
 # Run application
-./target/release/kvoice
+./target/release/Zana
 ```
 
 #### Option 2: Install from Crate (Linux/macOS)
 
 ```bash
-cargo install kvoice
+cargo install Zana
 ```
 
-This installs kVoice in `~/.cargo/bin/`. Make sure this directory is in your PATH:
+This installs Zana in `~/.cargo/bin/`. Make sure this directory is in your PATH:
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -113,24 +113,24 @@ Add this to your `~/.bashrc` or `~/.zshrc` to make it permanent.
 
 #### Option 3: Download Binary (Windows)
 
-1. Visit [kvoice.app](https://kvoice.app)
+1. Visit [Zana.app](https://Zana.app)
 2. Download the Windows installer
 3. Run the installer
-4. Launch kVoice from Start Menu
+4. Launch Zana from Start Menu
 
 ### First Launch Setup
 
 #### Step 1: Grant Microphone Permissions
 
 **macOS:**
-1. Launch kVoice
-2. System will prompt: "kvoice" would like to access the microphone
+1. Launch Zana
+2. System will prompt: "Zana" would like to access the microphone
 3. Click "OK"
 4. If prompted, open System Preferences > Privacy & Security > Microphone
-5. Ensure kVoice is checked
+5. Ensure Zana is checked
 
 **Linux:**
-1. Launch kVoice from terminal
+1. Launch Zana from terminal
 2. If microphone doesn't work, check PulseAudio settings:
    ```bash
    pactl load-module module-pipe-source
@@ -139,14 +139,14 @@ Add this to your `~/.bashrc` or `~/.zshrc` to make it permanent.
 3. In pavucontrol, go to "Recording" tab and select your microphone
 
 **Windows:**
-1. Launch kVoice
+1. Launch Zana
 2. Windows Security dialog will appear
 3. Click "Yes" to allow microphone access
 4. Or manually: Settings > Privacy > Microphone > Allow desktop apps to access microphone
 
 #### Step 2: Download Whisper Model
 
-On first launch, kVoice will prompt you to download a speech recognition model.
+On first launch, Zana will prompt you to download a speech recognition model.
 
 **Recommended Model: Small (244MB)**
 - Best balance of speed and accuracy
@@ -194,8 +194,8 @@ On first launch, kVoice will prompt you to download a speech recognition model.
 
 ### Your First Transcription (5 Minutes)
 
-**1. Launch kVoice**
-Double-click the kVoice icon or run `kvoice` from terminal
+**1. Launch Zana**
+Double-click the Zana icon or run `Zana` from terminal
 
 **2. Check Audio Level**
 - Look at the level indicator at the bottom
@@ -204,7 +204,7 @@ Double-click the kVoice icon or run `kvoice` from terminal
 
 **3. Record**
 - Click the red "Record" button
-- Speak clearly: "Hello, this is a test of kVoice speech recognition"
+- Speak clearly: "Hello, this is a test of Zana speech recognition"
 - The orb will pulse with your voice
 - Click "Stop" when finished
 
@@ -486,7 +486,7 @@ The central visualization responds to your voice in real-time:
 **Debug Mode:**
 - Enables detailed logging
 - Useful for troubleshooting
-- Logs saved to `~/.kvoice/logs/`
+- Logs saved to `~/.Zana/logs/`
 
 **Always on Top:**
 - Keep window above other applications
@@ -502,15 +502,15 @@ If something isn't working, reset to defaults:
 
 **macOS/Linux:**
 ```bash
-rm -rf ~/.kvoice
-kvoice
+rm -rf ~/.Zana
+Zana
 ```
 
 **Windows:**
 ```
-1. Close kVoice
-2. Delete: %APPDATA%\kvoice
-3. Restart kVoice
+1. Close Zana
+2. Delete: %APPDATA%\Zana
+3. Restart Zana
 ```
 
 ---
@@ -533,7 +533,7 @@ kvoice
 5. Plugin appears in your plugin list
 
 **Manual Installation:**
-1. Download `.kvoice` plugin file
+1. Download `.Zana` plugin file
 2. Settings > Plugins > Install from File
 3. Select downloaded file
 4. Plugin installs and activates
@@ -590,14 +590,14 @@ For documentation on creating plugins, see:
 
 **Solutions:**
 1. Check microphone permissions in system settings
-2. Verify correct audio device selected in kVoice Settings
+2. Verify correct audio device selected in Zana Settings
 3. Test microphone in another application
 4. Check cable connections (external mics)
-5. Restart kVoice
+5. Restart Zana
 
 **macOS:**
 - System Preferences > Security & Privacy > Privacy > Microphone
-- Ensure kVoice is checked
+- Ensure Zana is checked
 - Uncheck and recheck if needed
 
 **Linux:**
@@ -663,7 +663,7 @@ pavucontrol &
 **Manual Model Download:**
 1. Visit [Hugging Face](https://huggingface.co/ggerganov/whisper.cpp)
 2. Download model files (ggml-*.bin)
-3. Place in `~/.kvoice/models/` (or `%APPDATA%\kvoice\models\` on Windows)
+3. Place in `~/.Zana/models/` (or `%APPDATA%\Zana\models\` on Windows)
 
 ### Visualization Issues
 
@@ -674,7 +674,7 @@ pavucontrol &
 2. Try a different orb style
 3. Reduce quality setting
 4. Update GPU drivers
-5. Restart kVoice
+5. Restart Zana
 
 **Problem: Poor performance**
 
@@ -689,14 +689,14 @@ pavucontrol &
 
 **Solutions:**
 1. Enable compositing in desktop environment
-2. Try disabling transparency in kVoice settings
+2. Try disabling transparency in Zana settings
 3. Check window manager compatibility
 4. Use different window manager (GNOME, KDE)
 
 **Checking GPU Status:**
 ```bash
 # View logs
-cat ~/.kvoice/logs/kvoice.log | grep -i gpu
+cat ~/.Zana/logs/Zana.log | grep -i gpu
 
 # Should see something like:
 # "Using wgpu adapter: Your GPU Model"
@@ -711,18 +711,18 @@ cat ~/.kvoice/logs/kvoice.log | grep -i gpu
 2. Verify all dependencies are installed
 3. Try running from terminal to see error output:
    ```bash
-   kvoice --debug
+   Zana --debug
    ```
 4. Delete configuration and restart:
    ```bash
-   rm -rf ~/.kvoice
-   kvoice
+   rm -rf ~/.Zana
+   Zana
    ```
 
 **Problem: Settings not saving**
 
 **Solutions:**
-1. Check write permissions for `~/.kvoice`
+1. Check write permissions for `~/.Zana`
 2. Ensure disk is not full
 3. Restart application
 4. Check logs for errors
@@ -740,11 +740,11 @@ cat ~/.kvoice/logs/kvoice.log | grep -i gpu
 **macOS:**
 
 **Problem: "App can't be opened"**
-- Right-click kVoice, select "Open"
+- Right-click Zana, select "Open"
 - Or: System Preferences > Security > "Open Anyway"
 
 **Problem: Poor performance**
-- Disable "App Nap" for kVoice
+- Disable "App Nap" for Zana
 - Use full-screen mode for best experience
 - Close heavy applications (browsers, editors)
 
@@ -782,9 +782,9 @@ pulseaudio --start
 
 **Before Requesting Help:**
 1. Check this guide thoroughly
-2. Search existing issues: https://github.com/kvoice/kvoice/issues
+2. Search existing issues: https://github.com/Zana/Zana/issues
 3. Gather this information:
-   - kVoice version (run `kvoice --version`)
+   - Zana version (run `Zana --version`)
    - Operating system and version
    - Steps to reproduce
    - Error messages or logs
@@ -792,22 +792,22 @@ pulseaudio --start
 **Debug Logs:**
 ```bash
 # View logs
-cat ~/.kvoice/logs/kvoice.log
+cat ~/.Zana/logs/Zana.log
 
 # Or run with debug output
-RUST_LOG=debug kvoice
+RUST_LOG=debug Zana
 ```
 
 **Reporting Issues:**
-- GitHub: https://github.com/kvoice/kvoice/issues
+- GitHub: https://github.com/Zana/Zana/issues
 - Include error logs
 - Describe what you expected vs what happened
 - Include system information
 
 **Community:**
-- Discord: https://discord.gg/kvoice
-- Forums: https://kvoice.app/forum
-- Email: support@kvoice.app
+- Discord: https://discord.gg/Zana
+- Forums: https://Zana.app/forum
+- Email: support@Zana.app
 
 ---
 
@@ -911,7 +911,7 @@ RUST_LOG=debug kvoice
 
 ### Multiple Languages
 
-kVoice supports 90+ languages via Whisper:
+Zana supports 90+ languages via Whisper:
 
 **To Change Language:**
 1. Settings > Language
@@ -936,8 +936,8 @@ See: https://github.com/openai/whisper/blob/main/README.md
 Edit configuration file directly for advanced settings:
 
 **Location:**
-- macOS/Linux: `~/.kvoice/config.toml`
-- Windows: `%APPDATA%\kvoice\config.toml`
+- macOS/Linux: `~/.Zana/config.toml`
+- Windows: `%APPDATA%\Zana\config.toml`
 
 **Example:**
 ```toml
@@ -981,8 +981,8 @@ height = 500
 **Q: Is my audio uploaded anywhere?**
 A: No. All processing happens locally on your computer. Your audio never leaves your device.
 
-**Q: Can I use kVoice offline?**
-A: Yes, once the model is downloaded, kVoice works completely offline.
+**Q: Can I use Zana offline?**
+A: Yes, once the model is downloaded, Zana works completely offline.
 
 **Q: How much disk space do models need?**
 A: Models range from 39MB (Tiny) to 1.5GB (Large v3). You can delete unused models.
@@ -991,48 +991,48 @@ A: Models range from 39MB (Tiny) to 1.5GB (Large v3). You can delete unused mode
 A: Not directly in current version. Record the audio playing on your computer as a workaround.
 
 **Q: What audio formats are supported?**
-A: kVoice works with microphone input. For file support, check for future updates.
+A: Zana works with microphone input. For file support, check for future updates.
 
 **Q: Is transcription real-time?**
 A: Near real-time with Tiny model (~3x faster than realtime). Larger models are slower but more accurate.
 
 **Q: Can I train my own model?**
-A: kVoice uses Whisper models. Custom training requires separate tools from OpenAI.
+A: Zana uses Whisper models. Custom training requires separate tools from OpenAI.
 
-**Q: Does kVoice work with Bluetooth headphones?**
+**Q: Does Zana work with Bluetooth headphones?**
 A: Yes, if your system recognizes the headphones' microphone.
 
 **Q: Can I use multiple microphones?**
-A: kVoice uses one at a time. Switch in Settings > Audio Device.
+A: Zana uses one at a time. Switch in Settings > Audio Device.
 
 **Q: Is there a mobile version?**
-A: Not currently. kVoice is desktop-only.
+A: Not currently. Zana is desktop-only.
 
-**Q: Can I use kVoice commercially?**
-A: Yes, kVoice is released under MIT license. See LICENSE file.
+**Q: Can I use Zana commercially?**
+A: Yes, Zana is released under MIT license. See LICENSE file.
 
 ---
 
 ## Changelog
 
-See [CHANGELOG.md](https://github.com/kvoice/kvoice/blob/main/CHANGELOG.md) for version history.
+See [CHANGELOG.md](https://github.com/Zana/Zana/blob/main/CHANGELOG.md) for version history.
 
 ---
 
 ## License
 
-kVoice is released under the MIT License.
+Zana is released under the MIT License.
 
 ---
 
 ## Support
 
-- Website: https://kvoice.app
-- Documentation: https://kvoice.app/docs
-- GitHub: https://github.com/kvoice/kvoice
-- Discord: https://discord.gg/kvoice
-- Email: support@kvoice.app
+- Website: https://Zana.app
+- Documentation: https://Zana.app/docs
+- GitHub: https://github.com/Zana/Zana
+- Discord: https://discord.gg/Zana
+- Email: support@Zana.app
 
 ---
 
-**Enjoy using kVoice!**
+**Enjoy using Zana!**

@@ -545,7 +545,7 @@ export class NebulaGPURenderer {
 }
 
 // ============================================================================
-// Plugin Interface (for kVoice plugin system)
+// Plugin Interface (for Zana plugin system)
 // ============================================================================
 
 let renderer = null;
