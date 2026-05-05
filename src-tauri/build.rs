@@ -2,6 +2,5 @@ fn main() {
     tauri_build::build()
 }
 
-// Note: Info.plist entries for macOS are added via tauri_build::build!() macro
-// or can be manually added to the generated Info.plist in target/release/bundle/
-
+// Note: macOS Info.plist entries are merged from the tracked src-tauri/Info.plist
+// file next to tauri.conf.json; do not edit generated bundle files in target/.
