@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2.0",
-  "productName": "Zana",
+  "productName": "qVoice",
   "version": "1.0.0",
   "identifier": "app.zana",
   "build": {

@@ -241,15 +241,24 @@ cargo test -- --nocapture
 # Build optimized binary
 cargo build -p Zana-app --release
 
-# Create macOS app bundle
+# Create macOS app bundle and DMG
 cargo tauri build
 
 # Build universal binary (Intel + Apple Silicon)
 ./scripts/build-macos.sh --universal
 
-# Sign and notarize for distribution
+# Sign and notarize with a stable Developer ID certificate
+export APPLE_DEVELOPER_ID="Developer ID Application: Your Name (TEAMID)"
+export APPLE_ID="you@example.com"
+export APPLE_APP_PASSWORD="app-specific-password"
+export APPLE_TEAM_ID="TEAMID"
 ./scripts/sign-and-notarize.sh
 ```
+
+GitHub releases are created from `v*` tags by `.github/workflows/release.yml`.
+Set these repository secrets before publishing signed builds:
+`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`,
+`APPLE_ID`, `APPLE_APP_PASSWORD`, and `APPLE_TEAM_ID`.
 
 ## Project Status
 

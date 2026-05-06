@@ -36,6 +36,7 @@
       align-items: center;
       padding: 0 76px;
       border-bottom: 1px solid var(--border);
+      gap: 12px;
     }
     .titlebar h1 {
       font-size: 13px;
@@ -43,6 +44,24 @@
       color: var(--foreground);
       width: 100%;
       text-align: center;
+    }
+    .update-banner {
+      position: absolute;
+      right: 14px;
+      height: 24px;
+      padding: 0 10px;
+      display: none;
+      align-items: center;
+      border-radius: var(--radius);
+      background: oklch(0.22 0.11 145);
+      border-color: oklch(0.54 0.14 145 / 48%);
+      color: var(--foreground);
+      font-size: 11px;
+      font-weight: 650;
+      -webkit-app-region: no-drag;
+    }
+    .update-banner.visible {
+      display: inline-flex;
     }
     .content {
       padding: 24px;
@@ -255,6 +274,7 @@
 <body>
   <div class="titlebar">
     <h1>Preferences</h1>
+    <button id="update-banner" class="update-banner" type="button">Update</button>
   </div>
 
   <div class="content">
@@ -667,6 +687,38 @@
       open('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
     }
 
+    async function checkForUpdates() {
+      if (!window.__TAURI__) {
+        return;
+      }
+
+      try {
+        const { invoke } = window.__TAURI__.core;
+        const status = await invoke('check_for_updates');
+        const banner = document.getElementById('update-banner');
+
+        if (!status.available || !status.release_url) {
+          banner.classList.remove('visible');
+          return;
+        }
+
+        banner.textContent = status.latest_version
+          ? `Update ${status.latest_version}`
+          : 'Update';
+        banner.classList.add('visible');
+        banner.onclick = async () => {
+          try {
+            const { open } = window.__TAURI__.shell;
+            await open(status.release_url);
+          } catch (e) {
+            console.warn('Failed to open release:', e);
+          }
+        };
+      } catch (e) {
+        console.warn('Failed to check for updates:', e);
+      }
+    }
+
     async function savePreferences() {
       if (!window.__TAURI__) {
         setSaveStatus('Preferences can only be saved in the app.', 'error');
@@ -708,6 +760,7 @@
         const prefs = await invoke('get_preferences');
         await loadAudioInputs(prefs.audioInput);
         applyPreferences(prefs);
+        await checkForUpdates();
       } catch (e) {
         console.warn('Failed to load preferences:', e);
         setSaveStatus(String(e), 'error');

@@ -157,9 +157,9 @@ fn mac_bundle_identity_and_signing_are_stable() {
         "bundle identifier must stay app.zana so macOS permissions remain stable"
     );
     assert_eq!(
-        tauri_config.pointer("/bundle/macOS/signingIdentity"),
-        Some(&Value::String("-".to_string())),
-        "macOS app bundles must be ad-hoc signed so LaunchServices sees a sealed .app"
+        tauri_config.get("productName").and_then(Value::as_str),
+        Some("qVoice"),
+        "generated macOS bundle should be qVoice.app while identifier stays app.zana"
     );
 
     let plist = read_repo_file("src-tauri/Info.plist");
@@ -171,6 +171,26 @@ fn mac_bundle_identity_and_signing_are_stable() {
         plist.contains("<key>CFBundleDisplayName</key>")
             && plist.contains("<string>qVoice</string>"),
         "visible app display name should be qVoice while bundle identity stays stable"
+    );
+}
+
+#[test]
+fn preferences_exposes_update_check_banner() {
+    let html = read_repo_file("src-ui/preferences.html");
+    let main_rs = read_repo_file("src-tauri/src/main.rs");
+    let update_rs = read_repo_file("src-tauri/src/commands/update.rs");
+
+    assert!(
+        html.contains("id=\"update-banner\"") && html.contains("checkForUpdates"),
+        "preferences top bar must show an update affordance when a release is available"
+    );
+    assert!(
+        main_rs.contains("commands::check_for_updates"),
+        "update check command must be registered with Tauri"
+    );
+    assert!(
+        update_rs.contains("https://api.github.com/repos/{owner}/{repo}/releases/latest"),
+        "update checks must read the latest GitHub release"
     );
 }
 

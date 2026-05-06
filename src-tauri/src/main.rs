@@ -513,6 +513,8 @@ fn main() {
             commands::get_orb_style,
             commands::get_preferences,
             commands::save_preferences,
+            // Updates
+            commands::check_for_updates,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

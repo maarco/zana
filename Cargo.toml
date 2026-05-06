@@ -6,8 +6,8 @@ resolver = "2"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-authors = ["Zana Team"]
-repository = "https://github.com/Zana/Zana"
+authors = ["Marco Almazan"]
+repository = "https://github.com/malmazan/qVoice"
 
 [workspace.dependencies]
 # GUI Framework
