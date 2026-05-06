@@ -1319,13 +1319,20 @@
 
     window.closeWindow = async function() {
       try {
-        const { getCurrentWindow } = window.__TAURI__.window;
-        await getCurrentWindow().close();
+        if (window.__TAURI__ && window.__TAURI__.window
+            && typeof window.__TAURI__.window.getCurrentWindow === 'function') {
+          await window.__TAURI__.window.getCurrentWindow().close();
+          return;
+        }
+        if (window.__TAURI__ && window.__TAURI__.webviewWindow
+            && typeof window.__TAURI__.webviewWindow.getCurrent === 'function') {
+          await window.__TAURI__.webviewWindow.getCurrent().close();
+          return;
+        }
       } catch (e) {
-        console.error('[Genesis] Failed to close:', e);
-        // Fallback
-        window.close();
+        console.error('[Genesis] Failed to close via Tauri window API:', e);
       }
+      window.close();
     };
 
     // ============================================================================

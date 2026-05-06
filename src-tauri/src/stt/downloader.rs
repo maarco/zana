@@ -39,9 +39,22 @@ impl ModelDownloader {
     /// Create a downloader with a custom model directory
     pub fn with_model_dir(model_dir: PathBuf) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: Self::client_for_model_dir(),
             model_dir,
         }
+    }
+
+    #[cfg(not(test))]
+    fn client_for_model_dir() -> reqwest::Client {
+        reqwest::Client::new()
+    }
+
+    #[cfg(test)]
+    fn client_for_model_dir() -> reqwest::Client {
+        reqwest::Client::builder()
+            .no_proxy()
+            .build()
+            .expect("failed to build test HTTP client")
     }
 
     /// Check if a model is already downloaded and cached

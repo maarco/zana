@@ -44,6 +44,41 @@ fn preferences_window_has_tauri_capability() {
 }
 
 #[test]
+fn secondary_windows_have_close_capabilities() {
+    let tauri_config: Value =
+        serde_json::from_str(&read_repo_file("src-tauri/tauri.conf.json")).unwrap();
+    let capabilities = tauri_config
+        .pointer("/app/security/capabilities")
+        .and_then(Value::as_array)
+        .expect("tauri config must declare capabilities");
+
+    for window_name in ["preferences", "about", "onboarding"] {
+        let can_close = capabilities.iter().any(|capability| {
+            let includes_window = capability
+                .get("windows")
+                .and_then(Value::as_array)
+                .is_some_and(|windows| windows.iter().any(|window| window == window_name));
+
+            let allows_close = capability
+                .get("permissions")
+                .and_then(Value::as_array)
+                .is_some_and(|permissions| {
+                    permissions
+                        .iter()
+                        .any(|permission| permission == "core:window:allow-close")
+                });
+
+            includes_window && allows_close
+        });
+
+        assert!(
+            can_close,
+            "{window_name} must have Tauri close permission for Save/Cancel/close buttons"
+        );
+    }
+}
+
+#[test]
 fn preferences_save_uses_backend_save_command() {
     let html = read_repo_file("src-ui/preferences.html");
 

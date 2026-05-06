@@ -87,7 +87,7 @@
   </style>
 </head>
 <body>
-  <button class="close-btn" onclick="window.close()">&times;</button>
+  <button class="close-btn" onclick="closeWindow()">&times;</button>
 
   <div class="about-container">
     <div class="logo">K</div>
@@ -111,5 +111,24 @@
       Built with Tauri + Whisper.cpp
     </p>
   </div>
+  <script>
+    async function closeWindow() {
+      try {
+        if (window.__TAURI__ && window.__TAURI__.window
+            && typeof window.__TAURI__.window.getCurrentWindow === 'function') {
+          await window.__TAURI__.window.getCurrentWindow().close();
+          return;
+        }
+        if (window.__TAURI__ && window.__TAURI__.webviewWindow
+            && typeof window.__TAURI__.webviewWindow.getCurrent === 'function') {
+          await window.__TAURI__.webviewWindow.getCurrent().close();
+          return;
+        }
+      } catch (e) {
+        console.error('Failed to close via Tauri window API:', e);
+      }
+      window.close();
+    }
+  </script>
 </body>
 </html>
