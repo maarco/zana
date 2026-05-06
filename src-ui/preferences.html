@@ -63,6 +63,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 16px;
       padding: 12px 16px;
       background: var(--card);
       border: 1px solid var(--border);
@@ -79,6 +80,9 @@
       color: var(--muted-foreground);
       margin-top: 2px;
     }
+    .setting-copy {
+      min-width: 0;
+    }
     select, input[type="text"], input[type="password"], input[type="number"], input[type="url"] {
       background: var(--muted);
       border: 1px solid transparent;
@@ -87,6 +91,11 @@
       color: var(--foreground);
       font-size: 13px;
       min-width: 180px;
+    }
+    .setting-row > select,
+    .setting-row > input {
+      width: min(280px, 45%);
+      flex: 0 1 280px;
     }
     select:focus, input:focus {
       outline: none;
@@ -156,6 +165,44 @@
       width: 100%;
       min-width: 0;
     }
+    .writing-profile-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .writing-profile-field {
+      display: grid;
+      grid-template-columns: minmax(150px, 0.34fr) minmax(0, 1fr);
+      align-items: start;
+      gap: 16px;
+      padding: 12px 16px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .writing-profile-field input,
+    .writing-profile-field textarea {
+      width: 100%;
+      min-width: 0;
+    }
+    .writing-profile-field textarea {
+      min-height: 92px;
+    }
+    @media (max-width: 560px) {
+      .setting-row,
+      .provider-field,
+      .writing-profile-field {
+        grid-template-columns: 1fr;
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .setting-row > select,
+      .setting-row > input {
+        width: 100%;
+        flex-basis: auto;
+      }
+    }
     .button-row {
       display: flex;
       align-items: center;
@@ -215,7 +262,7 @@
       <div class="section-title">Speech Recognition</div>
 
       <div class="setting-row">
-        <div>
+        <div class="setting-copy">
           <div class="setting-label">Whisper Model</div>
           <div class="setting-desc">Larger models are more accurate but slower</div>
         </div>
@@ -229,7 +276,7 @@
       </div>
 
       <div class="setting-row">
-        <div>
+        <div class="setting-copy">
           <div class="setting-label">Language</div>
           <div class="setting-desc">Auto-detect or specify language</div>
         </div>
@@ -249,7 +296,7 @@
       <div class="section-title">Writing Polish</div>
 
       <div class="setting-row">
-        <div>
+        <div class="setting-copy">
           <div class="setting-label">Enable Writing Polish</div>
           <div class="setting-desc">
             Use clipboard context and your writing profile to polish local transcripts
@@ -292,35 +339,31 @@
         </div>
       </div>
 
-      <div class="setting-row">
-        <div style="width: 100%; margin-right: 12px;">
-          <div class="setting-label">Purpose</div>
-          <div class="setting-desc">
-            Why this text is being rewritten
+      <div class="writing-profile-grid">
+        <div class="writing-profile-field">
+          <div class="setting-copy">
+            <div class="setting-label">Purpose</div>
+            <div class="setting-desc">Why this text is being rewritten</div>
           </div>
+          <textarea id="writing-purpose" placeholder="e.g. Write a polished follow-up email"></textarea>
         </div>
-      </div>
-      <textarea id="writing-purpose" placeholder="e.g. Write a polished follow-up email"></textarea>
 
-      <div class="setting-row">
-        <div style="width: 100%; margin-right: 12px;">
-          <div class="setting-label">Tone</div>
-          <div class="setting-desc">
-            Desired writing style
+        <div class="writing-profile-field">
+          <div class="setting-copy">
+            <div class="setting-label">Tone</div>
+            <div class="setting-desc">Desired writing style</div>
           </div>
+          <input type="text" id="writing-tone" value="clear and concise">
         </div>
-      </div>
-      <input type="text" id="writing-tone" value="clear and concise">
 
-      <div class="setting-row">
-        <div style="width: 100%; margin-right: 12px;">
-          <div class="setting-label">Format</div>
-          <div class="setting-desc">
-            Expected output shape
+        <div class="writing-profile-field">
+          <div class="setting-copy">
+            <div class="setting-label">Format</div>
+            <div class="setting-desc">Expected output shape</div>
           </div>
+          <input type="text" id="writing-format" value="one short paragraph">
         </div>
       </div>
-      <input type="text" id="writing-format" value="one short paragraph">
     </div>
 
     <div class="section">
