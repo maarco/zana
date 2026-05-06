@@ -159,15 +159,31 @@ pub async fn run_diagnostics(
     // 5. Recording state check
     #[cfg(target_os = "macos")]
     {
-        // Check if Fn key monitoring is active (we can't really test this without a key press)
+        let has_accessibility = onboarding::check_accessibility();
         checks.insert(
             "keyboard".to_string(),
             DiagnosticCheck {
                 name: "Keyboard Hook".to_string(),
-                status: "info".to_string(),
-                message: "Press Fn key to test recording".to_string(),
-                fix: None,
-                fix_action: None,
+                status: if has_accessibility {
+                    "ok".to_string()
+                } else {
+                    "warning".to_string()
+                },
+                message: if has_accessibility {
+                    "Fn key monitor ready; hold Fn to record".to_string()
+                } else {
+                    "Fn key monitoring is waiting on accessibility permissions".to_string()
+                },
+                fix: if !has_accessibility {
+                    Some("Open System Settings".to_string())
+                } else {
+                    None
+                },
+                fix_action: if !has_accessibility {
+                    Some("openAccessibilitySettings()".to_string())
+                } else {
+                    None
+                },
             },
         );
     }
