@@ -5,26 +5,42 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Zana Preferences</title>
   <style>
+    :root {
+      --background: oklch(0.13 0 0);
+      --foreground: oklch(0.97 0 0);
+      --card: oklch(0.17 0 0);
+      --card-foreground: oklch(0.97 0 0);
+      --primary: oklch(0.65 0.18 250);
+      --primary-foreground: oklch(0.98 0 0);
+      --muted: oklch(0.22 0 0);
+      --muted-foreground: oklch(0.65 0 0);
+      --accent: oklch(0.25 0 0);
+      --border: oklch(1 0 0 / 8%);
+      --input: oklch(1 0 0 / 12%);
+      --ring: oklch(0.65 0.18 250);
+      --destructive: oklch(0.704 0.191 22.216);
+      --radius: 6px;
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
-      background: #1e1e2e;
-      color: #cdd6f4;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+      background: var(--background);
+      color: var(--foreground);
       min-height: 100vh;
       -webkit-app-region: drag;
     }
     .titlebar {
       height: 38px;
-      background: #181825;
+      background: var(--card);
       display: flex;
       align-items: center;
       padding: 0 76px;
-      border-bottom: 1px solid #313244;
+      border-bottom: 1px solid var(--border);
     }
     .titlebar h1 {
       font-size: 13px;
-      font-weight: 500;
-      color: #a6adc8;
+      font-weight: 700;
+      color: var(--foreground);
       width: 100%;
       text-align: center;
     }
@@ -39,8 +55,8 @@
       font-size: 11px;
       font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: #6c7086;
+      letter-spacing: 0.04em;
+      color: var(--muted-foreground);
       margin-bottom: 12px;
     }
     .setting-row {
@@ -48,72 +64,77 @@
       align-items: center;
       justify-content: space-between;
       padding: 12px 16px;
-      background: #181825;
-      border-radius: 8px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
       margin-bottom: 8px;
     }
     .setting-label {
       font-size: 14px;
-      color: #cdd6f4;
+      font-weight: 650;
+      color: var(--card-foreground);
     }
     .setting-desc {
       font-size: 12px;
-      color: #6c7086;
+      color: var(--muted-foreground);
       margin-top: 2px;
     }
     select, input[type="text"], input[type="password"], input[type="number"], input[type="url"] {
-      background: #313244;
-      border: 1px solid #45475a;
-      border-radius: 6px;
+      background: var(--muted);
+      border: 1px solid transparent;
+      border-radius: var(--radius);
       padding: 8px 12px;
-      color: #cdd6f4;
+      color: var(--foreground);
       font-size: 13px;
       min-width: 180px;
     }
     select:focus, input:focus {
       outline: none;
-      border-color: #89b4fa;
+      border-color: var(--ring);
+      box-shadow: 0 0 0 3px oklch(0.65 0.18 250 / 24%);
     }
     .toggle {
       position: relative;
-      width: 44px;
+      width: 40px;
       height: 24px;
-      background: #45475a;
+      background: var(--muted);
+      border: 1px solid var(--border);
       border-radius: 12px;
       cursor: pointer;
       transition: background 0.2s;
     }
     .toggle.active {
-      background: #89b4fa;
+      background: oklch(0.65 0.18 250 / 60%);
     }
     .toggle::after {
       content: '';
       position: absolute;
-      top: 2px;
-      left: 2px;
-      width: 20px;
-      height: 20px;
-      background: #cdd6f4;
+      top: 3px;
+      left: 3px;
+      width: 16px;
+      height: 16px;
+      background: #fff;
       border-radius: 50%;
       transition: transform 0.2s;
     }
     .toggle.active::after {
-      transform: translateX(20px);
+      transform: translateX(16px);
     }
     textarea {
       width: 100%;
       min-height: 72px;
-      background: #313244;
-      border: 1px solid #45475a;
-      border-radius: 6px;
+      background: var(--muted);
+      border: 1px solid transparent;
+      border-radius: var(--radius);
       padding: 8px 12px;
-      color: #cdd6f4;
+      color: var(--foreground);
       font-size: 13px;
       resize: vertical;
     }
     textarea:focus {
       outline: none;
-      border-color: #89b4fa;
+      border-color: var(--ring);
+      box-shadow: 0 0 0 3px oklch(0.65 0.18 250 / 24%);
     }
     .provider-grid {
       display: grid;
@@ -127,8 +148,9 @@
       align-items: center;
       gap: 12px;
       padding: 12px 16px;
-      background: #181825;
-      border-radius: 8px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
     }
     .provider-field input {
       width: 100%;
@@ -141,24 +163,24 @@
       gap: 12px;
       margin-top: 24px;
       padding-top: 24px;
-      border-top: 1px solid #313244;
+      border-top: 1px solid var(--border);
     }
     .save-status {
       margin-right: auto;
-      color: #a6adc8;
+      color: var(--muted-foreground);
       font-size: 12px;
       min-height: 16px;
     }
     .save-status.error {
-      color: #f38ba8;
+      color: var(--destructive);
     }
     button {
       padding: 8px 20px;
-      border-radius: 6px;
+      border-radius: var(--radius);
       font-size: 13px;
       font-weight: 500;
       cursor: pointer;
-      border: none;
+      border: 1px solid var(--border);
       transition: all 0.2s;
     }
     button:disabled {
@@ -166,18 +188,20 @@
       opacity: 0.55;
     }
     .btn-secondary {
-      background: #313244;
-      color: #cdd6f4;
+      background: var(--muted);
+      color: var(--foreground);
     }
     .btn-secondary:hover {
-      background: #45475a;
+      background: var(--accent);
     }
     .btn-primary {
-      background: #89b4fa;
-      color: #1e1e2e;
+      background: var(--primary);
+      color: var(--primary-foreground);
+      box-shadow: 0 1px 0 oklch(0.65 0.18 250 / 28%);
     }
     .btn-primary:hover {
-      background: #b4befe;
+      background: oklch(0.7 0.18 250);
+      transform: translateY(-1px);
     }
   </style>
 </head>
@@ -400,7 +424,7 @@
         <button class="btn-primary" onclick="runDoctor()">Doctor</button>
       </div>
 
-      <div id="doctor-results" style="display: none; margin-top: 12px; padding: 12px; background: #181825; border-radius: 8px; font-family: monospace; font-size: 12px;">
+      <div id="doctor-results" style="display: none; margin-top: 12px; padding: 12px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); font-family: monospace; font-size: 12px;">
         <div style="margin-bottom: 8px; font-weight: 600;" id="doctor-status">running checks...</div>
         <div id="doctor-output"></div>
       </div>
@@ -570,28 +594,28 @@
           const isGood = value.status === 'ok';
           allGood = allGood && isGood;
           const icon = isGood ? '✔' : '✖';
-          const color = isGood ? '#a6e3a1' : '#f38ba8';
+          const color = isGood ? 'oklch(0.75 0.16 145)' : 'var(--destructive)';
 
           html += `<div style="margin-bottom: 8px;">
             <span style="color: ${color}">${icon}</span>
-            <strong style="color: #cdd6f4">${value.name}</strong>
-            <div style="color: #a6adc8; margin-left: 20px;">${value.message}</div>
+            <strong style="color: var(--foreground)">${value.name}</strong>
+            <div style="color: var(--muted-foreground); margin-left: 20px;">${value.message}</div>
           </div>`;
 
           if (value.fix) {
             html += `<div style="margin-left: 20px; margin-bottom: 8px;">
-              <button onclick="${value.fix_action}" style="padding: 4px 12px; font-size: 11px; background: #89b4fa; border: none; border-radius: 4px; cursor: pointer;">${value.fix}</button>
+              <button onclick="${value.fix_action}" style="padding: 4px 12px; font-size: 11px; background: var(--primary); color: var(--primary-foreground); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer;">${value.fix}</button>
             </div>`;
           }
         }
 
         output.innerHTML = html;
         status.textContent = allGood ? 'all systems go' : 'issues found';
-        status.style.color = allGood ? '#a6e3a1' : '#f38ba8';
+        status.style.color = allGood ? 'oklch(0.75 0.16 145)' : 'var(--destructive)';
 
       } catch (e) {
         status.textContent = 'error running diagnostics';
-        output.innerHTML = `<div style="color: #f38ba8">${e}</div>`;
+        output.innerHTML = `<div style="color: var(--destructive)">${e}</div>`;
       }
     }
 
