@@ -115,6 +115,40 @@
       outline: none;
       border-color: #89b4fa;
     }
+    .setup-block {
+      background: #11111b;
+      border: 1px solid #313244;
+      border-radius: 8px;
+      margin: 8px 0 16px;
+      overflow: hidden;
+    }
+    .setup-block-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 16px;
+      border-bottom: 1px solid #313244;
+    }
+    .setup-copy {
+      background: #313244;
+      color: #cdd6f4;
+      padding: 6px 12px;
+      white-space: nowrap;
+    }
+    .setup-copy:hover {
+      background: #45475a;
+    }
+    .setup-commands {
+      padding: 14px 16px;
+      color: #a6adc8;
+      font-family: 'SF Mono', Monaco, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      user-select: text;
+      -webkit-user-select: text;
+    }
     .button-row {
       display: flex;
       align-items: center;
@@ -213,6 +247,22 @@
           </div>
         </div>
         <div class="toggle" id="cloud-rewrite-toggle"></div>
+      </div>
+
+      <div class="setup-block">
+        <div class="setup-block-header">
+          <div>
+            <div class="setting-label">LLM Provider Setup</div>
+            <div class="setting-desc">
+              Run before launching Zana, then fully quit and reopen the app
+            </div>
+          </div>
+          <button class="setup-copy" onclick="copyProviderSetup()">Copy</button>
+        </div>
+        <pre class="setup-commands" id="provider-setup-commands">launchctl setenv ZANA_REWRITE_API_KEY "sk-your-key"
+launchctl setenv ZANA_REWRITE_MODEL "gpt-4o-mini"
+launchctl setenv ZANA_REWRITE_API_URL "https://api.openai.com/v1/chat/completions"
+launchctl setenv ZANA_REWRITE_TIMEOUT_MS "15000"</pre>
       </div>
 
       <div class="setting-row">
@@ -408,6 +458,17 @@
       const field = document.getElementById(id);
       if (value !== undefined && value !== null) {
         field.value = String(value);
+      }
+    }
+
+    async function copyProviderSetup() {
+      const commands = document.getElementById('provider-setup-commands').textContent.trim();
+      try {
+        await navigator.clipboard.writeText(commands);
+        setSaveStatus('Provider setup copied');
+      } catch (e) {
+        console.warn('Failed to copy provider setup:', e);
+        setSaveStatus('Select and copy the provider setup commands manually.', 'error');
       }
     }
 
