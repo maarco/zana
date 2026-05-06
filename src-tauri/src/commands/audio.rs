@@ -2,7 +2,7 @@
 //!
 //! Tauri commands for audio capture and device management.
 
-use crate::audio::{AudioCapture, AudioDevice, AudioMetrics};
+use crate::audio::{AudioCapture, AudioDevice, AudioMetrics, CapturedAudio};
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -57,32 +57,39 @@ pub async fn start_recording(
     state: State<'_, AppState>,
     device_id: Option<String>,
 ) -> Result<RecordingResponse, String> {
-    let capture = state.audio_capture.lock().await;
-
-    match capture.start(device_id.as_deref()).await {
-        Ok(()) => Ok(RecordingResponse {
+    match start_recording_inner(&state, device_id.as_deref()).await {
+        Ok(_) => Ok(RecordingResponse {
             success: true,
             error: None,
         }),
         Err(e) => Ok(RecordingResponse {
             success: false,
-            error: Some(e.to_string()),
+            error: Some(e),
         }),
+    }
+}
+
+pub async fn start_recording_inner(
+    state: &AppState,
+    device_id: Option<&str>,
+) -> Result<(), String> {
+    state.capture_recording_clipboard().await;
+
+    let capture = state.audio_capture.lock().await;
+
+    match capture.start(device_id).await {
+        Ok(()) => Ok(()),
+        Err(e) => Err(e.to_string()),
     }
 }
 
 /// Stop audio recording
 #[tauri::command]
 pub async fn stop_recording(state: State<'_, AppState>) -> Result<StopRecordingResponse, String> {
-    let capture = state.audio_capture.lock().await;
-
-    match capture.stop().await {
+    match stop_recording_inner(&state).await {
         Ok(audio) => {
             let duration_ms = audio.duration_ms;
             let sample_count = audio.samples.len();
-
-            // Store captured audio for transcription (move, don't clone)
-            *state.captured_audio.lock().await = Some(audio);
 
             Ok(StopRecordingResponse {
                 success: true,
@@ -95,8 +102,21 @@ pub async fn stop_recording(state: State<'_, AppState>) -> Result<StopRecordingR
             success: false,
             duration_ms: 0,
             sample_count: 0,
-            error: Some(e.to_string()),
+            error: Some(e),
         }),
+    }
+}
+
+pub async fn stop_recording_inner(state: &AppState) -> Result<CapturedAudio, String> {
+    let capture = state.audio_capture.lock().await;
+
+    match capture.stop().await {
+        Ok(audio) => {
+            // Store captured audio for transcription (move, don't clone)
+            *state.captured_audio.lock().await = Some(audio.clone());
+            Ok(audio)
+        }
+        Err(e) => Err(e.to_string()),
     }
 }
 

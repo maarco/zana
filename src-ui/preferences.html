@@ -100,6 +100,21 @@
     .toggle.active::after {
       transform: translateX(20px);
     }
+    textarea {
+      width: 100%;
+      min-height: 72px;
+      background: #313244;
+      border: 1px solid #45475a;
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: #cdd6f4;
+      font-size: 13px;
+      resize: vertical;
+    }
+    textarea:focus {
+      outline: none;
+      border-color: #89b4fa;
+    }
     .button-row {
       display: flex;
       align-items: center;
@@ -185,6 +200,50 @@
           <option value="zh">Chinese</option>
         </select>
       </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Cloud Rewrite</div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Enable cloud polishing</div>
+          <div class="setting-desc">
+            Send transcription to a privacy-aware LLM for rewrite
+          </div>
+        </div>
+        <div class="toggle" id="cloud-rewrite-toggle"></div>
+      </div>
+
+      <div class="setting-row">
+        <div style="width: 100%; margin-right: 12px;">
+          <div class="setting-label">Purpose</div>
+          <div class="setting-desc">
+            Why this text is being rewritten
+          </div>
+        </div>
+      </div>
+      <textarea id="writing-purpose" placeholder="e.g. Write a polished follow-up email"></textarea>
+
+      <div class="setting-row">
+        <div style="width: 100%; margin-right: 12px;">
+          <div class="setting-label">Tone</div>
+          <div class="setting-desc">
+            Desired writing style
+          </div>
+        </div>
+      </div>
+      <input type="text" id="writing-tone" value="clear and concise">
+
+      <div class="setting-row">
+        <div style="width: 100%; margin-right: 12px;">
+          <div class="setting-label">Format</div>
+          <div class="setting-desc">
+            Expected output shape
+          </div>
+        </div>
+      </div>
+      <input type="text" id="writing-format" value="one short paragraph">
     </div>
 
     <div class="section">
@@ -296,7 +355,7 @@
 
     <div class="button-row">
       <div class="save-status" id="save-status" role="status"></div>
-      <button class="btn-secondary" onclick="window.close()">Cancel</button>
+      <button class="btn-secondary" onclick="closeWindow()">Cancel</button>
       <button class="btn-primary" id="save-button" onclick="savePreferences()">Save</button>
     </div>
   </div>
@@ -313,6 +372,27 @@
       const status = document.getElementById('save-status');
       status.textContent = message;
       status.className = type ? `save-status ${type}` : 'save-status';
+    }
+
+    // window.close() is a no-op for Tauri v2 secondary windows (the standard
+    // browser API only closes windows opened via window.open()). Use the Tauri
+    // window API; fall back to window.close() when running outside Tauri.
+    async function closeWindow() {
+      try {
+        if (window.__TAURI__ && window.__TAURI__.window
+            && typeof window.__TAURI__.window.getCurrentWindow === 'function') {
+          await window.__TAURI__.window.getCurrentWindow().close();
+          return;
+        }
+        if (window.__TAURI__ && window.__TAURI__.webviewWindow
+            && typeof window.__TAURI__.webviewWindow.getCurrent === 'function') {
+          await window.__TAURI__.webviewWindow.getCurrent().close();
+          return;
+        }
+      } catch (e) {
+        console.error('Failed to close via Tauri window API:', e);
+      }
+      window.close();
     }
 
     function setToggle(id, active) {
@@ -377,6 +457,10 @@
       setFieldValue('global-shortcut', prefs.globalShortcut);
       setFieldValue('orb-style', prefs.orbStyle);
       setToggle('menubar-toggle', prefs.showInMenuBar);
+      setToggle('cloud-rewrite-toggle', prefs.cloudRewriteEnabled);
+      setFieldValue('writing-purpose', prefs.writingPurpose);
+      setFieldValue('writing-tone', prefs.writingTone);
+      setFieldValue('writing-format', prefs.writingFormat);
     }
 
     function collectPreferences() {
@@ -389,7 +473,11 @@
         triggerKey: document.getElementById('trigger-key').value,
         globalShortcut: document.getElementById('global-shortcut').value,
         orbStyle: document.getElementById('orb-style').value,
-        showInMenuBar: isToggleActive('menubar-toggle')
+        showInMenuBar: isToggleActive('menubar-toggle'),
+        cloudRewriteEnabled: isToggleActive('cloud-rewrite-toggle'),
+        writingPurpose: document.getElementById('writing-purpose').value,
+        writingTone: document.getElementById('writing-tone').value,
+        writingFormat: document.getElementById('writing-format').value
       };
     }
 
@@ -471,7 +559,8 @@
           throw new Error(result.error || 'Unknown save error');
         }
 
-        window.close();
+        setSaveStatus('Saved');
+        await closeWindow();
       } catch (e) {
         console.error('Failed to save preferences:', e);
         setSaveStatus(String(e), 'error');

@@ -199,9 +199,9 @@ async fn test_settings_persistence() {
         whisper_model: Some("small".to_string()),
         audio_device: Some("test-device".to_string()),
         orb_style: Some("nebula-aura-gpu:purple".to_string()),
-        always_on_top: true,
         window_width: 600,
         window_height: 700,
+        ..Default::default()
     };
 
     // Save to temp file
@@ -523,9 +523,9 @@ async fn test_settings_change_persist_reload() {
         whisper_model: Some("tiny".to_string()),
         audio_device: Some("device-1".to_string()),
         orb_style: Some("nebula-aura-gpu:purple".to_string()),
-        always_on_top: true,
         window_width: 600,
         window_height: 700,
+        ..Default::default()
     };
 
     // Save to temp file
@@ -551,9 +551,10 @@ async fn test_settings_change_persist_reload() {
         whisper_model: Some("small".to_string()), // Changed
         audio_device: Some("device-2".to_string()), // Changed
         orb_style: settings1.orb_style.clone(),
-        always_on_top: false, // Changed
         window_width: 800,    // Changed
         window_height: 900,   // Changed
+        always_on_top: false, // Changed
+        ..Default::default()
     };
 
     // Save modified settings
@@ -888,9 +889,9 @@ fn benchmark_settings_serialization() {
         whisper_model: Some("small".to_string()),
         audio_device: Some("test-device".to_string()),
         orb_style: Some("nebula-aura-gpu:purple".to_string()),
-        always_on_top: true,
         window_width: 600,
         window_height: 700,
+        ..Default::default()
     };
 
     // Benchmark serialization

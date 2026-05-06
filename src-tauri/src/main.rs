@@ -1060,8 +1060,7 @@ fn handle_fn_press(app: &tauri::AppHandle) {
             tauri::async_runtime::spawn(async move {
                 log::info!("[FnPress] Starting audio capture...");
                 if let Some(state) = app_clone.try_state::<AppState>() {
-                    let capture = state.audio_capture.lock().await;
-                    match capture.start(None).await {
+                    match commands::start_recording_inner(&state, None).await {
                         Ok(_) => log::info!("[FnPress] Audio capture started successfully"),
                         Err(e) => log::error!("[FnPress] Failed to start recording: {}", e),
                     }
@@ -1148,46 +1147,49 @@ fn stop_recording(app: &tauri::AppHandle) {
     let app_clone = app.clone();
     tauri::async_runtime::spawn(async move {
         if let Some(state) = app_clone.try_state::<AppState>() {
-            // Stop capture
-            let capture = state.audio_capture.lock().await;
-            match capture.stop().await {
-                Ok(audio) => {
-                    log::info!("Recording stopped: {} samples", audio.samples.len());
+            let _ = commands::stop_recording_inner(&state)
+                .await
+                .map(|audio| log::info!("Recording stopped: {} samples", audio.samples.len()));
 
-                    // Transcribe
-                    let whisper = state.whisper_engine.lock().await;
-                    match whisper
-                        .transcribe(&audio.samples, Zana_app::WhisperModel::Small)
-                        .await
-                    {
-                        Ok(result) => {
-                            log::info!("Transcription: {}", result.text);
+            match commands::transcribe(state).await {
+                Ok(response) => {
+                    if response.success {
+                        if let Some(final_text) = response.text {
+                            log::info!(
+                                "[StopRecording] Transcription (rewritten: {})",
+                                response.used_cloud_rewrite
+                            );
 
                             // Use direct WKWebView eval - Tauri IPC doesn't work with NSPanel
-                            {
-                                let panel_guard = ORB_PANEL.lock().unwrap();
-                                if let Some(ref panel) = *panel_guard {
-                                    let escaped =
-                                        result.text.replace('\\', "\\\\").replace('"', "\\\"");
-                                    let js = format!("window.setTranscriptionComplete && window.setTranscriptionComplete(\"{}\")", escaped);
-                                    eval_js_in_panel(panel, &js);
-                                }
+                            let panel_guard = ORB_PANEL.lock().unwrap();
+                            if let Some(ref panel) = *panel_guard {
+                                let escaped = final_text.replace('\\', "\\\\").replace('"', "\\\"");
+                                let js = format!(
+                                    "window.setTranscriptionComplete && window.setTranscriptionComplete(\"{}\")",
+                                    escaped
+                                );
+                                eval_js_in_panel(panel, &js);
                             }
 
-                            // Paste text
-                            if !result.text.trim().is_empty() {
-                                paste_text(&result.text);
+                            if !final_text.trim().is_empty() {
+                                paste_text(&final_text);
                             }
                         }
-                        Err(e) => {
-                            log::error!("Transcription failed: {}", e);
-                        }
+                    } else {
+                        log::error!(
+                            "[StopRecording] Transcription failed: {}",
+                            response
+                                .error
+                                .unwrap_or_else(|| "unknown error".to_string())
+                        );
                     }
                 }
                 Err(e) => {
-                    log::error!("Failed to stop recording: {}", e);
+                    log::error!("Transcription command failed: {}", e);
                 }
             }
+        } else {
+            log::error!("[StopRecording] No app state available");
         }
 
         // Wait for poof animation to finish before starting fade out
@@ -1367,8 +1369,7 @@ fn handle_ctrl_press(app: &tauri::AppHandle) {
             tauri::async_runtime::spawn(async move {
                 log::info!("[CtrlPress] Starting audio capture...");
                 if let Some(state) = app_clone.try_state::<AppState>() {
-                    let capture = state.audio_capture.lock().await;
-                    match capture.start(None).await {
+                    match commands::start_recording_inner(&state, None).await {
                         Ok(_) => log::info!("[CtrlPress] Audio capture started"),
                         Err(e) => log::error!("[CtrlPress] Failed to start recording: {}", e),
                     }
@@ -1503,40 +1504,45 @@ fn win_stop_recording(app: &tauri::AppHandle) {
     let app_clone = app.clone();
     tauri::async_runtime::spawn(async move {
         if let Some(state) = app_clone.try_state::<AppState>() {
-            let capture = state.audio_capture.lock().await;
-            match capture.stop().await {
-                Ok(audio) => {
-                    log::info!(
-                        "[WinStopRec] Recording stopped: {} samples",
-                        audio.samples.len()
-                    );
+            let _ = commands::stop_recording_inner(&state)
+                .await
+                .map(|audio| log::info!("Recording stopped: {} samples", audio.samples.len()));
 
-                    let whisper = state.whisper_engine.lock().await;
-                    match whisper
-                        .transcribe(&audio.samples, Zana_app::WhisperModel::Small)
-                        .await
-                    {
-                        Ok(result) => {
-                            log::info!("[WinStopRec] Transcription: {}", result.text);
+            match commands::transcribe(state).await {
+                Ok(response) => {
+                    if response.success {
+                        if let Some(final_text) = response.text {
+                            log::info!(
+                                "[WinStopRec] Transcription (rewritten: {})",
+                                response.used_cloud_rewrite
+                            );
 
                             let _ = app_clone.emit(
                                 "transcription-complete",
                                 serde_json::json!({
-                                    "text": result.text
+                                    "text": final_text,
+                                    "rawText": response.raw_text,
+                                    "rewrittenText": response.rewritten_text,
+                                    "rewriteError": response.rewrite_error,
+                                    "usedCloudRewrite": response.used_cloud_rewrite,
                                 }),
                             );
 
-                            if !result.text.trim().is_empty() {
-                                win_paste_text(&result.text);
+                            if !final_text.trim().is_empty() {
+                                win_paste_text(&final_text);
                             }
                         }
-                        Err(e) => {
-                            log::error!("[WinStopRec] Transcription failed: {}", e);
-                        }
+                    } else {
+                        log::error!(
+                            "[WinStopRec] Transcription failed: {}",
+                            response
+                                .error
+                                .unwrap_or_else(|| "unknown error".to_string())
+                        );
                     }
                 }
                 Err(e) => {
-                    log::error!("[WinStopRec] Failed to stop recording: {}", e);
+                    log::error!("Transcription command failed: {}", e);
                 }
             }
         }

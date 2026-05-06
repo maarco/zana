@@ -2,11 +2,12 @@
 //!
 //! Tauri commands for speech-to-text using Whisper.
 
-use crate::commands::audio::RecordingResponse;
-use crate::state::AppState;
+use crate::state::{AppState, WritingProfile};
 use crate::stt::WhisperModel;
 use serde::{Deserialize, Serialize};
+use std::time::{Duration, Instant};
 use tauri::{Emitter, State};
+use tokio::time::timeout;
 
 /// Model info for UI
 #[derive(Debug, Serialize, Deserialize)]
@@ -34,10 +35,17 @@ pub struct TranscriptionResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub raw_text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rewritten_text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rewrite_error: Option<String>,
+    pub used_cloud_rewrite: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub segments: Option<Vec<SegmentInfo>>,
-    pub processing_ms: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    pub processing_ms: u64,
 }
 
 /// Segment info for UI
@@ -103,7 +111,7 @@ pub async fn download_model(
     state: State<'_, AppState>,
     window: tauri::Window,
     model_id: String,
-) -> Result<RecordingResponse, String> {
+) -> Result<crate::commands::audio::RecordingResponse, String> {
     let model = model_id
         .parse::<WhisperModel>()
         .map_err(|_| format!("Unknown model: {}", model_id))?;
@@ -135,14 +143,14 @@ pub async fn download_model(
     match engine.download_model(model, Some(progress_callback)).await {
         Ok(_path) => {
             log::info!("Model {} downloaded successfully", model_id);
-            Ok(RecordingResponse {
+            Ok(crate::commands::audio::RecordingResponse {
                 success: true,
                 error: None,
             })
         }
         Err(e) => {
             log::error!("Failed to download model {}: {}", model_id, e);
-            Ok(RecordingResponse {
+            Ok(crate::commands::audio::RecordingResponse {
                 success: false,
                 error: Some(e.to_string()),
             })
@@ -155,10 +163,10 @@ pub async fn download_model(
 pub async fn set_model(
     state: State<'_, AppState>,
     model_id: String,
-) -> Result<RecordingResponse, String> {
+) -> Result<crate::commands::audio::RecordingResponse, String> {
     // Validate model ID
     if model_id.parse::<WhisperModel>().is_err() {
-        return Ok(RecordingResponse {
+        return Ok(crate::commands::audio::RecordingResponse {
             success: false,
             error: Some(format!("Unknown model: {}", model_id)),
         });
@@ -171,7 +179,7 @@ pub async fn set_model(
     }
 
     if let Err(error) = state.save_settings().await {
-        return Ok(RecordingResponse {
+        return Ok(crate::commands::audio::RecordingResponse {
             success: false,
             error: Some(error.to_string()),
         });
@@ -179,15 +187,30 @@ pub async fn set_model(
 
     log::info!("Set active model to: {}", model_id);
 
-    Ok(RecordingResponse {
+    Ok(crate::commands::audio::RecordingResponse {
         success: true,
         error: None,
     })
 }
 
-/// Transcribe the last recorded audio
+/// Internal transcription payload used by multiple entry paths.
+#[derive(Debug)]
+struct CloudRewriteConfig {
+    model: String,
+    api_key: String,
+    url: String,
+    timeout_ms: u64,
+}
+
+/// Transcribe the last captured audio
 #[tauri::command]
 pub async fn transcribe(state: State<'_, AppState>) -> Result<TranscriptionResponse, String> {
+    transcribe_captured_audio(&state).await
+}
+
+pub async fn transcribe_captured_audio(state: &AppState) -> Result<TranscriptionResponse, String> {
+    let start = Instant::now();
+
     // Take captured audio (moves it out, freeing the memory after transcription)
     let audio = {
         let mut audio = state.captured_audio.lock().await;
@@ -200,6 +223,10 @@ pub async fn transcribe(state: State<'_, AppState>) -> Result<TranscriptionRespo
             return Ok(TranscriptionResponse {
                 success: false,
                 text: None,
+                raw_text: None,
+                rewritten_text: None,
+                rewrite_error: None,
+                used_cloud_rewrite: false,
                 segments: None,
                 processing_ms: 0,
                 error: Some("No audio captured. Record first.".to_string()),
@@ -207,7 +234,6 @@ pub async fn transcribe(state: State<'_, AppState>) -> Result<TranscriptionRespo
         }
     };
 
-    // Get model from settings
     let model_id = {
         let settings = state.settings.read().await;
         settings
@@ -227,6 +253,10 @@ pub async fn transcribe(state: State<'_, AppState>) -> Result<TranscriptionRespo
             return Ok(TranscriptionResponse {
                 success: false,
                 text: None,
+                raw_text: None,
+                rewritten_text: None,
+                rewrite_error: None,
+                used_cloud_rewrite: false,
                 segments: None,
                 processing_ms: 0,
                 error: Some(format!(
@@ -237,37 +267,71 @@ pub async fn transcribe(state: State<'_, AppState>) -> Result<TranscriptionRespo
         }
     }
 
-    // Run transcription
+    // Run local transcription
     let engine = state.whisper_engine.lock().await;
-
-    match engine.transcribe(&audio.samples, model).await {
-        Ok(result) => {
-            let segments: Vec<SegmentInfo> = result
-                .segments
-                .iter()
-                .map(|s| SegmentInfo {
-                    start_ms: s.start_ms,
-                    end_ms: s.end_ms,
-                    text: s.text.clone(),
-                })
-                .collect();
-
-            Ok(TranscriptionResponse {
-                success: true,
-                text: Some(result.text),
-                segments: Some(segments),
-                processing_ms: result.processing_ms,
-                error: None,
+    let local_result = match engine.transcribe(&audio.samples, model).await {
+        Ok(result) => result,
+        Err(e) => {
+            return Ok(TranscriptionResponse {
+                success: false,
+                text: None,
+                raw_text: None,
+                rewritten_text: None,
+                rewrite_error: None,
+                used_cloud_rewrite: false,
+                segments: None,
+                processing_ms: start.elapsed().as_millis() as u64,
+                error: Some(e.to_string()),
             })
         }
-        Err(e) => Ok(TranscriptionResponse {
-            success: false,
-            text: None,
-            segments: None,
-            processing_ms: 0,
-            error: Some(e.to_string()),
-        }),
+    };
+
+    let segments: Vec<SegmentInfo> = local_result
+        .segments
+        .iter()
+        .map(|s| SegmentInfo {
+            start_ms: s.start_ms,
+            end_ms: s.end_ms,
+            text: s.text.clone(),
+        })
+        .collect();
+
+    let mut final_text = local_result.text.clone();
+    let mut raw_text = Some(local_result.text.clone());
+    let mut rewritten_text = None;
+    let mut rewrite_error = None;
+    let mut used_cloud_rewrite = false;
+
+    let should_rewrite = {
+        let settings = state.settings.read().await;
+        settings.cloud_rewrite_enabled
+    };
+
+    if should_rewrite {
+        match run_cloud_rewrite(state, &local_result.text).await {
+            Ok((rewritten, raw)) => {
+                rewritten_text = Some(rewritten.clone());
+                raw_text = Some(raw);
+                final_text = rewritten;
+                used_cloud_rewrite = true;
+            }
+            Err(error) => {
+                rewrite_error = Some(error);
+            }
+        }
     }
+
+    Ok(TranscriptionResponse {
+        success: true,
+        text: Some(final_text),
+        raw_text,
+        rewritten_text,
+        rewrite_error,
+        used_cloud_rewrite,
+        segments: Some(segments),
+        error: None,
+        processing_ms: start.elapsed().as_millis() as u64,
+    })
 }
 
 /// Transcribe and return immediately (for quick preview)
@@ -281,5 +345,167 @@ pub async fn transcribe_preview(state: State<'_, AppState>) -> Result<String, St
         Err(response
             .error
             .unwrap_or_else(|| "Unknown error".to_string()))
+    }
+}
+
+fn build_rewrite_request(
+    clipboard: Option<String>,
+    profile: &WritingProfile,
+    text: &str,
+) -> String {
+    let mut prompt = String::new();
+
+    if let Some(previous_clipboard) = clipboard {
+        if !previous_clipboard.trim().is_empty() {
+            prompt.push_str("Context (last copied text):\n");
+            prompt.push_str(&previous_clipboard);
+            prompt.push('\n');
+            prompt.push('\n');
+        }
+    }
+
+    prompt.push_str("Rewrite the following transcription for readability and polish:\n");
+    prompt.push_str("- Keep all original meaning.\n");
+    prompt.push_str("- Preserve names, numbers, and action items.\n");
+    prompt.push_str(&format!("- Tone: {}\n", profile.tone));
+    prompt.push_str(&format!("- Purpose: {}\n", profile.purpose));
+    prompt.push_str(&format!("- Format: {}\n", profile.format));
+    prompt.push('\n');
+    prompt.push_str("Input:\n");
+    prompt.push_str(text);
+
+    prompt
+}
+
+async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<(String, String), String> {
+    let clipboard = state.take_recording_clipboard().await;
+    let settings = state.settings.read().await;
+    let profile = settings.writing_profile.clone();
+
+    let config = cloud_rewrite_config()?;
+
+    let request_body = serde_json::json!({
+        "model": config.model,
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are a concise writing assistant for improving transcribed speech."
+            },
+            {
+                "role": "user",
+                "content": build_rewrite_request(clipboard.clone(), &profile, transcript)
+            }
+        ],
+        "temperature": 0.3
+    });
+
+    let client = reqwest::Client::new();
+    let call = async {
+        let response = client
+            .post(&config.url)
+            .bearer_auth(&config.api_key)
+            .json(&request_body)
+            .send()
+            .await
+            .map_err(|e| format!("Cloud rewrite request failed: {}", e))?;
+
+        let status = response.status();
+        if !status.is_success() {
+            return Err(format!("Cloud rewrite failed with status {}", status));
+        }
+
+        #[derive(Deserialize)]
+        struct CloudResponse {
+            choices: Vec<CloudChoice>,
+        }
+        #[derive(Deserialize)]
+        struct CloudChoice {
+            message: CloudMessage,
+        }
+        #[derive(Deserialize)]
+        struct CloudMessage {
+            content: Option<String>,
+        }
+
+        let payload: CloudResponse = response
+            .json()
+            .await
+            .map_err(|e| format!("Cloud rewrite response parse failed: {}", e))?;
+
+        let content = payload
+            .choices
+            .first()
+            .and_then(|c| c.message.content.as_deref())
+            .ok_or_else(|| "Cloud rewrite response missing content".to_string())?;
+
+        Ok::<String, String>(content.trim().to_string())
+    };
+
+    let rewritten = match timeout(Duration::from_millis(config.timeout_ms), call).await {
+        Ok(result) => result?,
+        Err(_) => return Err("Cloud rewrite timed out".to_string()),
+    };
+
+    if rewritten.trim().is_empty() {
+        return Err("Cloud rewrite returned empty text".to_string());
+    }
+
+    Ok((rewritten, transcript.to_string()))
+}
+
+fn cloud_rewrite_config() -> Result<CloudRewriteConfig, String> {
+    let api_key = std::env::var("ZANA_REWRITE_API_KEY")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .ok_or_else(|| "Cloud rewrite enabled but ZANA_REWRITE_API_KEY is not set".to_string())?;
+
+    let url = std::env::var("ZANA_REWRITE_API_URL")
+        .unwrap_or_else(|_| "https://api.openai.com/v1/chat/completions".to_string());
+
+    if !url.starts_with("https://") {
+        return Err("Cloud rewrite URL must use https".to_string());
+    }
+
+    let model = std::env::var("ZANA_REWRITE_MODEL").unwrap_or_else(|_| "gpt-4o-mini".to_string());
+
+    let timeout_ms = std::env::var("ZANA_REWRITE_TIMEOUT_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(15_000);
+
+    Ok(CloudRewriteConfig {
+        model,
+        api_key,
+        url,
+        timeout_ms,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_rewrite_request;
+    use crate::state::WritingProfile;
+
+    #[test]
+    fn build_rewrite_request_includes_clipboard_and_profile() {
+        let profile = WritingProfile {
+            purpose: "send a follow-up email".to_string(),
+            tone: "warm".to_string(),
+            format: "two sentences".to_string(),
+        };
+
+        let prompt = build_rewrite_request(
+            Some("team status: launch next week".to_string()),
+            &profile,
+            "hey we shipped feature x yesterday",
+        );
+
+        assert!(prompt.contains("Context (last copied text):"));
+        assert!(prompt.contains("team status: launch next week"));
+        assert!(prompt.contains("Tone: warm"));
+        assert!(prompt.contains("Purpose: send a follow-up email"));
+        assert!(prompt.contains("Format: two sentences"));
+        assert!(prompt.contains("Input:"));
+        assert!(prompt.contains("hey we shipped feature x yesterday"));
     }
 }

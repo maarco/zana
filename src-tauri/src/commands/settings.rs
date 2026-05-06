@@ -19,6 +19,7 @@ pub struct SettingsResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Preferences {
+    pub cloud_rewrite_enabled: bool,
     pub whisper_model: String,
     pub language: String,
     pub audio_input: String,
@@ -28,11 +29,15 @@ pub struct Preferences {
     pub global_shortcut: String,
     pub orb_style: String,
     pub show_in_menu_bar: bool,
+    pub writing_purpose: String,
+    pub writing_tone: String,
+    pub writing_format: String,
 }
 
 impl Preferences {
     fn from_settings(settings: &Settings) -> Self {
         Self {
+            cloud_rewrite_enabled: settings.cloud_rewrite_enabled,
             whisper_model: settings
                 .whisper_model
                 .clone()
@@ -47,6 +52,9 @@ impl Preferences {
                 .unwrap_or_else(|| "default".to_string()),
             double_tap_enabled: settings.double_tap_enabled,
             min_hold_duration: settings.min_hold_duration_ms,
+            writing_purpose: settings.writing_profile.purpose.clone(),
+            writing_tone: settings.writing_profile.tone.clone(),
+            writing_format: settings.writing_profile.format.clone(),
             trigger_key: settings
                 .trigger_key
                 .clone()
@@ -73,6 +81,18 @@ impl Preferences {
             return Err("Minimum hold duration must be greater than zero".to_string());
         }
 
+        if self.writing_purpose.trim().is_empty() {
+            return Err("Writing purpose cannot be empty".to_string());
+        }
+
+        if self.writing_tone.trim().is_empty() {
+            return Err("Writing tone cannot be empty".to_string());
+        }
+
+        if self.writing_format.trim().is_empty() {
+            return Err("Writing format cannot be empty".to_string());
+        }
+
         Ok(())
     }
 
@@ -83,8 +103,14 @@ impl Preferences {
             "" | "default" => None,
             device => Some(device.to_string()),
         };
+        settings.cloud_rewrite_enabled = self.cloud_rewrite_enabled;
         settings.double_tap_enabled = self.double_tap_enabled;
         settings.min_hold_duration_ms = self.min_hold_duration;
+        settings.writing_profile = crate::state::WritingProfile {
+            purpose: self.writing_purpose.clone(),
+            tone: self.writing_tone.clone(),
+            format: self.writing_format.clone(),
+        };
         settings.trigger_key = Some(self.trigger_key.clone());
         settings.global_shortcut = Some(self.global_shortcut.clone());
         settings.orb_style = Some(self.orb_style.clone());

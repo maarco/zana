@@ -11,6 +11,27 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WritingProfile {
+    /// Why and where the rewritten text will be used
+    pub purpose: String,
+    /// Tone for rewritten output
+    pub tone: String,
+    /// Output shape/structure expectation
+    pub format: String,
+}
+
+impl Default for WritingProfile {
+    fn default() -> Self {
+        Self {
+            purpose: "Produce clear, useful text".to_string(),
+            tone: "clear and concise".to_string(),
+            format: "one short paragraph".to_string(),
+        }
+    }
+}
+
 /// User settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -39,6 +60,10 @@ pub struct Settings {
     pub window_width: u32,
     /// Window height
     pub window_height: u32,
+    /// Enable cloud rewrite after local transcription
+    pub cloud_rewrite_enabled: bool,
+    /// Selected writing style profile
+    pub writing_profile: WritingProfile,
 }
 
 impl Settings {
@@ -96,6 +121,8 @@ impl Settings {
             always_on_top: true,
             window_width: 500,
             window_height: 500,
+            cloud_rewrite_enabled: false,
+            writing_profile: WritingProfile::default(),
         }
     }
 }
@@ -122,6 +149,8 @@ pub struct AppState {
     pub captured_audio: Mutex<Option<CapturedAudio>>,
     /// User settings
     pub settings: RwLock<Settings>,
+    /// Clipboard text captured at record start for rewrite context
+    pub recording_clipboard: Mutex<Option<String>>,
 }
 
 impl AppState {
@@ -198,7 +227,22 @@ impl AppState {
             whisper_engine: Mutex::new(whisper_engine),
             captured_audio: Mutex::new(None),
             settings: RwLock::new(settings),
+            recording_clipboard: Mutex::new(None),
         })
+    }
+
+    /// Capture clipboard text for context before transcription.
+    pub async fn capture_recording_clipboard(&self) {
+        let snapshot = arboard::Clipboard::new()
+            .ok()
+            .and_then(|mut clipboard| clipboard.get_text().ok());
+
+        *self.recording_clipboard.lock().await = snapshot;
+    }
+
+    /// Take and clear the current clipboard context snapshot.
+    pub async fn take_recording_clipboard(&self) -> Option<String> {
+        self.recording_clipboard.lock().await.take()
     }
 
     /// Save settings
