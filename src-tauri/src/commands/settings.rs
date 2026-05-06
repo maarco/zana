@@ -101,7 +101,10 @@ impl Preferences {
             return Err("Writing format cannot be empty".to_string());
         }
 
-        if self.cloud_rewrite_enabled && self.rewrite_api_key.trim().is_empty() {
+        if self.cloud_rewrite_enabled
+            && self.rewrite_api_key.trim().is_empty()
+            && !is_local_rewrite_url(&self.rewrite_api_url)
+        {
             return Err("Rewrite API key is required when Writing Polish is enabled".to_string());
         }
 
@@ -109,8 +112,10 @@ impl Preferences {
             return Err("Rewrite model cannot be empty".to_string());
         }
 
-        if !self.rewrite_api_url.starts_with("https://") {
-            return Err("Rewrite API URL must use https".to_string());
+        if !is_allowed_rewrite_url(&self.rewrite_api_url) {
+            return Err(
+                "Rewrite API URL must use https unless it is localhost or 127.0.0.1".to_string(),
+            );
         }
 
         if self.rewrite_timeout_ms == 0 {
@@ -146,6 +151,16 @@ impl Preferences {
         settings.orb_style = Some(self.orb_style.clone());
         settings.show_in_menu_bar = self.show_in_menu_bar;
     }
+}
+
+fn is_local_rewrite_url(url: &str) -> bool {
+    url.starts_with("http://localhost:")
+        || url.starts_with("http://127.0.0.1:")
+        || url.starts_with("http://[::1]:")
+}
+
+fn is_allowed_rewrite_url(url: &str) -> bool {
+    url.starts_with("https://") || is_local_rewrite_url(url)
 }
 
 /// Load preferences for the Preferences window.

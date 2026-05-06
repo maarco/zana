@@ -403,10 +403,12 @@ async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<(String
 
     let client = reqwest::Client::new();
     let call = async {
-        let response = client
-            .post(&config.url)
-            .bearer_auth(&config.api_key)
-            .json(&request_body)
+        let mut request = client.post(&config.url).json(&request_body);
+        if !config.api_key.trim().is_empty() {
+            request = request.bearer_auth(&config.api_key);
+        }
+
+        let response = request
             .send()
             .await
             .map_err(|e| format!("Cloud rewrite request failed: {}", e))?;
@@ -462,9 +464,7 @@ fn cloud_rewrite_config(
         std::env::var("ZANA_REWRITE_API_KEY")
             .ok()
             .filter(|v| !v.trim().is_empty())
-            .ok_or_else(|| {
-                "Cloud rewrite enabled but no rewrite API key is configured".to_string()
-            })?
+            .unwrap_or_default()
     } else {
         settings.api_key.clone()
     };
@@ -476,8 +476,10 @@ fn cloud_rewrite_config(
         settings.api_url.clone()
     };
 
-    if !url.starts_with("https://") {
-        return Err("Cloud rewrite URL must use https".to_string());
+    if !is_allowed_rewrite_url(&url) {
+        return Err(
+            "Cloud rewrite URL must use https unless it is localhost or 127.0.0.1".to_string(),
+        );
     }
 
     let model = if settings.model.trim().is_empty() {
@@ -501,6 +503,16 @@ fn cloud_rewrite_config(
         url,
         timeout_ms,
     })
+}
+
+fn is_local_rewrite_url(url: &str) -> bool {
+    url.starts_with("http://localhost:")
+        || url.starts_with("http://127.0.0.1:")
+        || url.starts_with("http://[::1]:")
+}
+
+fn is_allowed_rewrite_url(url: &str) -> bool {
+    url.starts_with("https://") || is_local_rewrite_url(url)
 }
 
 #[cfg(test)]
@@ -559,5 +571,21 @@ mod tests {
         let error = cloud_rewrite_config(&settings).unwrap_err();
 
         assert!(error.contains("https"));
+    }
+
+    #[test]
+    fn cloud_rewrite_config_allows_local_http_without_api_key() {
+        let settings = CloudRewriteSettings {
+            api_key: String::new(),
+            model: "qwen3.5-0.8b".to_string(),
+            api_url: "http://localhost:1234/v1/chat/completions".to_string(),
+            timeout_ms: 15_000,
+        };
+
+        let config = cloud_rewrite_config(&settings).expect("local rewrite config should load");
+
+        assert_eq!(config.api_key, "");
+        assert_eq!(config.model, "qwen3.5-0.8b");
+        assert_eq!(config.url, "http://localhost:1234/v1/chat/completions");
     }
 }
