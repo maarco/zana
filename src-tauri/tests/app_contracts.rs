@@ -126,10 +126,40 @@ fn orb_markup_exposes_explicit_drag_target() {
     let html = read_repo_file("src-ui/orb.html");
 
     assert!(
-        html.contains("data-drag-region")
-            || html.contains("id=\"drag-region\"")
-            || html.contains("startDragging")
-            || html.contains("start_dragging"),
-        "orb markup must expose an explicit drag target for moving the overlay"
+        html.contains("id=\"drag-region\"") && html.contains("startDragging"),
+        "orb markup must expose an explicit drag target that calls Tauri startDragging"
+    );
+}
+
+#[test]
+fn orb_window_has_start_dragging_capability() {
+    let tauri_config: Value =
+        serde_json::from_str(&read_repo_file("src-tauri/tauri.conf.json")).unwrap();
+    let capabilities = tauri_config
+        .pointer("/app/security/capabilities")
+        .and_then(Value::as_array)
+        .expect("tauri config must declare capabilities");
+
+    let can_start_dragging = capabilities.iter().any(|capability| {
+        let includes_orb = capability
+            .get("windows")
+            .and_then(Value::as_array)
+            .is_some_and(|windows| windows.iter().any(|window| window == "orb"));
+
+        let allows_dragging = capability
+            .get("permissions")
+            .and_then(Value::as_array)
+            .is_some_and(|permissions| {
+                permissions
+                    .iter()
+                    .any(|permission| permission == "core:window:allow-start-dragging")
+            });
+
+        includes_orb && allows_dragging
+    });
+
+    assert!(
+        can_start_dragging,
+        "orb window must have Tauri startDragging permission"
     );
 }

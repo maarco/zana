@@ -41,14 +41,19 @@
       inset: 0;
       z-index: 2;
       -webkit-app-region: drag;
+      cursor: grab;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
     }
+    #drag-region:active { cursor: grabbing; }
     .status.recording { color: rgba(255,100,100,0.9); }
     .status.processing { color: rgba(100,200,255,0.9); }
   </style>
 </head>
 <body>
   <canvas id="canvas"></canvas>
-  <div id="drag-region" data-drag-region aria-hidden="true"></div>
+  <div id="drag-region" data-drag-region draggable="false" aria-hidden="true"></div>
   <div id="status" class="status"></div>
 
   <!-- Notifications system -->
@@ -93,6 +98,27 @@
 
     scriptEl.src = scriptSrc;
     console.log('[Orb] Loaded style:', orbStyle, 'from', scriptSrc);
+
+    const dragRegion = document.getElementById('drag-region');
+    dragRegion.addEventListener('dragstart', (event) => event.preventDefault());
+    dragRegion.addEventListener('pointerdown', async (event) => {
+      if (event.button !== 0) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      try {
+        if (window.__TAURI__?.window?.getCurrentWindow) {
+          await window.__TAURI__.window.getCurrentWindow().startDragging();
+        } else if (window.__TAURI__?.webviewWindow?.getCurrent) {
+          await window.__TAURI__.webviewWindow.getCurrent().startDragging();
+        }
+      } catch (error) {
+        console.warn('[Orb] startDragging failed, falling back to native drag region:', error);
+      }
+    }, { capture: true });
 
     // Windows/Linux: listen for Tauri events
     // (macOS uses eval_js to call window.* directly)
