@@ -1,10 +1,10 @@
-// Zana Notification System
+// qVoice Notification System
 // Provides toast notifications for user feedback
 
 (function() {
   // Create notification container
   const container = document.createElement('div');
-  container.id = 'Zana-notifications';
+  container.id = 'qVoice-notifications';
   container.style.cssText = `
     position: fixed;
     top: 20px;
@@ -26,7 +26,7 @@
   };
 
   // Show notification
-  window.ZanaNotify = function(message, type = 'info', duration = 3000) {
+  window.qVoiceNotify = function(message, type = 'info', duration = 3000) {
     const style = types[type] || types.info;
 
     const notification = document.createElement('div');
@@ -70,28 +70,33 @@
   };
 
   // Convenience methods
-  window.ZanaSuccess = (msg, duration) => window.ZanaNotify(msg, 'success', duration);
-  window.ZanaError = (msg, duration) => window.ZanaNotify(msg, 'error', duration);
-  window.ZanaWarning = (msg, duration) => window.ZanaNotify(msg, 'warning', duration);
-  window.ZanaInfo = (msg, duration) => window.ZanaNotify(msg, 'info', duration);
+  window.qVoiceSuccess = (msg, duration) => window.qVoiceNotify(msg, 'success', duration);
+  window.qVoiceError = (msg, duration) => window.qVoiceNotify(msg, 'error', duration);
+  window.qVoiceWarning = (msg, duration) => window.qVoiceNotify(msg, 'warning', duration);
+  window.qVoiceInfo = (msg, duration) => window.qVoiceNotify(msg, 'info', duration);
+  window.ZanaNotify = window.qVoiceNotify;
+  window.ZanaSuccess = window.qVoiceSuccess;
+  window.ZanaError = window.qVoiceError;
+  window.ZanaWarning = window.qVoiceWarning;
+  window.ZanaInfo = window.qVoiceInfo;
 
   // Listen for Tauri events
   if (window.__TAURI__) {
     window.__TAURI__.event.listen('notification', (event) => {
       const { message, type, duration } = event.payload;
-      window.ZanaNotify(message, type, duration);
+      window.qVoiceNotify(message, type, duration);
     });
 
     window.__TAURI__.event.listen('error', (event) => {
-      window.ZanaError(event.payload.message || 'An error occurred');
+      window.qVoiceError(event.payload.message || 'An error occurred');
     });
 
     window.__TAURI__.event.listen('transcription-complete', (event) => {
-      window.ZanaSuccess('Transcribed and pasted!', 2000);
+      window.qVoiceSuccess('Transcribed and pasted!', 2000);
     });
 
     window.__TAURI__.event.listen('recording-started', () => {
-      window.ZanaInfo('Recording...', 1500);
+      window.qVoiceInfo('Recording...', 1500);
     });
   }
 })();

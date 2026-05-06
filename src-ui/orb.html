@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Zana Orb</title>
+  <title>qVoice Orb</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
@@ -77,7 +77,9 @@
     };
 
     // Get orb style from localStorage (set by Rust via eval_js on macOS)
-    const orbStyle = localStorage.getItem('Zana_orb_style') || 'fire-v8';
+    const orbStyle = localStorage.getItem('qVoice_orb_style')
+      || localStorage.getItem('Zana_orb_style')
+      || 'fire-v8';
 
     // Load the selected orb script
     const scriptSrc = orbScripts[orbStyle] || orbScripts['fire-v8'];
@@ -126,7 +128,7 @@
       import('@tauri-apps/api/event').then(({ listen }) => {
         listen('apply-orb-style', (event) => {
           console.log('[Orb] Style changed via Tauri:', event.payload);
-          localStorage.setItem('Zana_orb_style', event.payload);
+          localStorage.setItem('qVoice_orb_style', event.payload);
           location.reload();
         });
 

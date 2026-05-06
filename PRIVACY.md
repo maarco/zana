@@ -1,10 +1,10 @@
-# Zana Privacy Policy
+# qVoice Privacy Policy
 
 Last updated: January 2025
 
 ## Our Commitment
 
-Zana is designed with privacy as a core principle. Your voice data never leaves your device.
+qVoice is designed with privacy as a core principle. Your voice data never leaves your device.
 
 ## Data Collection
 
@@ -25,7 +25,7 @@ Zana is designed with privacy as a core principle. Your voice data never leaves 
 
 ## Local Processing
 
-Zana uses Whisper.cpp, an open-source speech recognition model that runs entirely on your Mac. This means:
+qVoice uses Whisper.cpp, an open-source speech recognition model that runs entirely on your Mac. This means:
 
 1. Your voice is captured by your microphone
 2. Audio is processed by Whisper.cpp on your CPU/GPU
@@ -36,7 +36,7 @@ No network connection is required for transcription.
 
 ## Permissions
 
-Zana requires these macOS permissions:
+qVoice requires these macOS permissions:
 
 - **Microphone**: To capture your voice for transcription
 - **Accessibility**: To monitor the Fn key and simulate keyboard input
@@ -45,7 +45,7 @@ These permissions are used solely for the app's core functionality.
 
 ## Third-Party Services
 
-Zana does not integrate with any third-party services. The only network activity is:
+qVoice does not integrate with any third-party services. The only network activity is:
 
 - Downloading Whisper models on first run (from Hugging Face)
 - Checking for app updates (optional, from GitHub)
@@ -61,7 +61,7 @@ You can delete this data at any time by removing these directories.
 
 ## Children's Privacy
 
-Zana does not knowingly collect any information from children under 13.
+qVoice does not knowingly collect any information from children under 13.
 
 ## Changes to This Policy
 
@@ -69,8 +69,8 @@ We may update this privacy policy occasionally. Changes will be noted in the app
 
 ## Contact
 
-For privacy concerns, contact: privacy@Zana.dev
+For privacy concerns, contact: privacy@qvoice.app
 
 ## Open Source
 
-Zana is open source. You can audit the code at: https://github.com/Zana/Zana
+qVoice is open source. You can audit the code in this repository.

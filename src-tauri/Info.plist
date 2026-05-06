@@ -2,10 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>CFBundleDisplayName</key>
+    <string>qVoice</string>
     <key>NSAccessibilityUsageDescription</key>
-    <string>Zana needs accessibility access to listen for keyboard shortcuts (Fn key) so you can start recording with a single press.</string>
+    <string>qVoice needs accessibility access to listen for keyboard shortcuts (Fn key) so you can start recording with a single press.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Zana needs microphone access to record your voice for transcription.</string>
+    <string>qVoice needs microphone access to record your voice for transcription.</string>
     <key>LSRequiresCarbon</key>
     <false/>
 </dict>

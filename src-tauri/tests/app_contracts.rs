@@ -167,6 +167,11 @@ fn mac_bundle_identity_and_signing_are_stable() {
         plist.contains("<key>LSRequiresCarbon</key>") && plist.contains("<false/>"),
         "Zana must not advertise Carbon-only launch requirements"
     );
+    assert!(
+        plist.contains("<key>CFBundleDisplayName</key>")
+            && plist.contains("<string>qVoice</string>"),
+        "visible app display name should be qVoice while bundle identity stays stable"
+    );
 }
 
 #[test]

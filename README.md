@@ -1,10 +1,10 @@
-# Zana
+# qVoice
 
 **Voice-to-text transcription powered by local Whisper AI**
 
-Zana is a macOS menubar app that provides instant voice transcription using the Fn key. Press Fn to record, release to transcribe and paste - all processed locally with no cloud dependency.
+qVoice is a macOS menubar app that provides instant voice transcription using the Fn key. Press Fn to record, release to transcribe and paste - all processed locally with no cloud dependency.
 
-![Zana Demo](docs/demo.gif)
+![qVoice Demo](docs/demo.gif)
 
 ## Features
 
@@ -27,9 +27,9 @@ Zana is a macOS menubar app that provides instant voice transcription using the 
 
 ### Option 1: Download Pre-built Binary (Coming Soon)
 
-1. Download `Zana.dmg` from [Releases](https://github.com/Zana/Zana/releases)
-2. Open the DMG and drag Zana to Applications
-3. Launch Zana from Applications folder
+1. Download the qVoice DMG from Releases
+2. Open the DMG and drag qVoice to Applications
+3. Launch qVoice from Applications folder
 4. Grant accessibility permissions (required for Fn key monitoring)
 
 ### Option 2: Build from Source
@@ -56,8 +56,8 @@ Zana is a macOS menubar app that provides instant voice transcription using the 
 
 ```bash
 # Clone the repository
-git clone https://github.com/Zana/Zana.git
-cd Zana
+git clone <repo-url>
+cd qVoice
 
 # Build the app (debug mode - faster compile)
 cargo build -p Zana-app
@@ -77,7 +77,7 @@ The compiled binary will be at:
 
 ### 1. Grant Accessibility Permissions
 
-Zana needs accessibility access to monitor the Fn key globally.
+qVoice needs accessibility access to monitor the Fn key globally.
 
 **On first launch, you'll see:**
 ```
@@ -89,11 +89,11 @@ Grant access in System Settings > Privacy & Security > Accessibility
 1. Open **System Settings** > **Privacy & Security** > **Accessibility**
 2. Click the **lock icon** and authenticate
 3. Find **Zana-app** in the list and toggle it **ON**
-4. Restart Zana
+4. Restart qVoice
 
 ### 2. Download Whisper Model
 
-On first transcription, Zana will automatically download the Whisper model:
+On first transcription, qVoice will automatically download the Whisper model:
 - **Small model** (~500MB) - Default, best balance of speed and accuracy
 - **Tiny model** (~75MB) - Faster, less accurate
 - **Base/Medium/Large** - Available via settings (coming soon)
@@ -156,7 +156,7 @@ Plugins are automatically loaded on startup. See [docs/HOOK_HANDLER_GUIDE.md](do
 ## Architecture
 
 ```
-Zana
+qVoice
 ├── src-tauri/          Rust backend (Tauri app)
 │   ├── src/
 │   │   ├── audio/      Audio capture via cpal
@@ -180,8 +180,8 @@ Zana
 
 1. Check if Fn is mapped to system functions:
    - System Settings > Keyboard > Keyboard Shortcuts > Function Keys
-2. Restart Zana after granting accessibility permissions
-3. Check logs: `tail -f /tmp/Zana-run.log`
+2. Restart qVoice after granting accessibility permissions
+3. Check logs: `tail -f /tmp/qVoice-run.log`
 
 ### Orb disappears immediately after double-tap
 
@@ -218,8 +218,8 @@ cargo run -p Zana-app
 RUST_LOG=debug cargo run -p Zana-app
 
 # Run in tmux for background operation
-tmux new-session -d -s Zana "cargo run -p Zana-app 2>&1 | tee /tmp/Zana-run.log"
-tmux attach -t Zana
+tmux new-session -d -s qVoice "cargo run -p Zana-app 2>&1 | tee /tmp/qVoice-run.log"
+tmux attach -t qVoice
 ```
 
 ### Running Tests
@@ -302,10 +302,10 @@ MIT License - see [LICENSE](LICENSE) for details
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/Zana/Zana/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/Zana/Zana/discussions)
-- **Email**: support@Zana.dev
+- **Issues**: GitHub Issues
+- **Discussions**: GitHub Discussions
+- **Email**: support@qvoice.app
 
 ---
 
-Made with ❤️ by the Zana team
+Made by the qVoice team

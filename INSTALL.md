@@ -1,6 +1,6 @@
-# Zana Installation Guide
+# qVoice Installation Guide
 
-Quick guide to get Zana running on your Mac.
+Quick guide to get qVoice running on your Mac.
 
 ## Prerequisites
 
@@ -35,14 +35,14 @@ xcode-select --install
 
 Click "Install" in the popup dialog.
 
-### 3. Clone Zana
+### 3. Clone qVoice
 
 ```bash
-git clone https://github.com/Zana/Zana.git
-cd Zana
+git clone <repo-url>
+cd qVoice
 ```
 
-### 4. Build Zana
+### 4. Build qVoice
 
 **Quick build (debug mode, faster compile):**
 ```bash
@@ -56,7 +56,7 @@ cargo build -p Zana-app --release
 
 Build time: 5-15 minutes depending on your Mac.
 
-### 5. Run Zana
+### 5. Run qVoice
 
 **Debug mode:**
 ```bash
@@ -70,7 +70,7 @@ cargo run -p Zana-app --release
 
 ### 6. Grant Accessibility Permissions
 
-When you first run Zana, you'll see this warning in the terminal:
+When you first run qVoice, you'll see this warning in the terminal:
 ```
 Accessibility permissions not granted - Fn key monitoring disabled
 Grant access in System Settings > Privacy & Security > Accessibility
@@ -83,7 +83,7 @@ Grant access in System Settings > Privacy & Security > Accessibility
 3. Click the **lock icon** 🔒 at bottom left and enter your password
 4. Find **Zana-app** in the list
 5. Toggle the switch **ON** ✅
-6. **Restart Zana**
+6. **Restart qVoice**
 
 ### 7. First Transcription
 
@@ -113,7 +113,7 @@ source $HOME/.cargo/env
 ### Fn key doesn't work
 
 1. Check accessibility permissions (step 6 above)
-2. Restart Zana
+2. Restart qVoice
 3. Check if Fn is used for system functions:
    - System Settings > Keyboard > Dictation
    - Change "Press Fn Key Twice" to a different shortcut
@@ -140,31 +140,31 @@ Models are cached in:
 
 ## Running in Background
 
-To run Zana in the background (keeps running after closing terminal):
+To run qVoice in the background (keeps running after closing terminal):
 
 ```bash
 # Install tmux if not installed
 brew install tmux
 
 # Run in tmux session
-tmux new-session -d -s Zana "cargo run -p Zana-app 2>&1 | tee /tmp/Zana-run.log"
+tmux new-session -d -s qVoice "cargo run -p Zana-app 2>&1 | tee /tmp/qVoice-run.log"
 
 # View logs
-tail -f /tmp/Zana-run.log
+tail -f /tmp/qVoice-run.log
 
 # Attach to session
-tmux attach -t Zana
+tmux attach -t qVoice
 
 # Detach: Press Ctrl+B, then D
 
-# Stop Zana
-tmux kill-session -t Zana
+# Stop qVoice
+tmux kill-session -t qVoice
 ```
 
-## Updating Zana
+## Updating qVoice
 
 ```bash
-cd Zana
+cd qVoice
 git pull
 cargo build -p Zana-app --release
 ```
@@ -172,8 +172,8 @@ cargo build -p Zana-app --release
 ## Uninstalling
 
 ```bash
-# Remove Zana directory
-rm -rf ~/path/to/Zana
+# Remove qVoice checkout
+rm -rf ~/path/to/qVoice
 
 # Remove cached models (optional)
 rm -rf ~/Library/Application\ Support/Zana
@@ -191,6 +191,6 @@ rm -rf ~/Library/Application\ Support/Zana
 
 ## Get Help
 
-- **Issues**: https://github.com/Zana/Zana/issues
-- **Discussions**: https://github.com/Zana/Zana/discussions
-- **Email**: support@Zana.dev
+- **Issues**: GitHub Issues
+- **Discussions**: GitHub Discussions
+- **Email**: support@qvoice.app

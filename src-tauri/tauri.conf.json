@@ -19,7 +19,7 @@
     "category": "Utility",
     "copyright": "Copyright © 2025 Marco Almazan",
     "shortDescription": "AI-powered speech-to-text with beautiful visualizations",
-    "longDescription": "Zana is a privacy-first AI speech assistant with beautiful audio visualizations. Uses local Whisper models for transcription - your voice never leaves your device.",
+    "longDescription": "qVoice is a privacy-first AI speech assistant with beautiful audio visualizations. Uses local Whisper models for transcription - your voice never leaves your device.",
     "macOS": {
       "hardenedRuntime": true,
       "entitlements": "./entitlements.plist",

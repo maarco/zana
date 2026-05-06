@@ -1,5 +1,5 @@
 /**
- * Zana - Main Application
+ * qVoice - Main Application
  *
  * Two orb modes:
  * - Nebula (purple) - classic always-alive orb
@@ -965,10 +965,10 @@ async function initRenderers() {
         });
 
         sharedGPU = { device, context, format };
-        console.log('[Zana] Shared WebGPU initialized');
+        console.log('[qVoice] Shared WebGPU initialized');
       }
     } catch (e) {
-      console.warn('[Zana] WebGPU failed, using WebGL2:', e);
+      console.warn('[qVoice] WebGPU failed, using WebGL2:', e);
     }
   }
 
@@ -1005,7 +1005,7 @@ function toggleOrbMode() {
     state.orbMode = 'nebula';
     showStatus('Nebula Mode (purple)', 'success');
   }
-  console.log(`[Zana] Switched to ${state.orbMode} mode`);
+  console.log(`[qVoice] Switched to ${state.orbMode} mode`);
 }
 
 // ============================================================================
@@ -1383,7 +1383,7 @@ function setupEventListeners() {
 // ============================================================================
 
 async function init() {
-  console.log('[Zana] Initializing with dual orb modes...');
+  console.log('[qVoice] Initializing with dual orb modes...');
 
   // Initialize both renderers
   await initRenderers();
@@ -1398,7 +1398,7 @@ async function init() {
   await loadDevices();
   await loadModels();
 
-  console.log('[Zana] Ready - Press Ctrl+S to toggle between Nebula (purple) and Genesis (fire) modes');
+  console.log('[qVoice] Ready - Press Ctrl+S to toggle between Nebula (purple) and Genesis (fire) modes');
 }
 
 // Start when DOM is ready
