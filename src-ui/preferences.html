@@ -102,11 +102,21 @@
     }
     .button-row {
       display: flex;
+      align-items: center;
       justify-content: flex-end;
       gap: 12px;
       margin-top: 24px;
       padding-top: 24px;
       border-top: 1px solid #313244;
+    }
+    .save-status {
+      margin-right: auto;
+      color: #a6adc8;
+      font-size: 12px;
+      min-height: 16px;
+    }
+    .save-status.error {
+      color: #f38ba8;
     }
     button {
       padding: 8px 20px;
@@ -116,6 +126,10 @@
       cursor: pointer;
       border: none;
       transition: all 0.2s;
+    }
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
     }
     .btn-secondary {
       background: #313244;
@@ -281,8 +295,9 @@
     </div>
 
     <div class="button-row">
+      <div class="save-status" id="save-status" role="status"></div>
       <button class="btn-secondary" onclick="window.close()">Cancel</button>
-      <button class="btn-primary" onclick="savePreferences()">Save</button>
+      <button class="btn-primary" id="save-button" onclick="savePreferences()">Save</button>
     </div>
   </div>
 
@@ -293,6 +308,90 @@
         toggle.classList.toggle('active');
       });
     });
+
+    function setSaveStatus(message, type = '') {
+      const status = document.getElementById('save-status');
+      status.textContent = message;
+      status.className = type ? `save-status ${type}` : 'save-status';
+    }
+
+    function setToggle(id, active) {
+      const toggle = document.getElementById(id);
+      toggle.classList.toggle('active', Boolean(active));
+    }
+
+    function isToggleActive(id) {
+      return document.getElementById(id).classList.contains('active');
+    }
+
+    function setFieldValue(id, value) {
+      const field = document.getElementById(id);
+      if (value !== undefined && value !== null) {
+        field.value = String(value);
+      }
+    }
+
+    async function loadAudioInputs(selectedAudioInput = 'default') {
+      const select = document.getElementById('audio-input');
+      select.innerHTML = '<option value="default">Default Microphone</option>';
+
+      if (!window.__TAURI__) {
+        select.value = selectedAudioInput || 'default';
+        return;
+      }
+
+      try {
+        const { invoke } = window.__TAURI__.core;
+        const result = await invoke('list_audio_devices');
+        if (result.success) {
+          for (const device of result.devices) {
+            const option = document.createElement('option');
+            option.value = device.id;
+            option.textContent = device.name + (device.is_default ? ' (Default)' : '');
+            select.appendChild(option);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to load audio devices:', e);
+      }
+
+      const hasSelectedOption = Array.from(select.options).some(
+        option => option.value === selectedAudioInput
+      );
+      if (selectedAudioInput && !hasSelectedOption && selectedAudioInput !== 'default') {
+        const option = document.createElement('option');
+        option.value = selectedAudioInput;
+        option.textContent = selectedAudioInput;
+        select.appendChild(option);
+      }
+      select.value = selectedAudioInput || 'default';
+    }
+
+    function applyPreferences(prefs) {
+      setFieldValue('whisper-model', prefs.whisperModel);
+      setFieldValue('language', prefs.language);
+      setFieldValue('audio-input', prefs.audioInput);
+      setToggle('double-tap-toggle', prefs.doubleTapEnabled);
+      setFieldValue('min-hold', prefs.minHoldDuration);
+      setFieldValue('trigger-key', prefs.triggerKey);
+      setFieldValue('global-shortcut', prefs.globalShortcut);
+      setFieldValue('orb-style', prefs.orbStyle);
+      setToggle('menubar-toggle', prefs.showInMenuBar);
+    }
+
+    function collectPreferences() {
+      return {
+        whisperModel: document.getElementById('whisper-model').value,
+        language: document.getElementById('language').value,
+        audioInput: document.getElementById('audio-input').value,
+        doubleTapEnabled: isToggleActive('double-tap-toggle'),
+        minHoldDuration: parseInt(document.getElementById('min-hold').value, 10),
+        triggerKey: document.getElementById('trigger-key').value,
+        globalShortcut: document.getElementById('global-shortcut').value,
+        orbStyle: document.getElementById('orb-style').value,
+        showInMenuBar: isToggleActive('menubar-toggle')
+      };
+    }
 
     async function runDoctor() {
       const results = document.getElementById('doctor-results');
@@ -353,45 +452,49 @@
     }
 
     async function savePreferences() {
-      const prefs = {
-        whisperModel: document.getElementById('whisper-model').value,
-        language: document.getElementById('language').value,
-        audioInput: document.getElementById('audio-input').value,
-        doubleTapEnabled: document.getElementById('double-tap-toggle').classList.contains('active'),
-        minHoldDuration: parseInt(document.getElementById('min-hold').value),
-        triggerKey: document.getElementById('trigger-key').value,
-        globalShortcut: document.getElementById('global-shortcut').value,
-        orbStyle: document.getElementById('orb-style').value,
-        showInMenuBar: document.getElementById('menubar-toggle').classList.contains('active')
-      };
-
-      // Push orb style change through Rust backend
-      // (Rust relays to NSPanel via eval_js on macOS, emit on Windows)
-      if (window.__TAURI__) {
-        try {
-          const { invoke } = window.__TAURI__.core;
-          await invoke('set_orb_style', { style: prefs.orbStyle });
-        } catch (e) {
-          console.error('Failed to set orb style:', e);
-        }
+      if (!window.__TAURI__) {
+        setSaveStatus('Preferences can only be saved in the app.', 'error');
+        return;
       }
 
-      console.log('Preferences saved:', prefs);
-      window.close();
+      const saveButton = document.getElementById('save-button');
+      saveButton.disabled = true;
+      setSaveStatus('Saving...');
+
+      try {
+        const { invoke } = window.__TAURI__.core;
+        const result = await invoke('save_preferences', {
+          preferences: collectPreferences()
+        });
+
+        if (!result.success) {
+          throw new Error(result.error || 'Unknown save error');
+        }
+
+        window.close();
+      } catch (e) {
+        console.error('Failed to save preferences:', e);
+        setSaveStatus(String(e), 'error');
+        saveButton.disabled = false;
+      }
     }
 
-    // Load current orb style on page load
+    // Load current preferences on page load
     document.addEventListener('DOMContentLoaded', async () => {
-      let currentOrbStyle = 'fire-v8';
-      if (window.__TAURI__) {
-        try {
-          const { invoke } = window.__TAURI__.core;
-          currentOrbStyle = await invoke('get_orb_style');
-        } catch (e) {
-          console.warn('Failed to get orb style from backend:', e);
-        }
+      if (!window.__TAURI__) {
+        await loadAudioInputs();
+        return;
       }
-      document.getElementById('orb-style').value = currentOrbStyle;
+
+      try {
+        const { invoke } = window.__TAURI__.core;
+        const prefs = await invoke('get_preferences');
+        await loadAudioInputs(prefs.audioInput);
+        applyPreferences(prefs);
+      } catch (e) {
+        console.warn('Failed to load preferences:', e);
+        setSaveStatus(String(e), 'error');
+      }
     });
   </script>
 </body>

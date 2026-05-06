@@ -11,6 +11,11 @@
       height: 100%;
       background: transparent;
       overflow: hidden;
+      -webkit-app-region: drag;
+      cursor: grab;
+    }
+    body:active {
+      cursor: grabbing;
     }
     canvas {
       display: block;
@@ -31,12 +36,19 @@
       text-align: center;
       pointer-events: none;
     }
+    #drag-region {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      -webkit-app-region: drag;
+    }
     .status.recording { color: rgba(255,100,100,0.9); }
     .status.processing { color: rgba(100,200,255,0.9); }
   </style>
 </head>
 <body>
   <canvas id="canvas"></canvas>
+  <div id="drag-region" data-drag-region aria-hidden="true"></div>
   <div id="status" class="status"></div>
 
   <!-- Notifications system -->

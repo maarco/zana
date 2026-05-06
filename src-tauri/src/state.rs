@@ -12,7 +12,8 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 
 /// User settings
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Settings {
     /// Selected Whisper model
     pub whisper_model: Option<String>,
@@ -20,6 +21,18 @@ pub struct Settings {
     pub audio_device: Option<String>,
     /// Selected orb style plugin
     pub orb_style: Option<String>,
+    /// Preferred transcription language
+    pub language: Option<String>,
+    /// Whether double-tapping the trigger key latches recording
+    pub double_tap_enabled: bool,
+    /// Minimum trigger hold duration in milliseconds
+    pub min_hold_duration_ms: u64,
+    /// Recording trigger key
+    pub trigger_key: Option<String>,
+    /// Alternative global shortcut
+    pub global_shortcut: Option<String>,
+    /// Whether to show the tray/menu-bar icon
+    pub show_in_menu_bar: bool,
     /// Window always on top
     pub always_on_top: bool,
     /// Window width
@@ -73,11 +86,23 @@ impl Settings {
         Self {
             whisper_model: Some("small".to_string()),
             audio_device: None,
-            orb_style: Some("nebula-aura-gpu".to_string()),
+            orb_style: Some("fire-v8".to_string()),
+            language: Some("auto".to_string()),
+            double_tap_enabled: true,
+            min_hold_duration_ms: 300,
+            trigger_key: Some("fn".to_string()),
+            global_shortcut: Some("Cmd+Shift+Space".to_string()),
+            show_in_menu_bar: true,
             always_on_top: true,
             window_width: 500,
             window_height: 500,
         }
+    }
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self::default_settings()
     }
 }
 

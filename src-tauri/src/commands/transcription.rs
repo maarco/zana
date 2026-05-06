@@ -170,6 +170,13 @@ pub async fn set_model(
         settings.whisper_model = Some(model_id.clone());
     }
 
+    if let Err(error) = state.save_settings().await {
+        return Ok(RecordingResponse {
+            success: false,
+            error: Some(error.to_string()),
+        });
+    }
+
     log::info!("Set active model to: {}", model_id);
 
     Ok(RecordingResponse {

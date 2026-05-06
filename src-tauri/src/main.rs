@@ -510,6 +510,8 @@ fn main() {
             // Settings
             commands::set_orb_style,
             commands::get_orb_style,
+            commands::get_preferences,
+            commands::save_preferences,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -538,9 +540,10 @@ fn create_orb_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::E
         screen_height
     );
 
-    // 50% of screen size for draggable orb
-    let orb_width = (screen_width / 2.0).floor();
-    let orb_height = (screen_height / 2.0).floor();
+    // Keep the native hitbox close to the visible orb. Transparent NSPanels still
+    // intercept pointer events anywhere inside their rectangular frame.
+    let orb_width = 320.0;
+    let orb_height = 320.0;
 
     // Position in bottom-right corner with padding
     let padding = 20.0;
@@ -555,7 +558,7 @@ fn create_orb_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::E
         pos_y
     );
 
-    // Create WebviewWindow - smaller, positioned bottom-right
+    // Create WebviewWindow - compact, positioned bottom-right
     let orb = WebviewWindowBuilder::new(app, "orb", WebviewUrl::App("orb.html".into()))
         .title("Zana Orb")
         .inner_size(orb_width, orb_height)
