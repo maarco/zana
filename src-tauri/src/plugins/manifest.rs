@@ -5,6 +5,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
+use std::str::FromStr;
 
 /// Plugin manifest (plugin.toml)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -264,7 +265,7 @@ impl PluginManifest {
     }
 
     /// Load manifest from a TOML string
-    pub fn from_str(content: &str) -> anyhow::Result<Self> {
+    pub fn from_toml_str(content: &str) -> anyhow::Result<Self> {
         let manifest: PluginManifest = toml::from_str(content)?;
         Ok(manifest)
     }
@@ -275,8 +276,15 @@ impl PluginManifest {
         if self.plugin.id.is_empty() {
             anyhow::bail!("Plugin ID cannot be empty");
         }
-        if !self.plugin.id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
-            anyhow::bail!("Plugin ID must only contain alphanumeric characters, hyphens, and underscores");
+        if !self
+            .plugin
+            .id
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        {
+            anyhow::bail!(
+                "Plugin ID must only contain alphanumeric characters, hyphens, and underscores"
+            );
         }
 
         // Version must be semver-ish
@@ -322,7 +330,12 @@ impl PluginManifest {
                 }
             }
             ConfigOptionType::Select => {
-                if option.options.as_ref().map(|o| o.is_empty()).unwrap_or(true) {
+                if option
+                    .options
+                    .as_ref()
+                    .map(|o| o.is_empty())
+                    .unwrap_or(true)
+                {
                     anyhow::bail!(
                         "Config option '{}': select type requires non-empty options array",
                         option.key
@@ -346,6 +359,14 @@ impl PluginManifest {
         }
 
         config
+    }
+}
+
+impl FromStr for PluginManifest {
+    type Err = anyhow::Error;
+
+    fn from_str(content: &str) -> anyhow::Result<Self> {
+        Self::from_toml_str(content)
     }
 }
 
@@ -387,7 +408,7 @@ max = 2.0
 
     #[test]
     fn test_parse_manifest() {
-        let manifest = PluginManifest::from_str(VALID_MANIFEST).unwrap();
+        let manifest = VALID_MANIFEST.parse::<PluginManifest>().unwrap();
 
         assert_eq!(manifest.plugin.id, "nebula-aura");
         assert_eq!(manifest.plugin.name, "Nebula Aura");
@@ -400,15 +421,18 @@ max = 2.0
 
     #[test]
     fn test_validate_manifest() {
-        let manifest = PluginManifest::from_str(VALID_MANIFEST).unwrap();
+        let manifest = VALID_MANIFEST.parse::<PluginManifest>().unwrap();
         assert!(manifest.validate().is_ok());
     }
 
     #[test]
     fn test_default_config() {
-        let manifest = PluginManifest::from_str(VALID_MANIFEST).unwrap();
+        let manifest = VALID_MANIFEST.parse::<PluginManifest>().unwrap();
         let config = manifest.default_config();
 
-        assert_eq!(config.get("particle_density"), Some(&serde_json::json!(1.0)));
+        assert_eq!(
+            config.get("particle_density"),
+            Some(&serde_json::json!(1.0))
+        );
     }
 }

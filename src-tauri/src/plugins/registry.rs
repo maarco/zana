@@ -133,9 +133,7 @@ impl PluginRegistry {
 
     /// Get all orb style plugins
     pub fn orb_styles(&self) -> impl Iterator<Item = &PluginEntry> {
-        self.orb_styles
-            .iter()
-            .filter_map(|id| self.plugins.get(id))
+        self.orb_styles.iter().filter_map(|id| self.plugins.get(id))
     }
 
     /// Get all audio processor plugin IDs
@@ -192,10 +190,7 @@ impl PluginRegistry {
 
     /// Check if a plugin is enabled
     pub fn is_enabled(&self, id: &str) -> bool {
-        self.plugins
-            .get(id)
-            .map(|e| e.enabled)
-            .unwrap_or(false)
+        self.plugins.get(id).map(|e| e.enabled).unwrap_or(false)
     }
 
     /// Get list of all plugin manifests

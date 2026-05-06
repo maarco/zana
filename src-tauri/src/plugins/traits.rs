@@ -326,12 +326,7 @@ pub enum Color {
     /// CSS color string (e.g., "red", "#ff0000", "rgba(255, 0, 0, 0.5)")
     Css(String),
     /// RGBA values (0-255 for RGB, 0.0-1.0 for A)
-    Rgba {
-        r: u8,
-        g: u8,
-        b: u8,
-        a: f32,
-    },
+    Rgba { r: u8, g: u8, b: u8, a: f32 },
 }
 
 impl Color {

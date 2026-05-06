@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// GPU renderer type
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum GpuRendererType {
     /// Canvas 2D (CPU-based, fallback)
@@ -14,13 +14,8 @@ pub enum GpuRendererType {
     /// WebGL 2.0
     WebGL2,
     /// WebGPU (preferred)
+    #[default]
     WebGPU,
-}
-
-impl Default for GpuRendererType {
-    fn default() -> Self {
-        GpuRendererType::WebGPU
-    }
 }
 
 /// GPU capabilities detected at runtime
@@ -295,7 +290,10 @@ impl UniformValue {
 
 /// Build a uniform buffer from values
 #[allow(dead_code)]
-pub fn build_uniform_buffer(layout: &UniformLayout, values: &HashMap<String, UniformValue>) -> Vec<u8> {
+pub fn build_uniform_buffer(
+    layout: &UniformLayout,
+    values: &HashMap<String, UniformValue>,
+) -> Vec<u8> {
     let mut buffer = vec![0u8; layout.size as usize];
 
     for field in &layout.fields {

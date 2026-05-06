@@ -3,8 +3,8 @@
 //! Tauri commands for speech-to-text using Whisper.
 
 use crate::commands::audio::RecordingResponse;
-use crate::stt::WhisperModel;
 use crate::state::AppState;
+use crate::stt::WhisperModel;
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, State};
 
@@ -104,7 +104,9 @@ pub async fn download_model(
     window: tauri::Window,
     model_id: String,
 ) -> Result<RecordingResponse, String> {
-    let model = WhisperModel::from_str(&model_id).ok_or_else(|| format!("Unknown model: {}", model_id))?;
+    let model = model_id
+        .parse::<WhisperModel>()
+        .map_err(|_| format!("Unknown model: {}", model_id))?;
 
     let engine = state.whisper_engine.lock().await;
 
@@ -150,9 +152,12 @@ pub async fn download_model(
 
 /// Set the active Whisper model
 #[tauri::command]
-pub async fn set_model(state: State<'_, AppState>, model_id: String) -> Result<RecordingResponse, String> {
+pub async fn set_model(
+    state: State<'_, AppState>,
+    model_id: String,
+) -> Result<RecordingResponse, String> {
     // Validate model ID
-    if WhisperModel::from_str(&model_id).is_none() {
+    if model_id.parse::<WhisperModel>().is_err() {
         return Ok(RecordingResponse {
             success: false,
             error: Some(format!("Unknown model: {}", model_id)),
@@ -198,11 +203,15 @@ pub async fn transcribe(state: State<'_, AppState>) -> Result<TranscriptionRespo
     // Get model from settings
     let model_id = {
         let settings = state.settings.read().await;
-        settings.whisper_model.clone().unwrap_or_else(|| "small".to_string())
+        settings
+            .whisper_model
+            .clone()
+            .unwrap_or_else(|| "small".to_string())
     };
 
-    let model =
-        WhisperModel::from_str(&model_id).unwrap_or(WhisperModel::Small);
+    let model = model_id
+        .parse::<WhisperModel>()
+        .unwrap_or(WhisperModel::Small);
 
     // Check if model is downloaded
     {
@@ -262,6 +271,8 @@ pub async fn transcribe_preview(state: State<'_, AppState>) -> Result<String, St
     if response.success {
         Ok(response.text.unwrap_or_default())
     } else {
-        Err(response.error.unwrap_or_else(|| "Unknown error".to_string()))
+        Err(response
+            .error
+            .unwrap_or_else(|| "Unknown error".to_string()))
     }
 }

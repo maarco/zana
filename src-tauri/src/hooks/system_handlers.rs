@@ -164,7 +164,11 @@ impl ValidationHandler {
                     return Err(format!("Invalid progress percentage: {}", percent));
                 }
             }
-            HookEvent::TranscriptionSegment { start_ms, end_ms, text } => {
+            HookEvent::TranscriptionSegment {
+                start_ms,
+                end_ms,
+                text,
+            } => {
                 if *end_ms <= *start_ms {
                     return Err(format!(
                         "Invalid segment time range: start={}, end={}",
@@ -353,10 +357,7 @@ mod tests {
             end_ms: 500,
             text: "Hello world".to_string(),
         };
-        assert_eq!(
-            handler.handle(&mut invalid_segment).await,
-            HookResult::Skip
-        );
+        assert_eq!(handler.handle(&mut invalid_segment).await, HookResult::Skip);
 
         // Empty text
         let mut empty_segment = HookEvent::TranscriptionSegment {

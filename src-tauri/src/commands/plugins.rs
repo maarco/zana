@@ -140,10 +140,7 @@ fn copy_dir(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()>
 /// Copies the plugin directory to the plugins directory and loads the plugin.
 /// Emits HookEvent::PluginLoaded after successful installation.
 #[tauri::command]
-pub async fn install_plugin(
-    path: String,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn install_plugin(path: String, state: State<'_, AppState>) -> Result<(), String> {
     let source_path = std::path::Path::new(&path);
 
     // Validate source path exists and is a directory
@@ -209,10 +206,7 @@ pub async fn install_plugin(
 /// Unloads the plugin and removes its directory from the plugins folder.
 /// Emits HookEvent::PluginUnloaded after successful uninstallation.
 #[tauri::command]
-pub async fn uninstall_plugin(
-    id: String,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn uninstall_plugin(id: String, state: State<'_, AppState>) -> Result<(), String> {
     // Determine plugins directory
     let plugins_dir = if cfg!(debug_assertions) {
         std::path::PathBuf::from("plugins")

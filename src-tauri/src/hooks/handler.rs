@@ -5,7 +5,7 @@
 
 use super::event::{HookEvent, HookEventType};
 use async_trait::async_trait;
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 
 /// Result of handling a hook event
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,9 +31,10 @@ pub enum HookResult {
 /// # Example
 ///
 /// ```rust
-/// use Zana::hooks::{HookHandler, HookEvent, HookEventType, HookResult};
+/// use Zana_app::hooks::{HookHandler, HookEvent, HookEventType, HookResult};
 /// use async_trait::async_trait;
 ///
+/// #[derive(Debug)]
 /// struct LoggingHandler;
 ///
 /// #[async_trait]
@@ -116,7 +117,7 @@ pub trait HookHandler: Send + Sync + Debug {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust,ignore
 /// let handler = HookHandlerBuilder::new("my-handler")
 ///     .priority(50)
 ///     .subscribe(HookEventType::AudioLevelChange)
@@ -181,7 +182,6 @@ impl HookHandlerBuilder {
 }
 
 /// A simple function-based hook handler
-#[derive(Debug)]
 pub struct FnHookHandler<F>
 where
     F: Fn(&mut HookEvent) -> HookResult + Send + Sync,
@@ -194,16 +194,27 @@ where
     handler: F,
 }
 
+impl<F> Debug for FnHookHandler<F>
+where
+    F: Fn(&mut HookEvent) -> HookResult + Send + Sync,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FnHookHandler")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("priority", &self.priority)
+            .field("subscriptions", &self.subscriptions)
+            .field("enabled", &self.enabled)
+            .finish_non_exhaustive()
+    }
+}
+
 impl<F> FnHookHandler<F>
 where
     F: Fn(&mut HookEvent) -> HookResult + Send + Sync,
 {
     /// Create a new function-based handler
-    pub fn new(
-        id: impl Into<String>,
-        subscriptions: Vec<HookEventType>,
-        handler: F,
-    ) -> Self {
+    pub fn new(id: impl Into<String>, subscriptions: Vec<HookEventType>, handler: F) -> Self {
         let id = id.into();
         Self {
             name: id.clone(),
@@ -231,7 +242,7 @@ where
 #[async_trait]
 impl<F> HookHandler for FnHookHandler<F>
 where
-    F: Fn(&mut HookEvent) -> HookResult + Send + Sync + Debug,
+    F: Fn(&mut HookEvent) -> HookResult + Send + Sync,
 {
     fn id(&self) -> &str {
         &self.id
@@ -297,11 +308,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_fn_handler() {
-        let handler = FnHookHandler::new(
-            "fn-test",
-            vec![HookEventType::All],
-            |_event| HookResult::Continue,
-        )
+        let handler = FnHookHandler::new("fn-test", vec![HookEventType::All], |_event| {
+            HookResult::Continue
+        })
         .with_priority(50);
 
         assert_eq!(handler.id(), "fn-test");

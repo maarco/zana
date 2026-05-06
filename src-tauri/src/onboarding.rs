@@ -85,9 +85,15 @@ pub fn open_accessibility_settings() {
             .output()
         {
             Ok(output) => {
-                log::info!("[Onboarding] Open command executed, status: {}", output.status);
+                log::info!(
+                    "[Onboarding] Open command executed, status: {}",
+                    output.status
+                );
                 if !output.stderr.is_empty() {
-                    log::warn!("[Onboarding] stderr: {:?}", String::from_utf8_lossy(&output.stderr));
+                    log::warn!(
+                        "[Onboarding] stderr: {:?}",
+                        String::from_utf8_lossy(&output.stderr)
+                    );
                 }
             }
             Err(e) => {

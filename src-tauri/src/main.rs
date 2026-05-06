@@ -6,16 +6,18 @@
 #![allow(deprecated)]
 #![allow(unexpected_cfgs)]
 
-use Zana_app::state::AppState;
-use Zana_app::HookEvent;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex as StdMutex;
 use std::time::Instant;
-use tauri::Manager;
+use tauri::menu::{
+    Menu, MenuBuilder, MenuItem, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder,
+};
 #[allow(unused_imports)]
 use tauri::Emitter;
 use tauri::Listener;
-use tauri::menu::{Menu, MenuBuilder, MenuItem, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
+use tauri::Manager;
+use Zana_app::state::AppState;
+use Zana_app::HookEvent;
 
 #[cfg(target_os = "macos")]
 mod panel;
@@ -64,7 +66,7 @@ fn eval_js_in_panel(panel: &tauri_nspanel::PanelHandle<tauri::Wry>, js: &str) {
 #[cfg(target_os = "macos")]
 unsafe fn find_wkwebview_cocoa(view: cocoa::base::id) -> Option<cocoa::base::id> {
     use cocoa::base::{id, nil};
-    use objc::{msg_send, sel, sel_impl, class};
+    use objc::{class, msg_send, sel, sel_impl};
 
     if view == nil {
         return None;
@@ -222,7 +224,10 @@ fn main() {
     whisper_rs::install_logging_hooks();
 
     // Initialize logging - whisper logs will go through here now
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info,whisper_rs=warn")).init();
+    env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or("info,whisper_rs=warn"),
+    )
+    .init();
 
     log::info!("Starting Zana...");
 
@@ -240,7 +245,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         // Auto-updater disabled until signing keys are configured
         // .plugin(tauri_plugin_updater::Builder::new().build())
-        .menu(|app| create_app_menu(app))
+        .menu(create_app_menu)
         .setup(|app| {
             let is_first_run = Zana_app::onboarding::is_first_run();
 
@@ -263,7 +268,7 @@ fn main() {
                 let _onboarding_window = WebviewWindowBuilder::new(
                     app,
                     "onboarding",
-                    WebviewUrl::App("onboarding.html".into())
+                    WebviewUrl::App("onboarding.html".into()),
                 )
                 .title("Zana Genesis")
                 .inner_size(900.0, 700.0)
@@ -325,10 +330,13 @@ fn main() {
                         // Fallback: also emit for non-macOS or regular windows
                         #[cfg(not(target_os = "macos"))]
                         {
-                            let _ = app_handle_for_events.emit("audio-level", serde_json::json!({
-                                "level": level,
-                                "peak": peak
-                            }));
+                            let _ = app_handle_for_events.emit(
+                                "audio-level",
+                                serde_json::json!({
+                                    "level": level,
+                                    "peak": peak
+                                }),
+                            );
                         }
                     }
                 }
@@ -393,11 +401,18 @@ fn main() {
             {
                 let quit = MenuItem::with_id(app, "quit", "Quit Zana", true, Some("CmdOrCtrl+Q"))?;
                 let about = MenuItem::with_id(app, "about", "About Zana", true, None::<&str>)?;
-                let preferences = MenuItem::with_id(app, "preferences", "Preferences...", true, Some("CmdOrCtrl+,"))?;
+                let preferences = MenuItem::with_id(
+                    app,
+                    "preferences",
+                    "Preferences...",
+                    true,
+                    Some("CmdOrCtrl+,"),
+                )?;
                 let separator = tauri::menu::PredefinedMenuItem::separator(app)?;
                 let separator2 = tauri::menu::PredefinedMenuItem::separator(app)?;
 
-                let menu = Menu::with_items(app, &[&about, &separator, &preferences, &separator2, &quit])?;
+                let menu =
+                    Menu::with_items(app, &[&about, &separator, &preferences, &separator2, &quit])?;
 
                 // Try to get the config-created tray icon and add menu
                 if let Some(tray) = app.tray_by_id("main") {
@@ -405,50 +420,48 @@ fn main() {
                     log::info!("System tray menu attached to config tray icon");
 
                     // Set up menu event handler on the tray icon
-                    tray.on_menu_event(move |app, event| {
-                        match event.id.as_ref() {
-                            "quit" => {
-                                log::info!("Quit requested from tray menu");
-                                app.exit(0);
-                            }
-                            "about" => {
-                                log::info!("About requested from tray menu");
-                                use tauri::{WebviewUrl, WebviewWindowBuilder};
-                                if app.get_webview_window("about").is_none() {
-                                    let _ = WebviewWindowBuilder::new(
-                                        app,
-                                        "about",
-                                        WebviewUrl::App("about.html".into())
-                                    )
-                                    .title("About Zana")
-                                    .inner_size(400.0, 500.0)
-                                    .center()
-                                    .resizable(false)
-                                    .build();
-                                } else if let Some(window) = app.get_webview_window("about") {
-                                    let _ = window.set_focus();
-                                }
-                            }
-                            "preferences" => {
-                                log::info!("Preferences requested from tray menu");
-                                use tauri::{WebviewUrl, WebviewWindowBuilder};
-                                if app.get_webview_window("preferences").is_none() {
-                                    let _ = WebviewWindowBuilder::new(
-                                        app,
-                                        "preferences",
-                                        WebviewUrl::App("preferences.html".into())
-                                    )
-                                    .title("Zana Preferences")
-                                    .inner_size(500.0, 600.0)
-                                    .center()
-                                    .resizable(false)
-                                    .build();
-                                } else if let Some(window) = app.get_webview_window("preferences") {
-                                    let _ = window.set_focus();
-                                }
-                            }
-                            _ => {}
+                    tray.on_menu_event(move |app, event| match event.id.as_ref() {
+                        "quit" => {
+                            log::info!("Quit requested from tray menu");
+                            app.exit(0);
                         }
+                        "about" => {
+                            log::info!("About requested from tray menu");
+                            use tauri::{WebviewUrl, WebviewWindowBuilder};
+                            if app.get_webview_window("about").is_none() {
+                                let _ = WebviewWindowBuilder::new(
+                                    app,
+                                    "about",
+                                    WebviewUrl::App("about.html".into()),
+                                )
+                                .title("About Zana")
+                                .inner_size(400.0, 500.0)
+                                .center()
+                                .resizable(false)
+                                .build();
+                            } else if let Some(window) = app.get_webview_window("about") {
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "preferences" => {
+                            log::info!("Preferences requested from tray menu");
+                            use tauri::{WebviewUrl, WebviewWindowBuilder};
+                            if app.get_webview_window("preferences").is_none() {
+                                let _ = WebviewWindowBuilder::new(
+                                    app,
+                                    "preferences",
+                                    WebviewUrl::App("preferences.html".into()),
+                                )
+                                .title("Zana Preferences")
+                                .inner_size(500.0, 600.0)
+                                .center()
+                                .resizable(false)
+                                .build();
+                            } else if let Some(window) = app.get_webview_window("preferences") {
+                                let _ = window.set_focus();
+                            }
+                        }
+                        _ => {}
                     });
                 } else {
                     log::warn!("Could not find tray icon by id 'main'");
@@ -519,7 +532,11 @@ fn create_orb_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::E
         (frame.size.width, frame.size.height)
     };
 
-    log::info!("[CreateOrb] Screen size: {}x{}", screen_width, screen_height);
+    log::info!(
+        "[CreateOrb] Screen size: {}x{}",
+        screen_width,
+        screen_height
+    );
 
     // 50% of screen size for draggable orb
     let orb_width = (screen_width / 2.0).floor();
@@ -528,9 +545,15 @@ fn create_orb_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::E
     // Position in bottom-right corner with padding
     let padding = 20.0;
     let pos_x = (screen_width - orb_width - padding).floor();
-    let pos_y = padding;  // macOS Y is from bottom, so small Y = bottom
+    let pos_y = padding; // macOS Y is from bottom, so small Y = bottom
 
-    log::info!("[CreateOrb] Orb size: {}x{}, position: {},{}", orb_width, orb_height, pos_x, pos_y);
+    log::info!(
+        "[CreateOrb] Orb size: {}x{}, position: {},{}",
+        orb_width,
+        orb_height,
+        pos_x,
+        pos_y
+    );
 
     // Create WebviewWindow - smaller, positioned bottom-right
     let orb = WebviewWindowBuilder::new(app, "orb", WebviewUrl::App("orb.html".into()))
@@ -573,13 +596,15 @@ fn create_orb_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::E
             let new_frame = NSRect::new(new_origin, frame.size);
             let _: () = msg_send![ns_panel_ptr, setFrame:new_frame display: false];
         }
-        log::info!("[CreateOrb] NSPanel draggable, position set to {},{}", pos_x, pos_y);
+        log::info!(
+            "[CreateOrb] NSPanel draggable, position set to {},{}",
+            pos_x,
+            pos_y
+        );
     }
 
     // NonactivatingPanel prevents focus stealing
-    panel.set_style_mask(
-        NSWindowStyleMask::NonactivatingPanel | NSWindowStyleMask::Resizable
-    );
+    panel.set_style_mask(NSWindowStyleMask::NonactivatingPanel | NSWindowStyleMask::Resizable);
 
     // FullScreenAuxiliary allows appearing over fullscreen apps
     panel.set_collection_behavior(
@@ -770,14 +795,14 @@ fn setup_config_watcher(app: tauri::AppHandle) {
             std::path::PathBuf::from("/Users/malmazan/dev/Zana/src-ui/orb_config.json"),
         ];
 
-        let config_path = possible_paths
-            .into_iter()
-            .find(|p| p.exists());
+        let config_path = possible_paths.into_iter().find(|p| p.exists());
 
         let config_path = match config_path {
             Some(p) => p,
             None => {
-                log::warn!("[ConfigWatcher] Config file not found in any location, hot reload disabled");
+                log::warn!(
+                    "[ConfigWatcher] Config file not found in any location, hot reload disabled"
+                );
                 return;
             }
         };
@@ -807,36 +832,37 @@ fn setup_config_watcher(app: tauri::AppHandle) {
         }
 
         // Listen for file changes
-        loop {
-            match rx.recv() {
-                Ok(event) => {
-                    if event.kind.is_modify() {
-                        log::info!("[ConfigWatcher] Config file changed, reloading...");
+        while let Ok(event) = rx.recv() {
+            if event.kind.is_modify() {
+                log::info!("[ConfigWatcher] Config file changed, reloading...");
 
-                        // Read the new config
-                        if let Ok(content) = std::fs::read_to_string(&config_path) {
-                            // macOS: push via direct WKWebView eval (NSPanel doesn't support Tauri IPC)
-                            #[cfg(target_os = "macos")]
-                            {
-                                let panel_guard = ORB_PANEL.lock().unwrap();
-                                if let Some(ref panel) = *panel_guard {
-                                    let escaped = content.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n");
-                                    let js = format!("window.updateConfig && window.updateConfig(\"{}\")", escaped);
-                                    eval_js_in_panel(panel, &js);
-                                    log::info!("[ConfigWatcher] Config pushed to webview");
-                                }
-                            }
-
-                            // Windows/Linux: push via Tauri emit
-                            #[cfg(not(target_os = "macos"))]
-                            {
-                                let _ = app.emit("config-changed", content);
-                                log::info!("[ConfigWatcher] Config emitted to frontend");
-                            }
+                // Read the new config
+                if let Ok(content) = std::fs::read_to_string(&config_path) {
+                    // macOS: push via direct WKWebView eval (NSPanel doesn't support Tauri IPC)
+                    #[cfg(target_os = "macos")]
+                    {
+                        let panel_guard = ORB_PANEL.lock().unwrap();
+                        if let Some(ref panel) = *panel_guard {
+                            let escaped = content
+                                .replace('\\', "\\\\")
+                                .replace('"', "\\\"")
+                                .replace('\n', "\\n");
+                            let js = format!(
+                                "window.updateConfig && window.updateConfig(\"{}\")",
+                                escaped
+                            );
+                            eval_js_in_panel(panel, &js);
+                            log::info!("[ConfigWatcher] Config pushed to webview");
                         }
                     }
+
+                    // Windows/Linux: push via Tauri emit
+                    #[cfg(not(target_os = "macos"))]
+                    {
+                        let _ = app.emit("config-changed", content);
+                        log::info!("[ConfigWatcher] Config emitted to frontend");
+                    }
                 }
-                Err(_) => break,
             }
         }
     });
@@ -885,8 +911,13 @@ fn setup_fn_key_monitor(app: tauri::AppHandle) {
                 let was_pressed = FN_KEY_PRESSED.load(Ordering::SeqCst);
 
                 // Log all flag change events for debugging
-                log::debug!("[FnMonitor] keyCode={}, flags=0x{:x}, fn_pressed={}, was_pressed={}",
-                    key_code, flags, fn_is_pressed, was_pressed);
+                log::debug!(
+                    "[FnMonitor] keyCode={}, flags=0x{:x}, fn_pressed={}, was_pressed={}",
+                    key_code,
+                    flags,
+                    fn_is_pressed,
+                    was_pressed
+                );
 
                 if fn_is_pressed && !was_pressed && key_code == FN_KEY_CODE {
                     FN_KEY_PRESSED.store(true, Ordering::SeqCst);
@@ -916,8 +947,13 @@ fn setup_fn_key_monitor(app: tauri::AppHandle) {
                 let was_pressed = FN_KEY_PRESSED.load(Ordering::SeqCst);
 
                 // Log all flag change events for debugging
-                log::debug!("[FnMonitor-Local] keyCode={}, flags=0x{:x}, fn_pressed={}, was_pressed={}",
-                    key_code, flags, fn_is_pressed, was_pressed);
+                log::debug!(
+                    "[FnMonitor-Local] keyCode={}, flags=0x{:x}, fn_pressed={}, was_pressed={}",
+                    key_code,
+                    flags,
+                    fn_is_pressed,
+                    was_pressed
+                );
 
                 if fn_is_pressed && !was_pressed && key_code == FN_KEY_CODE {
                     FN_KEY_PRESSED.store(true, Ordering::SeqCst);
@@ -941,7 +977,8 @@ fn setup_fn_key_monitor(app: tauri::AppHandle) {
             ];
 
             // Store monitor handles as usize (cast from id pointers)
-            *FN_KEY_MONITORS.lock().unwrap() = Some((global_monitor as usize, local_monitor as usize));
+            *FN_KEY_MONITORS.lock().unwrap() =
+                Some((global_monitor as usize, local_monitor as usize));
 
             log::info!("Fn key monitors active");
         });
@@ -958,16 +995,21 @@ fn handle_fn_press(app: &tauri::AppHandle) {
         .map(|t| t.elapsed().as_millis())
         .unwrap_or(999999);
 
-    log::info!("[FnPress] Fn key pressed ({}ms since last release, IS_RECORDING={}, LATCHED={})",
+    log::info!(
+        "[FnPress] Fn key pressed ({}ms since last release, IS_RECORDING={}, LATCHED={})",
         ms_since_release,
         IS_RECORDING.load(Ordering::SeqCst),
-        LATCHED_RECORDING.load(Ordering::SeqCst));
+        LATCHED_RECORDING.load(Ordering::SeqCst)
+    );
 
     // Check for double-tap (tap within 300ms of last release)
     let is_double_tap = ms_since_release < 300;
 
     if is_double_tap {
-        log::info!("[FnPress] *** DOUBLE-TAP DETECTED *** ({}ms)", ms_since_release);
+        log::info!(
+            "[FnPress] *** DOUBLE-TAP DETECTED *** ({}ms)",
+            ms_since_release
+        );
     }
 
     // If already recording in latched mode, single tap stops it
@@ -1001,7 +1043,10 @@ fn handle_fn_press(app: &tauri::AppHandle) {
             let panel_guard = ORB_PANEL.lock().unwrap();
             if let Some(ref panel) = *panel_guard {
                 log::info!("[FnPress] Setting recording state via WKWebView eval");
-                eval_js_in_panel(panel, "window.setRecordingState && window.setRecordingState(true, false)");
+                eval_js_in_panel(
+                    panel,
+                    "window.setRecordingState && window.setRecordingState(true, false)",
+                );
                 log::info!("[FnPress] setRecordingState(true) called");
             } else {
                 log::error!("[FnPress] No orb panel available!");
@@ -1032,9 +1077,11 @@ fn handle_fn_press(app: &tauri::AppHandle) {
 /// Handle Fn key release - stop recording, transcribe, paste, hide
 #[cfg(target_os = "macos")]
 fn handle_fn_release(app: &tauri::AppHandle) {
-    log::info!("[FnRelease] Fn key released, IS_RECORDING={}, LATCHED={}",
+    log::info!(
+        "[FnRelease] Fn key released, IS_RECORDING={}, LATCHED={}",
         IS_RECORDING.load(Ordering::SeqCst),
-        LATCHED_RECORDING.load(Ordering::SeqCst));
+        LATCHED_RECORDING.load(Ordering::SeqCst)
+    );
 
     // Save release time for double-tap detection
     *LAST_FN_RELEASE.lock().unwrap() = Some(Instant::now());
@@ -1053,8 +1100,14 @@ fn handle_fn_release(app: &tauri::AppHandle) {
         .unwrap_or(false);
 
     if !held_long_enough {
-        log::info!("[FnRelease] Released too quickly ({} ms), ignoring",
-            LAST_FN_PRESS.lock().unwrap().map(|t| t.elapsed().as_millis()).unwrap_or(0));
+        log::info!(
+            "[FnRelease] Released too quickly ({} ms), ignoring",
+            LAST_FN_PRESS
+                .lock()
+                .unwrap()
+                .map(|t| t.elapsed().as_millis())
+                .unwrap_or(0)
+        );
         hide_orb(app);
         return;
     }
@@ -1081,7 +1134,10 @@ fn stop_recording(app: &tauri::AppHandle) {
     {
         let panel_guard = ORB_PANEL.lock().unwrap();
         if let Some(ref panel) = *panel_guard {
-            eval_js_in_panel(panel, "window.setRecordingState && window.setRecordingState(false, true)");
+            eval_js_in_panel(
+                panel,
+                "window.setRecordingState && window.setRecordingState(false, true)",
+            );
         }
     }
 
@@ -1108,7 +1164,8 @@ fn stop_recording(app: &tauri::AppHandle) {
                             {
                                 let panel_guard = ORB_PANEL.lock().unwrap();
                                 if let Some(ref panel) = *panel_guard {
-                                    let escaped = result.text.replace('\\', "\\\\").replace('"', "\\\"");
+                                    let escaped =
+                                        result.text.replace('\\', "\\\\").replace('"', "\\\"");
                                     let js = format!("window.setTranscriptionComplete && window.setTranscriptionComplete(\"{}\")", escaped);
                                     eval_js_in_panel(panel, &js);
                                 }
@@ -1179,12 +1236,10 @@ fn paste_text(text: &str) {
 fn setup_ctrl_key_monitor(app: tauri::AppHandle) {
     use std::sync::OnceLock;
     use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
+    use windows::Win32::UI::Input::KeyboardAndMouse::{VK_LCONTROL, VK_RCONTROL};
     use windows::Win32::UI::WindowsAndMessaging::{
-        CallNextHookEx, GetMessageW, SetWindowsHookExW, HHOOK, KBDLLHOOKSTRUCT,
-        MSG, WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
-    };
-    use windows::Win32::UI::Input::KeyboardAndMouse::{
-        VK_LCONTROL, VK_RCONTROL,
+        CallNextHookEx, GetMessageW, SetWindowsHookExW, HHOOK, KBDLLHOOKSTRUCT, MSG,
+        WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
     };
 
     static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
@@ -1201,10 +1256,9 @@ fn setup_ctrl_key_monitor(app: tauri::AppHandle) {
             let is_ctrl = vk == VK_LCONTROL.0 || vk == VK_RCONTROL.0;
 
             if is_ctrl {
-                let is_keydown = w_param.0 == WM_KEYDOWN as usize
-                    || w_param.0 == WM_SYSKEYDOWN as usize;
-                let is_keyup = w_param.0 == WM_KEYUP as usize
-                    || w_param.0 == WM_SYSKEYUP as usize;
+                let is_keydown =
+                    w_param.0 == WM_KEYDOWN as usize || w_param.0 == WM_SYSKEYDOWN as usize;
+                let is_keyup = w_param.0 == WM_KEYUP as usize || w_param.0 == WM_SYSKEYUP as usize;
 
                 let was_pressed = FN_KEY_PRESSED.load(Ordering::SeqCst);
 
@@ -1231,12 +1285,7 @@ fn setup_ctrl_key_monitor(app: tauri::AppHandle) {
 
     std::thread::spawn(move || {
         unsafe {
-            let hook = SetWindowsHookExW(
-                WH_KEYBOARD_LL,
-                Some(keyboard_hook_proc),
-                None,
-                0,
-            );
+            let hook = SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_hook_proc), None, 0);
 
             match hook {
                 Ok(h) => {
@@ -1303,10 +1352,13 @@ fn handle_ctrl_press(app: &tauri::AppHandle) {
             std::thread::sleep(std::time::Duration::from_millis(150));
             log::info!("[CtrlPress] Delay complete, emitting events");
 
-            let _ = app_clone.emit("recording-state", serde_json::json!({
-                "recording": true,
-                "transcribing": false
-            }));
+            let _ = app_clone.emit(
+                "recording-state",
+                serde_json::json!({
+                    "recording": true,
+                    "transcribing": false
+                }),
+            );
 
             // Start audio capture
             tauri::async_runtime::spawn(async move {
@@ -1365,8 +1417,7 @@ fn win_create_orb_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::erro
     use tauri::{WebviewUrl, WebviewWindowBuilder};
     use windows::Win32::Foundation::HWND;
     use windows::Win32::UI::WindowsAndMessaging::{
-        GetWindowLongW, SetWindowLongW, GWL_EXSTYLE,
-        WS_EX_LAYERED, WS_EX_TRANSPARENT,
+        GetWindowLongW, SetWindowLongW, GWL_EXSTYLE, WS_EX_LAYERED, WS_EX_TRANSPARENT,
     };
 
     log::info!("[WinOrb] Creating orb window...");
@@ -1438,10 +1489,13 @@ fn win_stop_recording(app: &tauri::AppHandle) {
     LATCHED_RECORDING.store(false, Ordering::SeqCst);
     log::info!("[WinStopRec] Stopping recording");
 
-    let _ = app.emit("recording-state", serde_json::json!({
-        "recording": false,
-        "transcribing": true
-    }));
+    let _ = app.emit(
+        "recording-state",
+        serde_json::json!({
+            "recording": false,
+            "transcribing": true
+        }),
+    );
 
     let app_clone = app.clone();
     tauri::async_runtime::spawn(async move {
@@ -1449,7 +1503,10 @@ fn win_stop_recording(app: &tauri::AppHandle) {
             let capture = state.audio_capture.lock().await;
             match capture.stop().await {
                 Ok(audio) => {
-                    log::info!("[WinStopRec] Recording stopped: {} samples", audio.samples.len());
+                    log::info!(
+                        "[WinStopRec] Recording stopped: {} samples",
+                        audio.samples.len()
+                    );
 
                     let whisper = state.whisper_engine.lock().await;
                     match whisper
@@ -1459,9 +1516,12 @@ fn win_stop_recording(app: &tauri::AppHandle) {
                         Ok(result) => {
                             log::info!("[WinStopRec] Transcription: {}", result.text);
 
-                            let _ = app_clone.emit("transcription-complete", serde_json::json!({
-                                "text": result.text
-                            }));
+                            let _ = app_clone.emit(
+                                "transcription-complete",
+                                serde_json::json!({
+                                    "text": result.text
+                                }),
+                            );
 
                             if !result.text.trim().is_empty() {
                                 win_paste_text(&result.text);
@@ -1491,8 +1551,7 @@ fn win_stop_recording(app: &tauri::AppHandle) {
 fn win_paste_text(text: &str) {
     use arboard::Clipboard;
     use windows::Win32::UI::Input::KeyboardAndMouse::{
-        SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP,
-        VK_CONTROL, VK_V,
+        SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VK_CONTROL, VK_V,
     };
 
     log::info!("[WinPaste] Pasting {} chars", text.len());

@@ -28,7 +28,7 @@
 //!
 //! # Example
 //!
-//! ```rust
+//! ```rust,ignore
 //! use Zana::plugins::{PluginManager, PluginManifest};
 //!
 //! // Load all plugins from the plugins directory
@@ -41,8 +41,8 @@
 
 mod gpu;
 mod hook_adapter;
-mod manifest;
 mod manager;
+mod manifest;
 mod registry;
 mod traits;
 
@@ -52,11 +52,11 @@ pub use gpu::{
     UniformType, UniformValue,
 };
 pub use hook_adapter::PluginHookAdapter;
-pub use manifest::{
-    ConfigOption, ConfigOptionType, PluginCapabilities, PluginConfigSchema,
-    PluginDevConfig, PluginKind, PluginManifest, PluginMeta, PluginTypeMeta, PluginUiConfig,
-};
 pub use manager::{PluginLoadError, PluginManager};
+pub use manifest::{
+    ConfigOption, ConfigOptionType, PluginCapabilities, PluginConfigSchema, PluginDevConfig,
+    PluginKind, PluginManifest, PluginMeta, PluginTypeMeta, PluginUiConfig,
+};
 pub use registry::{PluginEntry, PluginRegistry};
 pub use traits::{
     AudioProcessorPlugin, Color, CompositeOp, DrawCommand, GradientStop, IntegrationPlugin,

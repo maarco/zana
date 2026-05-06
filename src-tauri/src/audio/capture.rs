@@ -191,9 +191,7 @@ impl AudioCapture {
         let host = cpal::default_host();
         let mut devices = Vec::new();
 
-        let default_name = host
-            .default_input_device()
-            .and_then(|d| d.name().ok());
+        let default_name = host.default_input_device().and_then(|d| d.name().ok());
 
         let input_devices = host
             .input_devices()
@@ -253,7 +251,9 @@ impl AudioCapture {
             .map_err(|_| anyhow::anyhow!("Audio thread not running"))?;
 
         // Wait for response
-        let info = response_rx.await.map_err(|_| anyhow::anyhow!("Audio thread died"))??;
+        let info = response_rx
+            .await
+            .map_err(|_| anyhow::anyhow!("Audio thread died"))??;
 
         // Update recording state
         self.is_recording.store(true, Ordering::SeqCst);
@@ -322,7 +322,9 @@ impl AudioCapture {
             .map_err(|_| anyhow::anyhow!("Audio thread not running"))?;
 
         // Wait for response
-        let captured = response_rx.await.map_err(|_| anyhow::anyhow!("Audio thread died"))??;
+        let captured = response_rx
+            .await
+            .map_err(|_| anyhow::anyhow!("Audio thread died"))??;
 
         self.is_recording.store(false, Ordering::SeqCst);
 
@@ -345,7 +347,8 @@ impl AudioCapture {
     /// Get current audio metrics (for UI)
     pub async fn get_metrics(&self) -> AudioMetrics {
         let state = self.state.read().await;
-        let duration_ms = (state.sample_count as f64 / state.device_sample_rate as f64 * 1000.0) as u64;
+        let duration_ms =
+            (state.sample_count as f64 / state.device_sample_rate as f64 * 1000.0) as u64;
 
         AudioMetrics {
             level: state.level,
@@ -374,13 +377,11 @@ async fn audio_thread_main(
 
     while let Some(cmd) = command_rx.recv().await {
         match cmd {
-            AudioCommand::Start { device_id, response } => {
-                let result = start_capture(
-                    device_id.as_deref(),
-                    state.clone(),
-                    smoothing,
-                )
-                .await;
+            AudioCommand::Start {
+                device_id,
+                response,
+            } => {
+                let result = start_capture(device_id.as_deref(), state.clone(), smoothing).await;
 
                 match result {
                     Ok((stream, info)) => {
@@ -399,7 +400,8 @@ async fn audio_thread_main(
                 // Get captured data, resample, then free the buffer
                 let captured = {
                     let mut state = state.write().await;
-                    let duration_ms = (state.sample_count as f64 / state.device_sample_rate as f64 * 1000.0) as u64;
+                    let duration_ms = (state.sample_count as f64 / state.device_sample_rate as f64
+                        * 1000.0) as u64;
 
                     // Resample to 16kHz if needed (for Whisper)
                     let resampled = if state.device_sample_rate != 16000 {

@@ -150,11 +150,7 @@ impl EventBus {
                     let mut stats = self.stats.write().await;
                     stats.events_handled += 1;
                     stats.events_stopped += 1;
-                    log::debug!(
-                        "Event {:?} stopped by handler {}",
-                        event_type,
-                        handler.id()
-                    );
+                    log::debug!("Event {:?} stopped by handler {}", event_type, handler.id());
                     break;
                 }
                 HookResult::Modified => {
@@ -261,11 +257,9 @@ mod tests {
     async fn test_register_handler() {
         let bus = EventBus::new();
 
-        let handler = Arc::new(FnHookHandler::new(
-            "test",
-            vec![HookEventType::All],
-            |_| HookResult::Continue,
-        ));
+        let handler = Arc::new(FnHookHandler::new("test", vec![HookEventType::All], |_| {
+            HookResult::Continue
+        }));
 
         bus.register(handler).await.unwrap();
         assert_eq!(bus.handler_count().await, 1);

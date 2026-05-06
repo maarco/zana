@@ -8,15 +8,17 @@
 use crate::hooks::{EventBus, HookEvent, TranscriptionSegmentData};
 use anyhow::{Context, Result};
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
 /// Whisper model sizes
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum WhisperModel {
     Tiny,
     Base,
+    #[default]
     Small,
     Medium,
     Large,
@@ -42,18 +44,6 @@ impl WhisperModel {
         )
     }
 
-    /// Parse from string
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
-            "tiny" => Some(WhisperModel::Tiny),
-            "base" => Some(WhisperModel::Base),
-            "small" => Some(WhisperModel::Small),
-            "medium" => Some(WhisperModel::Medium),
-            "large" | "large-v3" => Some(WhisperModel::Large),
-            _ => None,
-        }
-    }
-
     /// Get human-readable name
     pub fn name(&self) -> &'static str {
         match self {
@@ -77,15 +67,24 @@ impl WhisperModel {
     }
 }
 
-impl Default for WhisperModel {
-    fn default() -> Self {
-        WhisperModel::Small
-    }
-}
-
 impl std::fmt::Display for WhisperModel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name())
+    }
+}
+
+impl FromStr for WhisperModel {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "tiny" => Ok(WhisperModel::Tiny),
+            "base" => Ok(WhisperModel::Base),
+            "small" => Ok(WhisperModel::Small),
+            "medium" => Ok(WhisperModel::Medium),
+            "large" | "large-v3" => Ok(WhisperModel::Large),
+            _ => Err(format!("unknown Whisper model: {s}")),
+        }
     }
 }
 
@@ -207,7 +206,7 @@ impl WhisperEngine {
 
         let client = reqwest::Client::new();
         let response = client
-            .get(&model.download_url())
+            .get(model.download_url())
             .send()
             .await
             .context("Failed to start model download")?;
@@ -327,7 +326,9 @@ impl WhisperEngine {
             params.set_suppress_blank(true);
             params.set_suppress_nst(true);
 
-            state.full(params, samples).context("Transcription failed")?;
+            state
+                .full(params, samples)
+                .context("Transcription failed")?;
 
             let num_segments = state.full_n_segments();
             let mut segments = Vec::new();
@@ -343,8 +344,8 @@ impl WhisperEngine {
                     let end = segment.end_timestamp();
 
                     let seg = TranscriptionSegment {
-                        start_ms: start as i64 * 10,
-                        end_ms: end as i64 * 10,
+                        start_ms: start * 10,
+                        end_ms: end * 10,
                         text: segment_text.clone(),
                     };
 
@@ -506,10 +507,10 @@ mod tests {
 
     #[test]
     fn test_model_from_str() {
-        assert_eq!(WhisperModel::from_str("tiny"), Some(WhisperModel::Tiny));
-        assert_eq!(WhisperModel::from_str("SMALL"), Some(WhisperModel::Small));
-        assert_eq!(WhisperModel::from_str("large-v3"), Some(WhisperModel::Large));
-        assert_eq!(WhisperModel::from_str("invalid"), None);
+        assert_eq!("tiny".parse::<WhisperModel>(), Ok(WhisperModel::Tiny));
+        assert_eq!("SMALL".parse::<WhisperModel>(), Ok(WhisperModel::Small));
+        assert_eq!("large-v3".parse::<WhisperModel>(), Ok(WhisperModel::Large));
+        assert!("invalid".parse::<WhisperModel>().is_err());
     }
 
     #[test]

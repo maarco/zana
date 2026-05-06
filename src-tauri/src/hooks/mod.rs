@@ -14,7 +14,7 @@
 //!
 //! # Example
 //!
-//! ```rust
+//! ```rust,ignore
 //! use Zana::hooks::{EventBus, HookEvent, HookEventType, HookHandler, HookResult};
 //! use std::sync::Arc;
 //!

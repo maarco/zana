@@ -112,10 +112,7 @@ impl ModelDownloader {
 
         // Ensure we got a success status
         if !response.status().is_success() {
-            anyhow::bail!(
-                "Download failed with HTTP status: {}",
-                response.status()
-            );
+            anyhow::bail!("Download failed with HTTP status: {}", response.status());
         }
 
         let total_size = response.content_length().unwrap_or(0);

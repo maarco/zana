@@ -48,6 +48,8 @@
 //! println!("Transcription: {}", result.text);
 //! ```
 
+#![allow(non_snake_case)]
+
 pub mod audio;
 pub mod commands;
 pub mod hooks;

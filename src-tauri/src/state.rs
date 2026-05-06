@@ -35,12 +35,10 @@ impl Settings {
 
         if path.exists() {
             match std::fs::read_to_string(&path) {
-                Ok(content) => {
-                    match serde_json::from_str(&content) {
-                        Ok(settings) => return settings,
-                        Err(e) => log::warn!("Failed to parse settings: {}", e),
-                    }
-                }
+                Ok(content) => match serde_json::from_str(&content) {
+                    Ok(settings) => return settings,
+                    Err(e) => log::warn!("Failed to parse settings: {}", e),
+                },
                 Err(e) => log::warn!("Failed to read settings: {}", e),
             }
         }
@@ -116,7 +114,7 @@ impl AppState {
             let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(async move {
                 if let Some(model_str) = preload_model {
-                    if let Some(model) = crate::stt::WhisperModel::from_str(&model_str) {
+                    if let Ok(model) = model_str.parse::<crate::stt::WhisperModel>() {
                         log::info!("Preloading whisper model: {}", model_str);
                         if let Err(e) = whisper_engine_clone.preload_model(model).await {
                             log::warn!("Failed to preload whisper model: {}", e);

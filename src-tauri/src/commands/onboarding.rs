@@ -3,8 +3,8 @@
 //! Tauri commands for first-run onboarding flow.
 
 use crate::onboarding;
-use crate::stt::WhisperModel;
 use crate::state::AppState;
+use crate::stt::WhisperModel;
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, State, Window};
 
@@ -105,10 +105,7 @@ pub async fn download_whisper_model(
     };
 
     // Download the model
-    match engine
-        .download_model(model, Some(progress_callback))
-        .await
-    {
+    match engine.download_model(model, Some(progress_callback)).await {
         Ok(_path) => {
             log::info!("Whisper model downloaded successfully for onboarding");
             Ok(OnboardingResponse {

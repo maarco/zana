@@ -74,10 +74,7 @@ impl PluginManager {
 
         // Check if plugins directory exists
         if !self.plugins_dir.exists() {
-            log::warn!(
-                "Plugins directory does not exist: {:?}",
-                self.plugins_dir
-            );
+            log::warn!("Plugins directory does not exist: {:?}", self.plugins_dir);
             fs::create_dir_all(&self.plugins_dir).with_context(|| {
                 format!("Failed to create plugins directory: {:?}", self.plugins_dir)
             })?;
@@ -85,9 +82,8 @@ impl PluginManager {
         }
 
         // Find all subdirectories containing plugin.toml
-        let entries = fs::read_dir(&self.plugins_dir).with_context(|| {
-            format!("Failed to read plugins directory: {:?}", self.plugins_dir)
-        })?;
+        let entries = fs::read_dir(&self.plugins_dir)
+            .with_context(|| format!("Failed to read plugins directory: {:?}", self.plugins_dir))?;
 
         let mut loaded_count = 0;
 
@@ -177,13 +173,15 @@ impl PluginManager {
         }
 
         // Wrap plugin in hook adapter and register as handler
-        let adapter = PluginHookAdapter::new(plugin.clone());
+        let adapter = PluginHookAdapter::new(plugin.clone()).await;
         let handler_id = adapter.id().to_string();
 
         self.event_bus
             .register(Arc::new(adapter))
             .await
-            .with_context(|| format!("Failed to register hook handler for plugin: {}", plugin_id))?;
+            .with_context(|| {
+                format!("Failed to register hook handler for plugin: {}", plugin_id)
+            })?;
 
         // Store handler ID for later unregister
         let mut handler_ids = self.handler_ids.lock().await;
@@ -257,9 +255,7 @@ impl PluginManager {
 
         if entry.is_some() {
             // Emit PluginUnloaded event
-            let event = HookEvent::PluginUnloaded {
-                id: id.to_string(),
-            };
+            let event = HookEvent::PluginUnloaded { id: id.to_string() };
             self.event_bus.emit(event).await;
 
             log::info!("Successfully unloaded plugin: {}", id);
@@ -364,10 +360,7 @@ impl Plugin for PlaceholderPlugin {
 
     fn on_config_change(&mut self, config: &std::collections::HashMap<String, serde_json::Value>) {
         self.config = config.clone();
-        log::debug!(
-            "Config changed for plugin: {}",
-            self.manifest.plugin.id
-        );
+        log::debug!("Config changed for plugin: {}", self.manifest.plugin.id);
     }
 }
 
@@ -417,11 +410,7 @@ audio_fft = true
         // Create manager
         let registry = Arc::new(RwLock::new(PluginRegistry::new()));
         let event_bus = Arc::new(crate::hooks::EventBus::new());
-        let manager = PluginManager::new(
-            registry,
-            event_bus,
-            plugins_dir,
-        );
+        let manager = PluginManager::new(registry, event_bus, plugins_dir);
 
         // Load all plugins
         let count = manager.load_all().await.unwrap();
@@ -443,11 +432,7 @@ audio_fft = true
         // Create manager
         let registry = Arc::new(RwLock::new(PluginRegistry::new()));
         let event_bus = Arc::new(crate::hooks::EventBus::new());
-        let manager = PluginManager::new(
-            registry,
-            event_bus,
-            plugins_dir,
-        );
+        let manager = PluginManager::new(registry, event_bus, plugins_dir);
 
         // Load plugin
         manager.load_plugin(&plugin_dir).await.unwrap();
@@ -469,11 +454,7 @@ audio_fft = true
         // Create manager
         let registry = Arc::new(RwLock::new(PluginRegistry::new()));
         let event_bus = Arc::new(crate::hooks::EventBus::new());
-        let manager = PluginManager::new(
-            registry,
-            event_bus,
-            plugins_dir,
-        );
+        let manager = PluginManager::new(registry, event_bus, plugins_dir);
 
         // Load plugin
         manager.load_plugin(&plugin_dir).await.unwrap();
@@ -495,11 +476,7 @@ audio_fft = true
         // Create manager
         let registry = Arc::new(RwLock::new(PluginRegistry::new()));
         let event_bus = Arc::new(crate::hooks::EventBus::new());
-        let manager = PluginManager::new(
-            registry,
-            event_bus,
-            plugins_dir,
-        );
+        let manager = PluginManager::new(registry, event_bus, plugins_dir);
 
         // Load plugin
         manager.load_plugin(&plugin_dir).await.unwrap();
