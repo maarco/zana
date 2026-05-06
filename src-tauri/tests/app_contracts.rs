@@ -90,6 +90,47 @@ fn preferences_save_uses_backend_save_command() {
 }
 
 #[test]
+fn preferences_exposes_rewrite_provider_fields() {
+    let html = read_repo_file("src-ui/preferences.html");
+    let settings = read_repo_file("src-tauri/src/commands/settings.rs");
+    let state = read_repo_file("src-tauri/src/state.rs");
+    let transcription = read_repo_file("src-tauri/src/commands/transcription.rs");
+
+    for field in [
+        "rewrite-api-key",
+        "rewrite-model",
+        "rewrite-api-url",
+        "rewrite-timeout-ms",
+    ] {
+        assert!(
+            html.contains(field),
+            "preferences UI must expose persisted rewrite provider field {field}"
+        );
+    }
+
+    for property in [
+        "rewrite_api_key",
+        "rewrite_model",
+        "rewrite_api_url",
+        "rewrite_timeout_ms",
+    ] {
+        assert!(
+            settings.contains(property),
+            "settings command must map {property}"
+        );
+    }
+
+    assert!(
+        state.contains("CloudRewriteSettings"),
+        "settings must persist rewrite provider config"
+    );
+    assert!(
+        transcription.contains("cloud_rewrite_config(&rewrite_settings)"),
+        "rewrite pipeline must read persisted provider config before env fallback"
+    );
+}
+
+#[test]
 fn set_model_persists_selected_model() {
     let source = read_repo_file("src-tauri/src/commands/transcription.rs");
     let start = source.find("pub async fn set_model").unwrap();

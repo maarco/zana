@@ -32,6 +32,30 @@ impl Default for WritingProfile {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CloudRewriteSettings {
+    /// API key for the chat-completions compatible rewrite provider
+    pub api_key: String,
+    /// Model name sent to the rewrite provider
+    pub model: String,
+    /// HTTPS chat-completions compatible endpoint
+    pub api_url: String,
+    /// Cloud rewrite timeout in milliseconds
+    pub timeout_ms: u64,
+}
+
+impl Default for CloudRewriteSettings {
+    fn default() -> Self {
+        Self {
+            api_key: String::new(),
+            model: "gpt-4o-mini".to_string(),
+            api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+            timeout_ms: 15_000,
+        }
+    }
+}
+
 /// User settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -62,6 +86,8 @@ pub struct Settings {
     pub window_height: u32,
     /// Enable cloud rewrite after local transcription
     pub cloud_rewrite_enabled: bool,
+    /// Cloud rewrite provider config
+    pub cloud_rewrite: CloudRewriteSettings,
     /// Selected writing style profile
     pub writing_profile: WritingProfile,
 }
@@ -122,6 +148,7 @@ impl Settings {
             window_width: 500,
             window_height: 500,
             cloud_rewrite_enabled: false,
+            cloud_rewrite: CloudRewriteSettings::default(),
             writing_profile: WritingProfile::default(),
         }
     }

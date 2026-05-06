@@ -29,6 +29,10 @@ pub struct Preferences {
     pub global_shortcut: String,
     pub orb_style: String,
     pub show_in_menu_bar: bool,
+    pub rewrite_api_key: String,
+    pub rewrite_model: String,
+    pub rewrite_api_url: String,
+    pub rewrite_timeout_ms: u64,
     pub writing_purpose: String,
     pub writing_tone: String,
     pub writing_format: String,
@@ -68,6 +72,10 @@ impl Preferences {
                 .clone()
                 .unwrap_or_else(|| "fire-v8".to_string()),
             show_in_menu_bar: settings.show_in_menu_bar,
+            rewrite_api_key: settings.cloud_rewrite.api_key.clone(),
+            rewrite_model: settings.cloud_rewrite.model.clone(),
+            rewrite_api_url: settings.cloud_rewrite.api_url.clone(),
+            rewrite_timeout_ms: settings.cloud_rewrite.timeout_ms,
         }
     }
 
@@ -93,6 +101,22 @@ impl Preferences {
             return Err("Writing format cannot be empty".to_string());
         }
 
+        if self.cloud_rewrite_enabled && self.rewrite_api_key.trim().is_empty() {
+            return Err("Rewrite API key is required when Writing Polish is enabled".to_string());
+        }
+
+        if self.rewrite_model.trim().is_empty() {
+            return Err("Rewrite model cannot be empty".to_string());
+        }
+
+        if !self.rewrite_api_url.starts_with("https://") {
+            return Err("Rewrite API URL must use https".to_string());
+        }
+
+        if self.rewrite_timeout_ms == 0 {
+            return Err("Rewrite timeout must be greater than zero".to_string());
+        }
+
         Ok(())
     }
 
@@ -104,6 +128,12 @@ impl Preferences {
             device => Some(device.to_string()),
         };
         settings.cloud_rewrite_enabled = self.cloud_rewrite_enabled;
+        settings.cloud_rewrite = crate::state::CloudRewriteSettings {
+            api_key: self.rewrite_api_key.clone(),
+            model: self.rewrite_model.clone(),
+            api_url: self.rewrite_api_url.clone(),
+            timeout_ms: self.rewrite_timeout_ms,
+        };
         settings.double_tap_enabled = self.double_tap_enabled;
         settings.min_hold_duration_ms = self.min_hold_duration;
         settings.writing_profile = crate::state::WritingProfile {

@@ -61,7 +61,7 @@
       color: #6c7086;
       margin-top: 2px;
     }
-    select, input[type="text"] {
+    select, input[type="text"], input[type="password"], input[type="number"], input[type="url"] {
       background: #313244;
       border: 1px solid #45475a;
       border-radius: 6px;
@@ -115,39 +115,24 @@
       outline: none;
       border-color: #89b4fa;
     }
-    .setup-block {
-      background: #11111b;
-      border: 1px solid #313244;
-      border-radius: 8px;
+    .provider-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
       margin: 8px 0 16px;
-      overflow: hidden;
     }
-    .setup-block-header {
-      display: flex;
+    .provider-field {
+      display: grid;
+      grid-template-columns: 180px 1fr;
       align-items: center;
-      justify-content: space-between;
       gap: 12px;
       padding: 12px 16px;
-      border-bottom: 1px solid #313244;
+      background: #181825;
+      border-radius: 8px;
     }
-    .setup-copy {
-      background: #313244;
-      color: #cdd6f4;
-      padding: 6px 12px;
-      white-space: nowrap;
-    }
-    .setup-copy:hover {
-      background: #45475a;
-    }
-    .setup-commands {
-      padding: 14px 16px;
-      color: #a6adc8;
-      font-family: 'SF Mono', Monaco, Consolas, monospace;
-      font-size: 12px;
-      line-height: 1.6;
-      white-space: pre-wrap;
-      user-select: text;
-      -webkit-user-select: text;
+    .provider-field input {
+      width: 100%;
+      min-width: 0;
     }
     .button-row {
       display: flex;
@@ -249,20 +234,38 @@
         <div class="toggle" id="cloud-rewrite-toggle"></div>
       </div>
 
-      <div class="setup-block">
-        <div class="setup-block-header">
+      <div class="provider-grid">
+        <div class="provider-field">
           <div>
-            <div class="setting-label">LLM Provider Setup</div>
-            <div class="setting-desc">
-              Run before launching Zana, then fully quit and reopen the app
-            </div>
+            <div class="setting-label">API Key</div>
+            <div class="setting-desc">Stored locally in Zana settings</div>
           </div>
-          <button class="setup-copy" onclick="copyProviderSetup()">Copy</button>
+          <input type="password" id="rewrite-api-key" placeholder="sk-...">
         </div>
-        <pre class="setup-commands" id="provider-setup-commands">launchctl setenv ZANA_REWRITE_API_KEY "sk-your-key"
-launchctl setenv ZANA_REWRITE_MODEL "gpt-4o-mini"
-launchctl setenv ZANA_REWRITE_API_URL "https://api.openai.com/v1/chat/completions"
-launchctl setenv ZANA_REWRITE_TIMEOUT_MS "15000"</pre>
+
+        <div class="provider-field">
+          <div>
+            <div class="setting-label">Model</div>
+            <div class="setting-desc">Chat completions model</div>
+          </div>
+          <input type="text" id="rewrite-model" value="gpt-4o-mini">
+        </div>
+
+        <div class="provider-field">
+          <div>
+            <div class="setting-label">API URL</div>
+            <div class="setting-desc">HTTPS chat completions endpoint</div>
+          </div>
+          <input type="url" id="rewrite-api-url" value="https://api.openai.com/v1/chat/completions">
+        </div>
+
+        <div class="provider-field">
+          <div>
+            <div class="setting-label">Timeout</div>
+            <div class="setting-desc">Milliseconds before fallback paste</div>
+          </div>
+          <input type="number" id="rewrite-timeout-ms" value="15000" min="1000" step="1000">
+        </div>
       </div>
 
       <div class="setting-row">
@@ -461,17 +464,6 @@ launchctl setenv ZANA_REWRITE_TIMEOUT_MS "15000"</pre>
       }
     }
 
-    async function copyProviderSetup() {
-      const commands = document.getElementById('provider-setup-commands').textContent.trim();
-      try {
-        await navigator.clipboard.writeText(commands);
-        setSaveStatus('Provider setup copied');
-      } catch (e) {
-        console.warn('Failed to copy provider setup:', e);
-        setSaveStatus('Select and copy the provider setup commands manually.', 'error');
-      }
-    }
-
     async function loadAudioInputs(selectedAudioInput = 'default') {
       const select = document.getElementById('audio-input');
       select.innerHTML = '<option value="default">Default Microphone</option>';
@@ -519,6 +511,10 @@ launchctl setenv ZANA_REWRITE_TIMEOUT_MS "15000"</pre>
       setFieldValue('orb-style', prefs.orbStyle);
       setToggle('menubar-toggle', prefs.showInMenuBar);
       setToggle('cloud-rewrite-toggle', prefs.cloudRewriteEnabled);
+      setFieldValue('rewrite-api-key', prefs.rewriteApiKey);
+      setFieldValue('rewrite-model', prefs.rewriteModel);
+      setFieldValue('rewrite-api-url', prefs.rewriteApiUrl);
+      setFieldValue('rewrite-timeout-ms', prefs.rewriteTimeoutMs);
       setFieldValue('writing-purpose', prefs.writingPurpose);
       setFieldValue('writing-tone', prefs.writingTone);
       setFieldValue('writing-format', prefs.writingFormat);
@@ -536,6 +532,10 @@ launchctl setenv ZANA_REWRITE_TIMEOUT_MS "15000"</pre>
         orbStyle: document.getElementById('orb-style').value,
         showInMenuBar: isToggleActive('menubar-toggle'),
         cloudRewriteEnabled: isToggleActive('cloud-rewrite-toggle'),
+        rewriteApiKey: document.getElementById('rewrite-api-key').value,
+        rewriteModel: document.getElementById('rewrite-model').value,
+        rewriteApiUrl: document.getElementById('rewrite-api-url').value,
+        rewriteTimeoutMs: parseInt(document.getElementById('rewrite-timeout-ms').value, 10),
         writingPurpose: document.getElementById('writing-purpose').value,
         writingTone: document.getElementById('writing-tone').value,
         writingFormat: document.getElementById('writing-format').value

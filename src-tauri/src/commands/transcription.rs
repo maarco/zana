@@ -381,8 +381,10 @@ async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<(String
     let clipboard = state.take_recording_clipboard().await;
     let settings = state.settings.read().await;
     let profile = settings.writing_profile.clone();
+    let rewrite_settings = settings.cloud_rewrite.clone();
+    drop(settings);
 
-    let config = cloud_rewrite_config()?;
+    let config = cloud_rewrite_config(&rewrite_settings)?;
 
     let request_body = serde_json::json!({
         "model": config.model,
@@ -453,25 +455,45 @@ async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<(String
     Ok((rewritten, transcript.to_string()))
 }
 
-fn cloud_rewrite_config() -> Result<CloudRewriteConfig, String> {
-    let api_key = std::env::var("ZANA_REWRITE_API_KEY")
-        .ok()
-        .filter(|v| !v.trim().is_empty())
-        .ok_or_else(|| "Cloud rewrite enabled but ZANA_REWRITE_API_KEY is not set".to_string())?;
+fn cloud_rewrite_config(
+    settings: &crate::state::CloudRewriteSettings,
+) -> Result<CloudRewriteConfig, String> {
+    let api_key = if settings.api_key.trim().is_empty() {
+        std::env::var("ZANA_REWRITE_API_KEY")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .ok_or_else(|| {
+                "Cloud rewrite enabled but no rewrite API key is configured".to_string()
+            })?
+    } else {
+        settings.api_key.clone()
+    };
 
-    let url = std::env::var("ZANA_REWRITE_API_URL")
-        .unwrap_or_else(|_| "https://api.openai.com/v1/chat/completions".to_string());
+    let url = if settings.api_url.trim().is_empty() {
+        std::env::var("ZANA_REWRITE_API_URL")
+            .unwrap_or_else(|_| "https://api.openai.com/v1/chat/completions".to_string())
+    } else {
+        settings.api_url.clone()
+    };
 
     if !url.starts_with("https://") {
         return Err("Cloud rewrite URL must use https".to_string());
     }
 
-    let model = std::env::var("ZANA_REWRITE_MODEL").unwrap_or_else(|_| "gpt-4o-mini".to_string());
+    let model = if settings.model.trim().is_empty() {
+        std::env::var("ZANA_REWRITE_MODEL").unwrap_or_else(|_| "gpt-4o-mini".to_string())
+    } else {
+        settings.model.clone()
+    };
 
-    let timeout_ms = std::env::var("ZANA_REWRITE_TIMEOUT_MS")
-        .ok()
-        .and_then(|value| value.parse::<u64>().ok())
-        .unwrap_or(15_000);
+    let timeout_ms = if settings.timeout_ms == 0 {
+        std::env::var("ZANA_REWRITE_TIMEOUT_MS")
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(15_000)
+    } else {
+        settings.timeout_ms
+    };
 
     Ok(CloudRewriteConfig {
         model,
@@ -483,8 +505,8 @@ fn cloud_rewrite_config() -> Result<CloudRewriteConfig, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::build_rewrite_request;
-    use crate::state::WritingProfile;
+    use super::{build_rewrite_request, cloud_rewrite_config};
+    use crate::state::{CloudRewriteSettings, WritingProfile};
 
     #[test]
     fn build_rewrite_request_includes_clipboard_and_profile() {
@@ -507,5 +529,35 @@ mod tests {
         assert!(prompt.contains("Format: two sentences"));
         assert!(prompt.contains("Input:"));
         assert!(prompt.contains("hey we shipped feature x yesterday"));
+    }
+
+    #[test]
+    fn cloud_rewrite_config_uses_saved_provider_settings() {
+        let settings = CloudRewriteSettings {
+            api_key: "sk-test".to_string(),
+            model: "gpt-4o-mini".to_string(),
+            api_url: "https://example.com/v1/chat/completions".to_string(),
+            timeout_ms: 12_000,
+        };
+
+        let config = cloud_rewrite_config(&settings).expect("saved provider config should load");
+
+        assert_eq!(config.api_key, "sk-test");
+        assert_eq!(config.model, "gpt-4o-mini");
+        assert_eq!(config.url, "https://example.com/v1/chat/completions");
+        assert_eq!(config.timeout_ms, 12_000);
+    }
+
+    #[test]
+    fn cloud_rewrite_config_rejects_non_https_saved_url() {
+        let settings = CloudRewriteSettings {
+            api_key: "sk-test".to_string(),
+            api_url: "http://example.com/v1/chat/completions".to_string(),
+            ..CloudRewriteSettings::default()
+        };
+
+        let error = cloud_rewrite_config(&settings).unwrap_err();
+
+        assert!(error.contains("https"));
     }
 }
