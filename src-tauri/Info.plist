@@ -6,5 +6,7 @@
     <string>Zana needs accessibility access to listen for keyboard shortcuts (Fn key) so you can start recording with a single press.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Zana needs microphone access to record your voice for transcription.</string>
+    <key>LSRequiresCarbon</key>
+    <false/>
 </dict>
 </plist>

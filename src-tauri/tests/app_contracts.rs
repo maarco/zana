@@ -106,6 +106,29 @@ fn set_model_persists_selected_model() {
 }
 
 #[test]
+fn mac_bundle_identity_and_signing_are_stable() {
+    let tauri_config: Value =
+        serde_json::from_str(&read_repo_file("src-tauri/tauri.conf.json")).unwrap();
+
+    assert_eq!(
+        tauri_config.get("identifier").and_then(Value::as_str),
+        Some("app.zana"),
+        "bundle identifier must stay app.zana so macOS permissions remain stable"
+    );
+    assert_eq!(
+        tauri_config.pointer("/bundle/macOS/signingIdentity"),
+        Some(&Value::String("-".to_string())),
+        "macOS app bundles must be ad-hoc signed so LaunchServices sees a sealed .app"
+    );
+
+    let plist = read_repo_file("src-tauri/Info.plist");
+    assert!(
+        plist.contains("<key>LSRequiresCarbon</key>") && plist.contains("<false/>"),
+        "Zana must not advertise Carbon-only launch requirements"
+    );
+}
+
+#[test]
 fn mac_orb_panel_uses_compact_geometry() {
     let source = read_repo_file("src-tauri/src/main.rs");
     let start = source.find("fn create_orb_window").unwrap();
