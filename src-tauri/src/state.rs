@@ -45,6 +45,50 @@ pub struct CloudRewriteSettings {
     pub timeout_ms: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct DictionaryReplacement {
+    pub from: String,
+    pub to: String,
+    pub enabled: bool,
+    pub reason: Option<String>,
+}
+
+impl DictionaryReplacement {
+    pub fn enabled(from: &str, to: &str, reason: Option<String>) -> Self {
+        Self {
+            from: from.to_string(),
+            to: to.to_string(),
+            enabled: true,
+            reason,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct TranscriptHistoryEntry {
+    pub raw_text: String,
+    pub final_text: String,
+    pub used_rewrite: bool,
+    pub timestamp: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct StyleMemory {
+    pub rule: String,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct ProjectMemory {
+    pub key: String,
+    pub value: String,
+    pub reason: Option<String>,
+}
+
 impl Default for CloudRewriteSettings {
     fn default() -> Self {
         Self {
@@ -90,6 +134,14 @@ pub struct Settings {
     pub cloud_rewrite: CloudRewriteSettings,
     /// Selected writing style profile
     pub writing_profile: WritingProfile,
+    /// Post-transcription phrase corrections for names, tools, and jargon
+    pub dictionary_replacements: Vec<DictionaryReplacement>,
+    /// Recent local transcript/rewrite history used as rewrite context
+    pub transcript_history: Vec<TranscriptHistoryEntry>,
+    /// Learned user style preferences
+    pub style_memories: Vec<StyleMemory>,
+    /// Learned project terms and context
+    pub project_memories: Vec<ProjectMemory>,
 }
 
 impl Settings {
@@ -99,8 +151,11 @@ impl Settings {
 
         if path.exists() {
             match std::fs::read_to_string(&path) {
-                Ok(content) => match serde_json::from_str(&content) {
-                    Ok(settings) => return settings,
+                Ok(content) => match serde_json::from_str::<Settings>(&content) {
+                    Ok(mut settings) => {
+                        settings.hydrate_learned_defaults();
+                        return settings;
+                    }
                     Err(e) => log::warn!("Failed to parse settings: {}", e),
                 },
                 Err(e) => log::warn!("Failed to read settings: {}", e),
@@ -108,6 +163,12 @@ impl Settings {
         }
 
         Self::default_settings()
+    }
+
+    fn hydrate_learned_defaults(&mut self) {
+        if self.dictionary_replacements.is_empty() {
+            self.dictionary_replacements = default_dictionary_replacements();
+        }
     }
 
     /// Save to disk
@@ -150,6 +211,10 @@ impl Settings {
             cloud_rewrite_enabled: false,
             cloud_rewrite: CloudRewriteSettings::default(),
             writing_profile: WritingProfile::default(),
+            dictionary_replacements: default_dictionary_replacements(),
+            transcript_history: Vec::new(),
+            style_memories: Vec::new(),
+            project_memories: Vec::new(),
         }
     }
 }
@@ -158,6 +223,26 @@ impl Default for Settings {
     fn default() -> Self {
         Self::default_settings()
     }
+}
+
+fn default_dictionary_replacements() -> Vec<DictionaryReplacement> {
+    vec![
+        DictionaryReplacement::enabled(
+            "cloud code",
+            "claude code",
+            Some("Developer vocabulary correction".to_string()),
+        ),
+        DictionaryReplacement::enabled(
+            "cloud.markdown",
+            "claude.md",
+            Some("Developer filename correction".to_string()),
+        ),
+        DictionaryReplacement::enabled(
+            "cloud markdown",
+            "claude.md",
+            Some("Developer filename correction".to_string()),
+        ),
+    ]
 }
 
 /// Global application state
