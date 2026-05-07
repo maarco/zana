@@ -369,6 +369,10 @@ fn build_rewrite_request(
     prompt.push_str("- Do not explain, comment, ask questions, or mention missing context.\n");
     prompt.push_str("- If the input is a test phrase, clean it up as a test phrase.\n");
     prompt.push_str("- Keep all original meaning.\n");
+    prompt.push_str("- Preserve the speaker's point of view and grammatical person.\n");
+    prompt.push_str("- If the speaker says I, me, my, we, or our, keep that perspective.\n");
+    prompt.push_str("- Do not turn the speaker into the assistant, user, or a third person.\n");
+    prompt.push_str("- Do not add intent, context, claims, or details that were not spoken.\n");
     prompt.push_str("- Preserve names, numbers, and action items.\n");
     prompt.push_str(&format!("- Tone: {}\n", profile.tone));
     prompt.push_str(&format!("- Purpose: {}\n", profile.purpose));
@@ -394,7 +398,7 @@ async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<(String
         "messages": [
             {
                 "role": "system",
-                "content": "You rewrite dictated speech into final paste-ready text. Submit the final text with the submit_text tool. Do not explain, ask questions, mention uncertainty, or describe what you changed."
+                "content": "You rewrite dictated speech into the speaker's final paste-ready text. Preserve the speaker's point of view, grammatical person, and meaning exactly. Submit the final text with the submit_text tool. Do not become the speaker, do not refer to the speaker as the user, and do not explain, ask questions, mention uncertainty, or describe what you changed."
             },
             {
                 "role": "user",
@@ -412,7 +416,7 @@ async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<(String
                         "properties": {
                             "text": {
                                 "type": "string",
-                                "description": "The final paste-ready rewritten text. No explanation or commentary."
+                                "description": "The speaker's final paste-ready rewritten text, preserving point of view and meaning. No explanation or commentary."
                             }
                         },
                         "required": ["text"],
@@ -614,6 +618,9 @@ mod tests {
         assert!(prompt.contains("team status: launch next week"));
         assert!(prompt.contains("Return only the rewritten text."));
         assert!(prompt.contains("Do not explain, comment, ask questions"));
+        assert!(prompt.contains("Preserve the speaker's point of view"));
+        assert!(prompt.contains("If the speaker says I, me, my, we, or our"));
+        assert!(prompt.contains("Do not turn the speaker into the assistant"));
         assert!(prompt.contains("Tone: warm"));
         assert!(prompt.contains("Purpose: send a follow-up email"));
         assert!(prompt.contains("Format: two sentences"));
