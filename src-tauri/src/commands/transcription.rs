@@ -7,10 +7,8 @@ use crate::state::{
     WritingProfile,
 };
 use crate::stt::WhisperModel;
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::process::Command;
 use std::time::{Duration, Instant};
 use tauri::{Emitter, State};
 use tokio::time::timeout;
@@ -226,6 +224,7 @@ pub async fn transcribe_captured_audio(state: &AppState) -> Result<Transcription
     let audio = match audio {
         Some(a) => a,
         None => {
+            state.clear_recording_context().await;
             return Ok(TranscriptionResponse {
                 success: false,
                 text: None,
@@ -256,6 +255,7 @@ pub async fn transcribe_captured_audio(state: &AppState) -> Result<Transcription
     {
         let engine = state.whisper_engine.lock().await;
         if !engine.is_model_downloaded(model) {
+            state.clear_recording_context().await;
             return Ok(TranscriptionResponse {
                 success: false,
                 text: None,
@@ -278,6 +278,7 @@ pub async fn transcribe_captured_audio(state: &AppState) -> Result<Transcription
     let local_result = match engine.transcribe(&audio.samples, model).await {
         Ok(result) => result,
         Err(e) => {
+            state.clear_recording_context().await;
             return Ok(TranscriptionResponse {
                 success: false,
                 text: None,
@@ -288,9 +289,10 @@ pub async fn transcribe_captured_audio(state: &AppState) -> Result<Transcription
                 segments: None,
                 processing_ms: start.elapsed().as_millis() as u64,
                 error: Some(e.to_string()),
-            })
+            });
         }
     };
+    drop(engine);
 
     let segments: Vec<SegmentInfo> = local_result
         .segments
@@ -336,17 +338,18 @@ pub async fn transcribe_captured_audio(state: &AppState) -> Result<Transcription
                 rewrite_error = Some(error);
             }
         }
-    }
-
-    if let Err(error) = record_transcript_history(
-        state,
-        &corrected_local_text,
-        &final_text,
-        used_cloud_rewrite,
-    )
-    .await
-    {
-        log::warn!("Failed to save transcript history: {}", error);
+        if let Err(error) = record_transcript_history(
+            state,
+            &corrected_local_text,
+            &final_text,
+            used_cloud_rewrite,
+        )
+        .await
+        {
+            log::warn!("Failed to save transcript history: {}", error);
+        }
+    } else {
+        state.clear_recording_context().await;
     }
 
     Ok(TranscriptionResponse {
@@ -617,57 +620,9 @@ fn build_rewrite_message_content(
     }
 }
 
-async fn capture_screenshot_data_url() -> Result<String, String> {
-    #[cfg(target_os = "macos")]
-    {
-        tokio::task::spawn_blocking(capture_macos_screenshot_data_url)
-            .await
-            .map_err(|error| format!("Screenshot capture task failed: {error}"))?
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        Err("Screenshot context is only implemented on macOS".to_string())
-    }
-}
-
-#[cfg(target_os = "macos")]
-fn capture_macos_screenshot_data_url() -> Result<String, String> {
-    let path = std::env::temp_dir().join(format!(
-        "qvoice-rewrite-context-{}-{}.jpg",
-        std::process::id(),
-        chrono::Utc::now().timestamp_millis()
-    ));
-
-    let output = Command::new("/usr/sbin/screencapture")
-        .arg("-x")
-        .arg("-t")
-        .arg("jpg")
-        .arg(&path)
-        .output()
-        .map_err(|error| format!("Failed to run screencapture: {error}"))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let _ = std::fs::remove_file(&path);
-        return Err(format!("screencapture failed: {}", stderr.trim()));
-    }
-
-    let bytes = std::fs::read(&path).map_err(|error| {
-        let _ = std::fs::remove_file(&path);
-        format!("Failed to read screenshot: {error}")
-    })?;
-    let _ = std::fs::remove_file(&path);
-
-    if bytes.is_empty() {
-        return Err("Screenshot capture returned an empty image".to_string());
-    }
-
-    Ok(format!("data:image/jpeg;base64,{}", BASE64.encode(bytes)))
-}
-
 async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<RewriteResult, String> {
     let clipboard = state.take_recording_clipboard().await;
+    let screenshot = state.take_recording_screenshot().await;
     let settings = state.settings.read().await;
     let profile = settings.writing_profile.clone();
     let rewrite_settings = settings.cloud_rewrite.clone();
@@ -678,17 +633,6 @@ async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<Rewrite
     drop(settings);
 
     let config = cloud_rewrite_config(&rewrite_settings)?;
-    let screenshot = if rewrite_settings.include_screenshot {
-        match capture_screenshot_data_url().await {
-            Ok(screenshot) => Some(screenshot),
-            Err(error) => {
-                log::warn!("Screenshot context unavailable: {}", error);
-                None
-            }
-        }
-    } else {
-        None
-    };
     let user_content = build_rewrite_message_content(
         build_rewrite_request(
             clipboard.clone(),
@@ -950,9 +894,15 @@ fn cap_vec<T>(entries: &mut Vec<T>, max_len: usize) {
 fn cloud_rewrite_config(
     settings: &crate::state::CloudRewriteSettings,
 ) -> Result<CloudRewriteConfig, String> {
+    cloud_rewrite_config_with_env(settings, |key| std::env::var(key).ok())
+}
+
+fn cloud_rewrite_config_with_env(
+    settings: &crate::state::CloudRewriteSettings,
+    env_get: impl Fn(&str) -> Option<String>,
+) -> Result<CloudRewriteConfig, String> {
     let api_key = if settings.api_key.trim().is_empty() {
-        std::env::var("ZANA_REWRITE_API_KEY")
-            .ok()
+        env_get("ZANA_REWRITE_API_KEY")
             .filter(|v| !v.trim().is_empty())
             .unwrap_or_default()
     } else {
@@ -960,8 +910,8 @@ fn cloud_rewrite_config(
     };
 
     let url = if settings.api_url.trim().is_empty() {
-        std::env::var("ZANA_REWRITE_API_URL")
-            .unwrap_or_else(|_| "https://api.openai.com/v1/chat/completions".to_string())
+        env_get("ZANA_REWRITE_API_URL")
+            .unwrap_or_else(|| "https://api.openai.com/v1/chat/completions".to_string())
     } else {
         settings.api_url.clone()
     };
@@ -972,16 +922,18 @@ fn cloud_rewrite_config(
             "Cloud rewrite URL must use https unless it is localhost or 127.0.0.1".to_string(),
         );
     }
+    if !is_local_rewrite_url(&url) && api_key.trim().is_empty() {
+        return Err("Cloud rewrite API key is required for remote providers".to_string());
+    }
 
     let model = if settings.model.trim().is_empty() {
-        std::env::var("ZANA_REWRITE_MODEL").unwrap_or_else(|_| "gpt-4o-mini".to_string())
+        env_get("ZANA_REWRITE_MODEL").unwrap_or_else(|| "gpt-4o-mini".to_string())
     } else {
         settings.model.clone()
     };
 
     let timeout_ms = if settings.timeout_ms == 0 {
-        std::env::var("ZANA_REWRITE_TIMEOUT_MS")
-            .ok()
+        env_get("ZANA_REWRITE_TIMEOUT_MS")
             .and_then(|value| value.parse::<u64>().ok())
             .unwrap_or(15_000)
     } else {
@@ -1135,8 +1087,8 @@ fn normalize_rewrite_url(url: &str) -> String {
 mod tests {
     use super::{
         apply_dictionary_replacements, build_rewrite_message_content, build_rewrite_request,
-        cloud_rewrite_config, looks_like_assistant_meta_response, looks_like_malformed_tool_call,
-        rewrite_result_from_tool_arguments,
+        cloud_rewrite_config, cloud_rewrite_config_with_env, looks_like_assistant_meta_response,
+        looks_like_malformed_tool_call, rewrite_result_from_tool_arguments,
     };
     use crate::state::{CloudRewriteSettings, DictionaryReplacement, WritingProfile};
 
@@ -1215,6 +1167,19 @@ mod tests {
         let error = cloud_rewrite_config(&settings).unwrap_err();
 
         assert!(error.contains("https"));
+    }
+
+    #[test]
+    fn cloud_rewrite_config_rejects_remote_without_api_key() {
+        let settings = CloudRewriteSettings {
+            api_key: String::new(),
+            api_url: "https://example.com/v1/chat/completions".to_string(),
+            ..CloudRewriteSettings::default()
+        };
+
+        let error = cloud_rewrite_config_with_env(&settings, |_| None).unwrap_err();
+
+        assert!(error.contains("API key"));
     }
 
     #[test]

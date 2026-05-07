@@ -6,8 +6,10 @@ use crate::audio::{AudioCapture, CapturedAudio};
 use crate::hooks::{EventBus, LoggingHandler, MetricsHandler, ValidationHandler};
 use crate::plugins::{PluginManager, PluginRegistry};
 use crate::stt::WhisperEngine;
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::process::Command;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 
@@ -266,6 +268,8 @@ pub struct AppState {
     pub settings: RwLock<Settings>,
     /// Clipboard text captured at record start for rewrite context
     pub recording_clipboard: Mutex<Option<String>>,
+    /// Screenshot captured at record release for vision rewrite context
+    pub recording_screenshot: Mutex<Option<String>>,
 }
 
 impl AppState {
@@ -343,6 +347,7 @@ impl AppState {
             captured_audio: Mutex::new(None),
             settings: RwLock::new(settings),
             recording_clipboard: Mutex::new(None),
+            recording_screenshot: Mutex::new(None),
         })
     }
 
@@ -360,6 +365,40 @@ impl AppState {
         self.recording_clipboard.lock().await.take()
     }
 
+    /// Capture screen context at recording release for vision-capable rewrite providers.
+    pub async fn capture_recording_screenshot_if_enabled(&self) {
+        let include_screenshot = {
+            let settings = self.settings.read().await;
+            settings.cloud_rewrite.include_screenshot
+        };
+
+        if !include_screenshot {
+            *self.recording_screenshot.lock().await = None;
+            return;
+        }
+
+        let screenshot = match capture_screenshot_data_url().await {
+            Ok(screenshot) => Some(screenshot),
+            Err(error) => {
+                log::warn!("Screenshot context unavailable: {}", error);
+                None
+            }
+        };
+
+        *self.recording_screenshot.lock().await = screenshot;
+    }
+
+    /// Take and clear the current release-time screenshot context snapshot.
+    pub async fn take_recording_screenshot(&self) -> Option<String> {
+        self.recording_screenshot.lock().await.take()
+    }
+
+    /// Clear all per-recording context so failed/local-only flows cannot leak later.
+    pub async fn clear_recording_context(&self) {
+        *self.recording_clipboard.lock().await = None;
+        *self.recording_screenshot.lock().await = None;
+    }
+
     /// Save settings
     pub async fn save_settings(&self) -> anyhow::Result<()> {
         let settings = self.settings.read().await;
@@ -373,4 +412,53 @@ impl AppState {
         log::info!("Loaded {} plugin(s)", count);
         Ok(count)
     }
+}
+
+async fn capture_screenshot_data_url() -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    {
+        tokio::task::spawn_blocking(capture_macos_screenshot_data_url)
+            .await
+            .map_err(|error| format!("Screenshot capture task failed: {error}"))?
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Screenshot context is only implemented on macOS".to_string())
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn capture_macos_screenshot_data_url() -> Result<String, String> {
+    let path = std::env::temp_dir().join(format!(
+        "qvoice-rewrite-context-{}-{}.jpg",
+        std::process::id(),
+        chrono::Utc::now().timestamp_millis()
+    ));
+
+    let output = Command::new("/usr/sbin/screencapture")
+        .arg("-x")
+        .arg("-t")
+        .arg("jpg")
+        .arg(&path)
+        .output()
+        .map_err(|error| format!("Failed to run screencapture: {error}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let _ = std::fs::remove_file(&path);
+        return Err(format!("screencapture failed: {}", stderr.trim()));
+    }
+
+    let bytes = std::fs::read(&path).map_err(|error| {
+        let _ = std::fs::remove_file(&path);
+        format!("Failed to read screenshot: {error}")
+    })?;
+    let _ = std::fs::remove_file(&path);
+
+    if bytes.is_empty() {
+        return Err("Screenshot capture returned an empty image".to_string());
+    }
+
+    Ok(format!("data:image/jpeg;base64,{}", BASE64.encode(bytes)))
 }

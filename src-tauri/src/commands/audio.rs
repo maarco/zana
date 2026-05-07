@@ -109,14 +109,20 @@ pub async fn stop_recording(state: State<'_, AppState>) -> Result<StopRecordingR
 
 pub async fn stop_recording_inner(state: &AppState) -> Result<CapturedAudio, String> {
     let capture = state.audio_capture.lock().await;
+    let stop_result = capture.stop().await;
+    drop(capture);
 
-    match capture.stop().await {
+    match stop_result {
         Ok(audio) => {
+            state.capture_recording_screenshot_if_enabled().await;
             // Store captured audio for transcription (move, don't clone)
             *state.captured_audio.lock().await = Some(audio.clone());
             Ok(audio)
         }
-        Err(e) => Err(e.to_string()),
+        Err(e) => {
+            state.clear_recording_context().await;
+            Err(e.to_string())
+        }
     }
 }
 
