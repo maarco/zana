@@ -506,6 +506,12 @@ async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<(String
         return Err("Cloud rewrite returned empty text".to_string());
     }
 
+    if looks_like_assistant_meta_response(&rewritten) {
+        return Err(
+            "Cloud rewrite returned assistant commentary instead of rewritten text".to_string(),
+        );
+    }
+
     Ok((rewritten, transcript.to_string()))
 }
 
@@ -578,6 +584,35 @@ fn rewrite_text_from_tool_arguments(arguments: &str) -> Option<String> {
         .map(ToString::to_string)
 }
 
+fn looks_like_assistant_meta_response(text: &str) -> bool {
+    let normalized = text.trim().to_ascii_lowercase();
+    if normalized.is_empty() {
+        return true;
+    }
+
+    let refusal_or_meta_markers = [
+        "i am unable to",
+        "i'm unable to",
+        "i cannot access",
+        "i can't access",
+        "i cannot rewrite",
+        "i can't rewrite",
+        "please provide",
+        "as an ai",
+        "i don't have access",
+        "i do not have access",
+        "your transcription",
+        "user input",
+        "private documents",
+    ];
+
+    refusal_or_meta_markers
+        .iter()
+        .filter(|marker| normalized.contains(*marker))
+        .count()
+        >= 2
+}
+
 fn normalize_rewrite_url(url: &str) -> String {
     let trimmed = url.trim();
     if !is_local_rewrite_url(trimmed) {
@@ -597,7 +632,10 @@ fn normalize_rewrite_url(url: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_rewrite_request, cloud_rewrite_config, rewrite_text_from_tool_arguments};
+    use super::{
+        build_rewrite_request, cloud_rewrite_config, looks_like_assistant_meta_response,
+        rewrite_text_from_tool_arguments,
+    };
     use crate::state::{CloudRewriteSettings, WritingProfile};
 
     #[test]
@@ -694,5 +732,15 @@ mod tests {
             .expect("tool arguments should include text");
 
         assert_eq!(text, "Testing one, two, three.");
+    }
+
+    #[test]
+    fn detects_assistant_meta_response_as_failed_rewrite() {
+        let response = "I am unable to rewrite or edit your transcription, as I cannot access private documents or modify user input. Please provide a clear, accurate version of what you intended to say.";
+
+        assert!(looks_like_assistant_meta_response(response));
+        assert!(!looks_like_assistant_meta_response(
+            "The transcription that goes through the LLM does not get transcribed correctly."
+        ));
     }
 }
