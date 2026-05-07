@@ -425,12 +425,7 @@ async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<(String
                 }
             }
         ],
-        "tool_choice": {
-            "type": "function",
-            "function": {
-                "name": "submit_text"
-            }
-        },
+        "tool_choice": "required",
         "temperature": 0.3
     });
 
