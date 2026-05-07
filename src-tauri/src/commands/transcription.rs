@@ -364,7 +364,10 @@ fn build_rewrite_request(
         }
     }
 
-    prompt.push_str("Rewrite the following transcription for readability and polish:\n");
+    prompt.push_str("Rewrite the transcription into final paste-ready text.\n");
+    prompt.push_str("- Return only the rewritten text.\n");
+    prompt.push_str("- Do not explain, comment, ask questions, or mention missing context.\n");
+    prompt.push_str("- If the input is a test phrase, clean it up as a test phrase.\n");
     prompt.push_str("- Keep all original meaning.\n");
     prompt.push_str("- Preserve names, numbers, and action items.\n");
     prompt.push_str(&format!("- Tone: {}\n", profile.tone));
@@ -391,13 +394,39 @@ async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<(String
         "messages": [
             {
                 "role": "system",
-                "content": "You are a concise writing assistant for improving transcribed speech."
+                "content": "You rewrite dictated speech into final paste-ready text. Submit the final text with the submit_text tool. Do not explain, ask questions, mention uncertainty, or describe what you changed."
             },
             {
                 "role": "user",
                 "content": build_rewrite_request(clipboard.clone(), &profile, transcript)
             }
         ],
+        "tools": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "submit_text",
+                    "description": "Submit the final rewritten text that should be pasted to the user's cursor.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "text": {
+                                "type": "string",
+                                "description": "The final paste-ready rewritten text. No explanation or commentary."
+                            }
+                        },
+                        "required": ["text"],
+                        "additionalProperties": false
+                    }
+                }
+            }
+        ],
+        "tool_choice": {
+            "type": "function",
+            "function": {
+                "name": "submit_text"
+            }
+        },
         "temperature": 0.3
     });
 
@@ -429,6 +458,15 @@ async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<(String
         #[derive(Deserialize)]
         struct CloudMessage {
             content: Option<String>,
+            tool_calls: Option<Vec<ToolCall>>,
+        }
+        #[derive(Deserialize)]
+        struct ToolCall {
+            function: ToolCallFunction,
+        }
+        #[derive(Deserialize)]
+        struct ToolCallFunction {
+            arguments: String,
         }
 
         let payload: CloudResponse = response
@@ -436,11 +474,21 @@ async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<(String
             .await
             .map_err(|e| format!("Cloud rewrite response parse failed: {}", e))?;
 
-        let content = payload
+        let message = payload
             .choices
             .first()
-            .and_then(|c| c.message.content.as_deref())
-            .ok_or_else(|| "Cloud rewrite response missing content".to_string())?;
+            .map(|choice| &choice.message)
+            .ok_or_else(|| "Cloud rewrite response missing choices".to_string())?;
+
+        let tool_text = message
+            .tool_calls
+            .as_ref()
+            .and_then(|tool_calls| tool_calls.first())
+            .and_then(|tool_call| rewrite_text_from_tool_arguments(&tool_call.function.arguments));
+
+        let content = tool_text
+            .or_else(|| message.content.clone())
+            .ok_or_else(|| "Cloud rewrite response missing text".to_string())?;
 
         Ok::<String, String>(content.trim().to_string())
     };
@@ -516,6 +564,16 @@ fn is_allowed_rewrite_url(url: &str) -> bool {
     url.starts_with("https://") || is_local_rewrite_url(url)
 }
 
+fn rewrite_text_from_tool_arguments(arguments: &str) -> Option<String> {
+    let value = serde_json::from_str::<serde_json::Value>(arguments).ok()?;
+    value
+        .get("text")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+        .map(ToString::to_string)
+}
+
 fn normalize_rewrite_url(url: &str) -> String {
     let trimmed = url.trim();
     if !is_local_rewrite_url(trimmed) {
@@ -535,7 +593,7 @@ fn normalize_rewrite_url(url: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_rewrite_request, cloud_rewrite_config};
+    use super::{build_rewrite_request, cloud_rewrite_config, rewrite_text_from_tool_arguments};
     use crate::state::{CloudRewriteSettings, WritingProfile};
 
     #[test]
@@ -554,6 +612,8 @@ mod tests {
 
         assert!(prompt.contains("Context (last copied text):"));
         assert!(prompt.contains("team status: launch next week"));
+        assert!(prompt.contains("Return only the rewritten text."));
+        assert!(prompt.contains("Do not explain, comment, ask questions"));
         assert!(prompt.contains("Tone: warm"));
         assert!(prompt.contains("Purpose: send a follow-up email"));
         assert!(prompt.contains("Format: two sentences"));
@@ -619,5 +679,13 @@ mod tests {
         let config = cloud_rewrite_config(&settings).expect("local rewrite config should load");
 
         assert_eq!(config.url, "http://localhost:1234/v1/chat/completions");
+    }
+
+    #[test]
+    fn parses_rewrite_text_from_tool_arguments() {
+        let text = rewrite_text_from_tool_arguments(r#"{"text":"Testing one, two, three."}"#)
+            .expect("tool arguments should include text");
+
+        assert_eq!(text, "Testing one, two, three.");
     }
 }
