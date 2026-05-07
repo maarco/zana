@@ -413,9 +413,25 @@ struct LearnedMemory {
 #[serde(default)]
 struct SubmitResultArguments {
     text: String,
-    dictionary_replacements: Vec<DictionaryReplacementProposal>,
-    style_memories: Vec<StyleMemoryProposal>,
-    project_memories: Vec<ProjectMemoryProposal>,
+    dictionary_replacements: Vec<FlexibleMemoryValue>,
+    style_memories: Vec<FlexibleMemoryValue>,
+    project_memories: Vec<FlexibleMemoryValue>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum FlexibleMemoryValue {
+    String(String),
+    Object(serde_json::Value),
+}
+
+impl FlexibleMemoryValue {
+    fn into_value(self) -> Option<serde_json::Value> {
+        match self {
+            Self::String(value) => serde_json::from_str(&value).ok(),
+            Self::Object(value) => Some(value),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -615,7 +631,7 @@ async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<Rewrite
                 "type": "function",
                 "function": {
                     "name": "submit_result",
-                    "description": "Submit final rewritten text plus optional local memory updates qVoice should learn silently.",
+                    "description": "Submit final rewritten text. Optional memory updates can be encoded as JSON strings.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -625,44 +641,18 @@ async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<Rewrite
                             },
                             "dictionary_replacements": {
                                 "type": "array",
-                                "description": "Optional future automatic corrections for recurring names, tools, jargon, file names, or phrases.",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "from": { "type": "string" },
-                                        "to": { "type": "string" },
-                                        "reason": { "type": "string" }
-                                    },
-                                    "required": ["from", "to"],
-                                    "additionalProperties": false
-                                }
+                                "description": "Optional JSON strings like {\"from\":\"cloud code\",\"to\":\"claude code\",\"reason\":\"developer term\"}.",
+                                "items": { "type": "string" }
                             },
                             "style_memories": {
                                 "type": "array",
-                                "description": "Optional durable style preferences learned from the dictation.",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "rule": { "type": "string" },
-                                        "reason": { "type": "string" }
-                                    },
-                                    "required": ["rule"],
-                                    "additionalProperties": false
-                                }
+                                "description": "Optional JSON strings like {\"rule\":\"Keep bug reports concise\",\"reason\":\"user style\"}.",
+                                "items": { "type": "string" }
                             },
                             "project_memories": {
                                 "type": "array",
-                                "description": "Optional durable project vocabulary or context facts.",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "key": { "type": "string" },
-                                        "value": { "type": "string" },
-                                        "reason": { "type": "string" }
-                                    },
-                                    "required": ["key", "value"],
-                                    "additionalProperties": false
-                                }
+                                "description": "Optional JSON strings like {\"key\":\"current_project\",\"value\":\"qVoice\",\"reason\":\"active dictation context\"}.",
+                                "items": { "type": "string" }
                             }
                         },
                         "required": ["text"],
@@ -741,6 +731,10 @@ async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<Rewrite
             .content
             .clone()
             .ok_or_else(|| "Cloud rewrite response missing text".to_string())?;
+
+        if looks_like_malformed_tool_call(&content) {
+            return Err("Cloud rewrite returned malformed tool call".to_string());
+        }
 
         Ok::<RewriteResult, String>(RewriteResult {
             text: content.trim().to_string(),
@@ -934,6 +928,8 @@ fn rewrite_result_from_tool_arguments(arguments: &str) -> Option<RewriteResult> 
     let dictionary_replacements = parsed
         .dictionary_replacements
         .into_iter()
+        .filter_map(|proposal| proposal.into_value())
+        .filter_map(|value| serde_json::from_value::<DictionaryReplacementProposal>(value).ok())
         .filter_map(|proposal| {
             let from = proposal.from.trim();
             let to = proposal.to.trim();
@@ -951,6 +947,8 @@ fn rewrite_result_from_tool_arguments(arguments: &str) -> Option<RewriteResult> 
     let style_memories = parsed
         .style_memories
         .into_iter()
+        .filter_map(|proposal| proposal.into_value())
+        .filter_map(|value| serde_json::from_value::<StyleMemoryProposal>(value).ok())
         .filter_map(|proposal| {
             let rule = proposal.rule.trim();
             if rule.is_empty() {
@@ -966,6 +964,8 @@ fn rewrite_result_from_tool_arguments(arguments: &str) -> Option<RewriteResult> 
     let project_memories = parsed
         .project_memories
         .into_iter()
+        .filter_map(|proposal| proposal.into_value())
+        .filter_map(|value| serde_json::from_value::<ProjectMemoryProposal>(value).ok())
         .filter_map(|proposal| {
             let key = proposal.key.trim();
             let value = proposal.value.trim();
@@ -1019,6 +1019,13 @@ fn looks_like_assistant_meta_response(text: &str) -> bool {
         >= 2
 }
 
+fn looks_like_malformed_tool_call(text: &str) -> bool {
+    let normalized = text.trim().to_ascii_lowercase();
+    normalized.contains("<tool_call")
+        || normalized.contains("</tool_call")
+        || normalized.contains("<function=")
+}
+
 fn normalize_rewrite_url(url: &str) -> String {
     let trimmed = url.trim();
     if !is_local_rewrite_url(trimmed) {
@@ -1040,7 +1047,8 @@ fn normalize_rewrite_url(url: &str) -> String {
 mod tests {
     use super::{
         apply_dictionary_replacements, build_rewrite_request, cloud_rewrite_config,
-        looks_like_assistant_meta_response, rewrite_result_from_tool_arguments,
+        looks_like_assistant_meta_response, looks_like_malformed_tool_call,
+        rewrite_result_from_tool_arguments,
     };
     use crate::state::{CloudRewriteSettings, DictionaryReplacement, WritingProfile};
 
@@ -1139,7 +1147,7 @@ mod tests {
     #[test]
     fn parses_rewrite_text_from_tool_arguments() {
         let result = rewrite_result_from_tool_arguments(
-            r#"{"text":"Testing one, two, three.","dictionary_replacements":[{"from":"cloud code","to":"claude code","reason":"developer tool"}]}"#,
+            r#"{"text":"Testing one, two, three.","dictionary_replacements":["{\"from\":\"cloud code\",\"to\":\"claude code\",\"reason\":\"developer tool\"}"]}"#,
         )
             .expect("tool arguments should include text");
 
@@ -1147,6 +1155,13 @@ mod tests {
         assert_eq!(result.memory.dictionary_replacements.len(), 1);
         assert_eq!(result.memory.dictionary_replacements[0].from, "cloud code");
         assert_eq!(result.memory.dictionary_replacements[0].to, "claude code");
+    }
+
+    #[test]
+    fn detects_malformed_tool_call_content() {
+        assert!(looks_like_malformed_tool_call("\n</tool_call>"));
+        assert!(looks_like_malformed_tool_call("<tool_call>"));
+        assert!(!looks_like_malformed_tool_call("Testing one, two, three."));
     }
 
     #[test]
