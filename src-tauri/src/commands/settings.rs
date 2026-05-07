@@ -33,6 +33,7 @@ pub struct Preferences {
     pub rewrite_model: String,
     pub rewrite_api_url: String,
     pub rewrite_timeout_ms: u64,
+    pub rewrite_include_screenshot: bool,
     pub writing_purpose: String,
     pub writing_tone: String,
     pub writing_format: String,
@@ -76,6 +77,7 @@ impl Preferences {
             rewrite_model: settings.cloud_rewrite.model.clone(),
             rewrite_api_url: settings.cloud_rewrite.api_url.clone(),
             rewrite_timeout_ms: settings.cloud_rewrite.timeout_ms,
+            rewrite_include_screenshot: settings.cloud_rewrite.include_screenshot,
         }
     }
 
@@ -138,6 +140,7 @@ impl Preferences {
             model: self.rewrite_model.clone(),
             api_url: self.rewrite_api_url.clone(),
             timeout_ms: self.rewrite_timeout_ms,
+            include_screenshot: self.rewrite_include_screenshot,
         };
         settings.double_tap_enabled = self.double_tap_enabled;
         settings.min_hold_duration_ms = self.min_hold_duration;

@@ -7,7 +7,10 @@ use crate::state::{
     WritingProfile,
 };
 use crate::stt::WhisperModel;
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
+use std::process::Command;
 use std::time::{Duration, Instant};
 use tauri::{Emitter, State};
 use tokio::time::timeout;
@@ -593,6 +596,76 @@ fn append_memory_context(
     }
 }
 
+fn build_rewrite_message_content(
+    prompt: String,
+    screenshot_data_url: Option<String>,
+) -> serde_json::Value {
+    match screenshot_data_url {
+        Some(data_url) => json!([
+            {
+                "type": "text",
+                "text": prompt
+            },
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": data_url
+                }
+            }
+        ]),
+        None => json!(prompt),
+    }
+}
+
+async fn capture_screenshot_data_url() -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    {
+        tokio::task::spawn_blocking(capture_macos_screenshot_data_url)
+            .await
+            .map_err(|error| format!("Screenshot capture task failed: {error}"))?
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Screenshot context is only implemented on macOS".to_string())
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn capture_macos_screenshot_data_url() -> Result<String, String> {
+    let path = std::env::temp_dir().join(format!(
+        "qvoice-rewrite-context-{}-{}.jpg",
+        std::process::id(),
+        chrono::Utc::now().timestamp_millis()
+    ));
+
+    let output = Command::new("/usr/sbin/screencapture")
+        .arg("-x")
+        .arg("-t")
+        .arg("jpg")
+        .arg(&path)
+        .output()
+        .map_err(|error| format!("Failed to run screencapture: {error}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let _ = std::fs::remove_file(&path);
+        return Err(format!("screencapture failed: {}", stderr.trim()));
+    }
+
+    let bytes = std::fs::read(&path).map_err(|error| {
+        let _ = std::fs::remove_file(&path);
+        format!("Failed to read screenshot: {error}")
+    })?;
+    let _ = std::fs::remove_file(&path);
+
+    if bytes.is_empty() {
+        return Err("Screenshot capture returned an empty image".to_string());
+    }
+
+    Ok(format!("data:image/jpeg;base64,{}", BASE64.encode(bytes)))
+}
+
 async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<RewriteResult, String> {
     let clipboard = state.take_recording_clipboard().await;
     let settings = state.settings.read().await;
@@ -605,8 +678,31 @@ async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<Rewrite
     drop(settings);
 
     let config = cloud_rewrite_config(&rewrite_settings)?;
+    let screenshot = if rewrite_settings.include_screenshot {
+        match capture_screenshot_data_url().await {
+            Ok(screenshot) => Some(screenshot),
+            Err(error) => {
+                log::warn!("Screenshot context unavailable: {}", error);
+                None
+            }
+        }
+    } else {
+        None
+    };
+    let user_content = build_rewrite_message_content(
+        build_rewrite_request(
+            clipboard.clone(),
+            &profile,
+            &dictionary_replacements,
+            &transcript_history,
+            &style_memories,
+            &project_memories,
+            transcript,
+        ),
+        screenshot,
+    );
 
-    let request_body = serde_json::json!({
+    let request_body = json!({
         "model": config.model,
         "messages": [
             {
@@ -615,15 +711,7 @@ async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<Rewrite
             },
             {
                 "role": "user",
-                "content": build_rewrite_request(
-                    clipboard.clone(),
-                    &profile,
-                    &dictionary_replacements,
-                    &transcript_history,
-                    &style_memories,
-                    &project_memories,
-                    transcript,
-                )
+                "content": user_content
             }
         ],
         "tools": [
@@ -1046,8 +1134,8 @@ fn normalize_rewrite_url(url: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_dictionary_replacements, build_rewrite_request, cloud_rewrite_config,
-        looks_like_assistant_meta_response, looks_like_malformed_tool_call,
+        apply_dictionary_replacements, build_rewrite_message_content, build_rewrite_request,
+        cloud_rewrite_config, looks_like_assistant_meta_response, looks_like_malformed_tool_call,
         rewrite_result_from_tool_arguments,
     };
     use crate::state::{CloudRewriteSettings, DictionaryReplacement, WritingProfile};
@@ -1085,12 +1173,27 @@ mod tests {
     }
 
     #[test]
+    fn rewrite_message_content_attaches_screenshot_when_available() {
+        let content = build_rewrite_message_content(
+            "rewrite this".to_string(),
+            Some("data:image/jpeg;base64,abc".to_string()),
+        );
+        let items = content.as_array().expect("vision content should be array");
+
+        assert_eq!(items[0]["type"], "text");
+        assert_eq!(items[0]["text"], "rewrite this");
+        assert_eq!(items[1]["type"], "image_url");
+        assert_eq!(items[1]["image_url"]["url"], "data:image/jpeg;base64,abc");
+    }
+
+    #[test]
     fn cloud_rewrite_config_uses_saved_provider_settings() {
         let settings = CloudRewriteSettings {
             api_key: "sk-test".to_string(),
             model: "gpt-4o-mini".to_string(),
             api_url: "https://example.com/v1/chat/completions".to_string(),
             timeout_ms: 12_000,
+            include_screenshot: false,
         };
 
         let config = cloud_rewrite_config(&settings).expect("saved provider config should load");
@@ -1121,6 +1224,7 @@ mod tests {
             model: "qwen3.5-0.8b".to_string(),
             api_url: "http://localhost:1234/v1/chat/completions".to_string(),
             timeout_ms: 15_000,
+            include_screenshot: false,
         };
 
         let config = cloud_rewrite_config(&settings).expect("local rewrite config should load");
@@ -1137,6 +1241,7 @@ mod tests {
             model: "qwen3.5-0.8b".to_string(),
             api_url: "http://localhost:1234/".to_string(),
             timeout_ms: 15_000,
+            include_screenshot: false,
         };
 
         let config = cloud_rewrite_config(&settings).expect("local rewrite config should load");

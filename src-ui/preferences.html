@@ -325,6 +325,16 @@
         <div class="toggle" id="cloud-rewrite-toggle"></div>
       </div>
 
+      <div class="setting-row">
+        <div class="setting-copy">
+          <div class="setting-label">Include Screenshot Context</div>
+          <div class="setting-desc">
+            Attach the screen on release for vision-capable rewrite models
+          </div>
+        </div>
+        <div class="toggle" id="rewrite-screenshot-toggle"></div>
+      </div>
+
       <div class="provider-grid">
         <div class="provider-field">
           <div>
@@ -598,6 +608,7 @@
       setFieldValue('orb-style', prefs.orbStyle);
       setToggle('menubar-toggle', prefs.showInMenuBar);
       setToggle('cloud-rewrite-toggle', prefs.cloudRewriteEnabled);
+      setToggle('rewrite-screenshot-toggle', prefs.rewriteIncludeScreenshot);
       setFieldValue('rewrite-api-key', prefs.rewriteApiKey);
       setFieldValue('rewrite-model', prefs.rewriteModel);
       setFieldValue('rewrite-api-url', prefs.rewriteApiUrl);
@@ -619,6 +630,7 @@
         orbStyle: document.getElementById('orb-style').value,
         showInMenuBar: isToggleActive('menubar-toggle'),
         cloudRewriteEnabled: isToggleActive('cloud-rewrite-toggle'),
+        rewriteIncludeScreenshot: isToggleActive('rewrite-screenshot-toggle'),
         rewriteApiKey: document.getElementById('rewrite-api-key').value,
         rewriteModel: document.getElementById('rewrite-model').value,
         rewriteApiUrl: document.getElementById('rewrite-api-url').value,

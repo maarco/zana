@@ -43,6 +43,8 @@ pub struct CloudRewriteSettings {
     pub api_url: String,
     /// Cloud rewrite timeout in milliseconds
     pub timeout_ms: u64,
+    /// Attach a screenshot to the rewrite request when the provider supports vision
+    pub include_screenshot: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -96,6 +98,7 @@ impl Default for CloudRewriteSettings {
             model: "gpt-4o-mini".to_string(),
             api_url: "https://api.openai.com/v1/chat/completions".to_string(),
             timeout_ms: 15_000,
+            include_screenshot: false,
         }
     }
 }
