@@ -475,6 +475,7 @@ fn cloud_rewrite_config(
     } else {
         settings.api_url.clone()
     };
+    let url = normalize_rewrite_url(&url);
 
     if !is_allowed_rewrite_url(&url) {
         return Err(
@@ -513,6 +514,23 @@ fn is_local_rewrite_url(url: &str) -> bool {
 
 fn is_allowed_rewrite_url(url: &str) -> bool {
     url.starts_with("https://") || is_local_rewrite_url(url)
+}
+
+fn normalize_rewrite_url(url: &str) -> String {
+    let trimmed = url.trim();
+    if !is_local_rewrite_url(trimmed) {
+        return trimmed.to_string();
+    }
+
+    let Ok(mut parsed) = reqwest::Url::parse(trimmed) else {
+        return trimmed.to_string();
+    };
+
+    if parsed.path().is_empty() || parsed.path() == "/" {
+        parsed.set_path("/v1/chat/completions");
+    }
+
+    parsed.to_string()
 }
 
 #[cfg(test)]
@@ -586,6 +604,20 @@ mod tests {
 
         assert_eq!(config.api_key, "");
         assert_eq!(config.model, "qwen3.5-0.8b");
+        assert_eq!(config.url, "http://localhost:1234/v1/chat/completions");
+    }
+
+    #[test]
+    fn cloud_rewrite_config_expands_local_server_root() {
+        let settings = CloudRewriteSettings {
+            api_key: String::new(),
+            model: "qwen3.5-0.8b".to_string(),
+            api_url: "http://localhost:1234/".to_string(),
+            timeout_ms: 15_000,
+        };
+
+        let config = cloud_rewrite_config(&settings).expect("local rewrite config should load");
+
         assert_eq!(config.url, "http://localhost:1234/v1/chat/completions");
     }
 }
