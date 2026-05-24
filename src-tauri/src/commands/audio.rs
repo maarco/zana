@@ -2,7 +2,7 @@
 //!
 //! Tauri commands for audio capture and device management.
 
-use crate::audio::{AudioCapture, AudioDevice, AudioMetrics, CapturedAudio};
+use crate::audio::{AudioCapture, AudioDevice, AudioMetrics};
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -32,6 +32,12 @@ pub struct StopRecordingResponse {
     pub sample_count: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct CapturedAudioSummary {
+    pub duration_ms: u64,
+    pub sample_count: usize,
 }
 
 /// List available audio input devices
@@ -79,7 +85,10 @@ pub async fn start_recording_inner(
 
     match capture.start(device_id).await {
         Ok(()) => Ok(()),
-        Err(e) => Err(e.to_string()),
+        Err(e) => {
+            state.clear_recording_context().await;
+            Err(e.to_string())
+        }
     }
 }
 
@@ -87,17 +96,12 @@ pub async fn start_recording_inner(
 #[tauri::command]
 pub async fn stop_recording(state: State<'_, AppState>) -> Result<StopRecordingResponse, String> {
     match stop_recording_inner(&state).await {
-        Ok(audio) => {
-            let duration_ms = audio.duration_ms;
-            let sample_count = audio.samples.len();
-
-            Ok(StopRecordingResponse {
-                success: true,
-                duration_ms,
-                sample_count,
-                error: None,
-            })
-        }
+        Ok(summary) => Ok(StopRecordingResponse {
+            success: true,
+            duration_ms: summary.duration_ms,
+            sample_count: summary.sample_count,
+            error: None,
+        }),
         Err(e) => Ok(StopRecordingResponse {
             success: false,
             duration_ms: 0,
@@ -107,7 +111,7 @@ pub async fn stop_recording(state: State<'_, AppState>) -> Result<StopRecordingR
     }
 }
 
-pub async fn stop_recording_inner(state: &AppState) -> Result<CapturedAudio, String> {
+pub async fn stop_recording_inner(state: &AppState) -> Result<CapturedAudioSummary, String> {
     let capture = state.audio_capture.lock().await;
     let stop_result = capture.stop().await;
     drop(capture);
@@ -115,15 +119,29 @@ pub async fn stop_recording_inner(state: &AppState) -> Result<CapturedAudio, Str
     match stop_result {
         Ok(audio) => {
             state.capture_recording_screenshot_if_enabled().await;
-            // Store captured audio for transcription (move, don't clone)
-            *state.captured_audio.lock().await = Some(audio.clone());
-            Ok(audio)
+            let duration_ms = audio.duration_ms;
+            let sample_count = audio.samples.len();
+            *state.captured_audio.lock().await = Some(audio);
+            Ok(CapturedAudioSummary {
+                duration_ms,
+                sample_count,
+            })
         }
         Err(e) => {
+            *state.captured_audio.lock().await = None;
             state.clear_recording_context().await;
             Err(e.to_string())
         }
     }
+}
+
+pub async fn cancel_recording_inner(state: &AppState) {
+    let capture = state.audio_capture.lock().await;
+    let _ = capture.stop().await;
+    drop(capture);
+
+    *state.captured_audio.lock().await = None;
+    state.clear_recording_context().await;
 }
 
 /// Get current audio metrics (for visualization)

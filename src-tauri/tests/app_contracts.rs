@@ -252,3 +252,117 @@ fn orb_window_has_start_dragging_capability() {
         "orb window must have Tauri startDragging permission"
     );
 }
+
+#[test]
+fn orb_runtime_parks_animation_when_hidden() {
+    let html = read_repo_file("src-ui/orb.html");
+    let runtime = read_repo_file("src-ui/orb-runtime.js");
+
+    assert!(
+        html.contains("orb-runtime.js")
+            && html.find("orb-runtime.js") < html.find("orb-lifecycle.js"),
+        "orb runtime must load before lifecycle and legacy renderers patch requestAnimationFrame"
+    );
+    assert!(
+        runtime.contains("window.requestAnimationFrame")
+            && runtime.contains("pausedFrames")
+            && runtime.contains("sleepSoon")
+            && runtime.contains("installControlBridge"),
+        "orb runtime must park animation frames while the hidden panel is inactive"
+    );
+}
+
+#[test]
+fn mac_and_windows_hotkey_start_failures_clear_recording_state() {
+    let source = read_repo_file("src-tauri/src/main.rs");
+
+    assert!(
+        source.contains("fn handle_recording_start_failed"),
+        "hotkey recording paths need a shared rollback helper for failed audio starts"
+    );
+    assert!(
+        source.matches("handle_recording_start_failed(&app_clone").count() >= 2,
+        "both macOS Fn and Windows Ctrl start paths must clear native recording state on start failure"
+    );
+}
+
+#[test]
+fn short_hotkey_release_cancels_pending_capture() {
+    let source = read_repo_file("src-tauri/src/main.rs");
+
+    assert!(
+        source.contains("cancel_recording_without_transcription(app)"),
+        "short hotkey release must cancel pending capture instead of only hiding the orb"
+    );
+    assert!(
+        source.contains("Recording start skipped because the trigger was released"),
+        "delayed capture start must re-check the native recording flag before opening the microphone"
+    );
+    assert!(
+        source
+            .matches("Recording start completed after the trigger was released")
+            .count()
+            >= 2,
+        "both hotkey paths must cancel capture if release races with async microphone start"
+    );
+}
+
+#[test]
+fn failed_stop_does_not_transcribe_stale_audio() {
+    let source = read_repo_file("src-tauri/src/main.rs");
+
+    assert!(
+        source.matches("return;").count() >= 2 && source.contains("Failed to stop recording"),
+        "hotkey stop paths must return before transcribe when stop_recording_inner fails"
+    );
+}
+
+#[test]
+fn tauri_file_logging_is_registered_for_crash_forensics() {
+    let source = read_repo_file("src-tauri/src/main.rs");
+
+    assert!(
+        source.contains("tauri_plugin_log"),
+        "main.rs must register the log plugin for runtime crash forensics"
+    );
+}
+
+#[test]
+fn tauri_log_plugin_config_is_owned_by_rust_builder() {
+    let tauri_config: Value =
+        serde_json::from_str(&read_repo_file("src-tauri/tauri.conf.json")).unwrap();
+
+    assert!(
+        tauri_config.pointer("/plugins/log").is_none(),
+        "tauri-plugin-log v2 expects no plugins.log config object when targets are configured in Rust"
+    );
+}
+
+#[test]
+fn app_registers_single_instance_guard() {
+    let cargo = read_repo_file("src-tauri/Cargo.toml");
+    let main = read_repo_file("src-tauri/src/main.rs");
+
+    assert!(
+        cargo.contains("tauri-plugin-single-instance"),
+        "Cargo.toml must include the single-instance plugin so duplicate launches cannot stack resident processes"
+    );
+    assert!(
+        main.contains("tauri_plugin_single_instance::init"),
+        "main.rs must register the single-instance plugin during Tauri builder setup"
+    );
+}
+
+#[test]
+fn whisper_full_runs_on_blocking_thread() {
+    let source = read_repo_file("src-tauri/src/stt/whisper.rs");
+
+    assert!(
+        source.contains("tokio::task::spawn_blocking"),
+        "Whisper full() must run on a blocking thread, not inline on an async runtime worker"
+    );
+    assert!(
+        source.contains(".full(params, &samples)") || source.contains(".full(params, samples"),
+        "the blocking task must own or borrow audio samples inside the blocking closure"
+    );
+}

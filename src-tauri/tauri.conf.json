@@ -124,16 +124,6 @@
     "fs": {},
     "shell": {
       "open": true
-    },
-    "log": {
-      "level": "info",
-      "targets": [
-        {
-          "kind": "file",
-          "name": "zana.log",
-          "level": "info"
-        }
-      ]
     }
   }
 }

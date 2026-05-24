@@ -223,14 +223,6 @@ fn main() {
     // Redirect whisper.cpp logs to Rust logging (suppresses stderr output)
     whisper_rs::install_logging_hooks();
 
-    // Initialize logging - whisper logs will go through here now
-    env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or("info,whisper_rs=warn"),
-    )
-    .init();
-
-    log::info!("Starting qVoice...");
-
     let mut builder = tauri::Builder::default();
 
     // Register macOS NSPanel plugin
@@ -243,6 +235,26 @@ fn main() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            log::info!("[SingleInstance] Duplicate launch blocked");
+
+            if let Some(window) = app.get_webview_window("preferences") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(log::LevelFilter::Info)
+                .level_for("whisper_rs", log::LevelFilter::Warn)
+                .targets([
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
+                        file_name: Some("zana".into()),
+                    }),
+                ])
+                .build(),
+        )
         // Auto-updater disabled until signing keys are configured
         // .plugin(tauri_plugin_updater::Builder::new().build())
         .menu(create_app_menu)
@@ -991,6 +1003,36 @@ fn setup_fn_key_monitor(app: tauri::AppHandle) {
     }
 }
 
+fn clear_recording_flags() {
+    IS_RECORDING.store(false, Ordering::SeqCst);
+    LATCHED_RECORDING.store(false, Ordering::SeqCst);
+}
+
+fn clear_recording_buffers(app: tauri::AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        if let Some(state) = app.try_state::<AppState>() {
+            commands::cancel_recording_inner(&state).await;
+        }
+    });
+}
+
+/// Cancel a recording path without transcribing or pasting.
+#[cfg(target_os = "macos")]
+fn cancel_recording_without_transcription(app: &tauri::AppHandle) {
+    log::info!("[RecordingCancel] Cancelling pending/active recording without transcription");
+    clear_recording_flags();
+    clear_recording_buffers(app.clone());
+    hide_orb(app);
+}
+
+#[cfg(target_os = "macos")]
+fn handle_recording_start_failed(app: &tauri::AppHandle, error: &str) {
+    log::error!("[RecordingStart] Failed to start recording: {}", error);
+    clear_recording_flags();
+    clear_recording_buffers(app.clone());
+    hide_orb(app);
+}
+
 /// Handle Fn key press - show orb and start recording
 #[cfg(target_os = "macos")]
 fn handle_fn_press(app: &tauri::AppHandle) {
@@ -1043,6 +1085,10 @@ fn handle_fn_press(app: &tauri::AppHandle) {
         let app_clone = app.clone();
         std::thread::spawn(move || {
             std::thread::sleep(std::time::Duration::from_millis(150));
+            if !IS_RECORDING.load(Ordering::SeqCst) {
+                log::info!("[FnPress] Recording start skipped because the trigger was released");
+                return;
+            }
             log::info!("[FnPress] Delay complete, emitting events");
 
             // Use direct WKWebView eval - Tauri IPC doesn't work with NSPanel
@@ -1062,13 +1108,31 @@ fn handle_fn_press(app: &tauri::AppHandle) {
             // Start audio capture via state
             tauri::async_runtime::spawn(async move {
                 log::info!("[FnPress] Starting audio capture...");
-                if let Some(state) = app_clone.try_state::<AppState>() {
-                    match commands::start_recording_inner(&state, None).await {
-                        Ok(_) => log::info!("[FnPress] Audio capture started successfully"),
-                        Err(e) => log::error!("[FnPress] Failed to start recording: {}", e),
-                    }
+                if !IS_RECORDING.load(Ordering::SeqCst) {
+                    log::info!(
+                        "[FnPress] Recording start skipped because the trigger was released"
+                    );
+                    return;
+                }
+
+                let start_result = if let Some(state) = app_clone.try_state::<AppState>() {
+                    commands::start_recording_inner(&state, None).await
                 } else {
                     log::error!("[FnPress] No app state available!");
+                    Err("No app state available".to_string())
+                };
+
+                match start_result {
+                    Ok(_) if IS_RECORDING.load(Ordering::SeqCst) => {
+                        log::info!("[FnPress] Audio capture started successfully")
+                    }
+                    Ok(_) => {
+                        log::info!(
+                            "[FnPress] Recording start completed after the trigger was released; cancelling capture"
+                        );
+                        cancel_recording_without_transcription(&app_clone);
+                    }
+                    Err(e) => handle_recording_start_failed(&app_clone, &e),
                 }
             });
 
@@ -1113,7 +1177,7 @@ fn handle_fn_release(app: &tauri::AppHandle) {
                 .map(|t| t.elapsed().as_millis())
                 .unwrap_or(0)
         );
-        hide_orb(app);
+        cancel_recording_without_transcription(app);
         return;
     }
 
@@ -1150,9 +1214,14 @@ fn stop_recording(app: &tauri::AppHandle) {
     let app_clone = app.clone();
     tauri::async_runtime::spawn(async move {
         if let Some(state) = app_clone.try_state::<AppState>() {
-            let _ = commands::stop_recording_inner(&state)
-                .await
-                .map(|audio| log::info!("Recording stopped: {} samples", audio.samples.len()));
+            match commands::stop_recording_inner(&state).await {
+                Ok(summary) => log::info!("Recording stopped: {} samples", summary.sample_count),
+                Err(error) => {
+                    log::error!("[StopRecording] Failed to stop recording: {}", error);
+                    hide_orb(&app_clone);
+                    return;
+                }
+            }
 
             match commands::transcribe(state).await {
                 Ok(response) => {
@@ -1238,6 +1307,23 @@ fn paste_text(text: &str) {
 // =============================================================================
 // WINDOWS IMPLEMENTATION
 // =============================================================================
+
+/// Cancel a recording path without transcribing or pasting.
+#[cfg(target_os = "windows")]
+fn cancel_recording_without_transcription(app: &tauri::AppHandle) {
+    log::info!("[RecordingCancel] Cancelling pending/active recording without transcription");
+    clear_recording_flags();
+    clear_recording_buffers(app.clone());
+    win_hide_orb(app);
+}
+
+#[cfg(target_os = "windows")]
+fn handle_recording_start_failed(app: &tauri::AppHandle, error: &str) {
+    log::error!("[RecordingStart] Failed to start recording: {}", error);
+    clear_recording_flags();
+    clear_recording_buffers(app.clone());
+    win_hide_orb(app);
+}
 
 /// Setup Ctrl key double-tap monitor using Win32 low-level keyboard hook
 #[cfg(target_os = "windows")]
@@ -1358,6 +1444,10 @@ fn handle_ctrl_press(app: &tauri::AppHandle) {
         let app_clone = app.clone();
         std::thread::spawn(move || {
             std::thread::sleep(std::time::Duration::from_millis(150));
+            if !IS_RECORDING.load(Ordering::SeqCst) {
+                log::info!("[CtrlPress] Recording start skipped because the trigger was released");
+                return;
+            }
             log::info!("[CtrlPress] Delay complete, emitting events");
 
             let _ = app_clone.emit(
@@ -1371,11 +1461,31 @@ fn handle_ctrl_press(app: &tauri::AppHandle) {
             // Start audio capture
             tauri::async_runtime::spawn(async move {
                 log::info!("[CtrlPress] Starting audio capture...");
-                if let Some(state) = app_clone.try_state::<AppState>() {
-                    match commands::start_recording_inner(&state, None).await {
-                        Ok(_) => log::info!("[CtrlPress] Audio capture started"),
-                        Err(e) => log::error!("[CtrlPress] Failed to start recording: {}", e),
+                if !IS_RECORDING.load(Ordering::SeqCst) {
+                    log::info!(
+                        "[CtrlPress] Recording start skipped because the trigger was released"
+                    );
+                    return;
+                }
+
+                let start_result = if let Some(state) = app_clone.try_state::<AppState>() {
+                    commands::start_recording_inner(&state, None).await
+                } else {
+                    log::error!("[CtrlPress] No app state available!");
+                    Err("No app state available".to_string())
+                };
+
+                match start_result {
+                    Ok(_) if IS_RECORDING.load(Ordering::SeqCst) => {
+                        log::info!("[CtrlPress] Audio capture started")
                     }
+                    Ok(_) => {
+                        log::info!(
+                            "[CtrlPress] Recording start completed after the trigger was released; cancelling capture"
+                        );
+                        cancel_recording_without_transcription(&app_clone);
+                    }
+                    Err(e) => handle_recording_start_failed(&app_clone, &e),
                 }
             });
         });
@@ -1408,7 +1518,7 @@ fn handle_ctrl_release(app: &tauri::AppHandle) {
 
     if !held_long_enough {
         log::info!("[CtrlRelease] Released too quickly, ignoring");
-        win_hide_orb(app);
+        cancel_recording_without_transcription(app);
         return;
     }
 
@@ -1507,9 +1617,14 @@ fn win_stop_recording(app: &tauri::AppHandle) {
     let app_clone = app.clone();
     tauri::async_runtime::spawn(async move {
         if let Some(state) = app_clone.try_state::<AppState>() {
-            let _ = commands::stop_recording_inner(&state)
-                .await
-                .map(|audio| log::info!("Recording stopped: {} samples", audio.samples.len()));
+            match commands::stop_recording_inner(&state).await {
+                Ok(summary) => log::info!("Recording stopped: {} samples", summary.sample_count),
+                Err(error) => {
+                    log::error!("[WinStopRec] Failed to stop recording: {}", error);
+                    win_hide_orb(&app_clone);
+                    return;
+                }
+            }
 
             match commands::transcribe(state).await {
                 Ok(response) => {

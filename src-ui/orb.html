@@ -58,6 +58,8 @@
 
   <!-- Notifications system -->
   <script src="notifications.js"></script>
+  <!-- Pauses animation loops while the hidden orb panel is inactive -->
+  <script src="orb-runtime.js"></script>
   <!-- Orb lifecycle framework (activates only for migrated renderers) -->
   <script src="orb-lifecycle.js"></script>
   <!-- Orb renderer loaded dynamically based on preference -->
@@ -95,6 +97,9 @@
         console.log('[Orb] Lifecycle renderer activated');
       } else {
         console.log('[Orb] Legacy renderer (no lifecycle)');
+      }
+      if (window.__orbRuntime) {
+        window.__orbRuntime.installControlBridge();
       }
     };
 

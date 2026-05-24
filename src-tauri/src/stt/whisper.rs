@@ -307,9 +307,12 @@ impl WhisperEngine {
         // Ensure model is loaded
         self.get_or_create_context(model).await?;
 
-        // Run transcription
-        let result = {
-            let guard = self.context_cache.lock().await;
+        let samples = samples.to_vec();
+        let context_cache = self.context_cache.clone();
+
+        // Run whisper.cpp on a blocking worker so the async runtime stays responsive.
+        let result = tokio::task::spawn_blocking(move || -> Result<TranscriptionResult> {
+            let guard = context_cache.blocking_lock();
             let cached = guard.as_ref().context("Whisper context not initialized")?;
 
             let mut state = cached
@@ -327,7 +330,7 @@ impl WhisperEngine {
             params.set_suppress_nst(true);
 
             state
-                .full(params, samples)
+                .full(params, &samples)
                 .context("Transcription failed")?;
 
             let num_segments = state.full_n_segments();
@@ -349,26 +352,29 @@ impl WhisperEngine {
                         text: segment_text.clone(),
                     };
 
-                    // Emit segment event
-                    self.event_bus
-                        .emit(HookEvent::TranscriptionSegment {
-                            start_ms: seg.start_ms,
-                            end_ms: seg.end_ms,
-                            text: seg.text.clone(),
-                        })
-                        .await;
-
                     segments.push(seg);
                     full_text.push_str(&segment_text);
                 }
             }
 
-            TranscriptionResult {
+            Ok(TranscriptionResult {
                 text: full_text.trim().to_string(),
                 segments,
                 processing_ms: start_time.elapsed().as_millis() as u64,
-            }
-        };
+            })
+        })
+        .await
+        .context("Whisper transcription task failed")??;
+
+        for segment in &result.segments {
+            self.event_bus
+                .emit(HookEvent::TranscriptionSegment {
+                    start_ms: segment.start_ms,
+                    end_ms: segment.end_ms,
+                    text: segment.text.clone(),
+                })
+                .await;
+        }
 
         // Emit complete event
         self.event_bus
