@@ -1,0 +1,1550 @@
+{
+  "version": 1,
+  "meta": {
+    "title": "qVoice Codebase Hub",
+    "subtitle": "A repo-local map of the live Tauri app, voice pipeline, docs drift, release gates, and manual QA surfaces.",
+    "structure": "docs-portal + inventory-explorer",
+    "interactionLevel": 2,
+    "generatedAt": "2026-05-20T00:55:00Z",
+    "repository": {
+      "root": "/Users/malmazan/dev/qVoice",
+      "branch": "main",
+      "activeWorkspace": "src-tauri",
+      "workspaceNote": "Root Cargo.toml lists only src-tauri as a workspace member. Treat root src/ as a stale trap unless reactivated intentionally."
+    }
+  },
+  "summary": [
+    {
+      "label": "authoritative runtime",
+      "value": "src-tauri",
+      "detail": "Tauri 2 app, Rust backend, vanilla src-ui assets"
+    },
+    {
+      "label": "primary risk",
+      "value": "docs drift",
+      "detail": "privacy, version, egui migration, release docs"
+    },
+    {
+      "label": "hard requirement",
+      "value": "local first",
+      "detail": "Whisper transcribes before optional rewrite"
+    }
+  ],
+  "pages": [
+    {
+      "id": "page-orientation",
+      "title": "orientation",
+      "group": "start here",
+      "summary": "Use this first. It separates the live Tauri path from stale root and planning surfaces.",
+      "status": "keep",
+      "source": "interactive-doc-site/data/site.json",
+      "links": [
+        {
+          "label": "workspace",
+          "path": "Cargo.toml"
+        },
+        {
+          "label": "active crate",
+          "path": "src-tauri/Cargo.toml"
+        },
+        {
+          "label": "entry point",
+          "path": "src-tauri/src/main.rs"
+        }
+      ],
+      "objects": [
+        "repo-state",
+        "active-tauri-crate",
+        "root-src-orphan"
+      ]
+    },
+    {
+      "id": "page-voice-pipeline",
+      "title": "voice pipeline",
+      "group": "runtime",
+      "summary": "The critical product flow: trigger key, capture audio, local Whisper, optional rewrite, final paste.",
+      "status": "keep",
+      "source": "src-tauri/src/commands/transcription.rs",
+      "links": [
+        {
+          "label": "audio command",
+          "path": "src-tauri/src/commands/audio.rs"
+        },
+        {
+          "label": "transcription command",
+          "path": "src-tauri/src/commands/transcription.rs"
+        },
+        {
+          "label": "state",
+          "path": "src-tauri/src/state.rs"
+        }
+      ],
+      "objects": [
+        "audio-commands",
+        "transcription-command",
+        "state-settings"
+      ]
+    },
+    {
+      "id": "page-preferences",
+      "title": "preferences and rewrite",
+      "group": "runtime",
+      "summary": "Settings bridge between src-ui/preferences.html and typed backend validation.",
+      "status": "keep",
+      "source": "src-ui/preferences.html",
+      "links": [
+        {
+          "label": "preferences UI",
+          "path": "src-ui/preferences.html"
+        },
+        {
+          "label": "settings command",
+          "path": "src-tauri/src/commands/settings.rs"
+        },
+        {
+          "label": "contract tests",
+          "path": "src-tauri/tests/app_contracts.rs"
+        }
+      ],
+      "objects": [
+        "preferences-ui",
+        "settings-command",
+        "app-contracts"
+      ]
+    },
+    {
+      "id": "page-ui-surfaces",
+      "title": "ui surfaces",
+      "group": "frontend",
+      "summary": "Vanilla HTML/JS surfaces loaded by Tauri windows and the macOS NSPanel orb.",
+      "status": "review",
+      "source": "src-ui",
+      "links": [
+        {
+          "label": "orb",
+          "path": "src-ui/orb.html"
+        },
+        {
+          "label": "onboarding",
+          "path": "src-ui/onboarding.html"
+        },
+        {
+          "label": "preferences",
+          "path": "src-ui/preferences.html"
+        }
+      ],
+      "objects": [
+        "orb-ui",
+        "onboarding-ui",
+        "legacy-main-ui"
+      ]
+    },
+    {
+      "id": "page-hooks-plugins",
+      "title": "hooks and plugins",
+      "group": "extension",
+      "summary": "Event bus, system handlers, manifest parsing, plugin registry, and the current placeholder loader boundary.",
+      "status": "review",
+      "source": "src-tauri/src/plugins/manager.rs",
+      "links": [
+        {
+          "label": "event bus",
+          "path": "src-tauri/src/hooks/bus.rs"
+        },
+        {
+          "label": "plugin manager",
+          "path": "src-tauri/src/plugins/manager.rs"
+        },
+        {
+          "label": "plugin docs",
+          "path": "docs/PLUGIN_DEVELOPMENT.md"
+        }
+      ],
+      "objects": [
+        "hooks-event-bus",
+        "plugin-manager",
+        "plugin-docs"
+      ]
+    },
+    {
+      "id": "page-release",
+      "title": "release and packaging",
+      "group": "release",
+      "summary": "CI, release workflow, manual macOS scripts, bundle identity, and launch smoke risks.",
+      "status": "fix",
+      "source": ".github/workflows/release.yml",
+      "links": [
+        {
+          "label": "release workflow",
+          "path": ".github/workflows/release.yml"
+        },
+        {
+          "label": "mac build script",
+          "path": "scripts/build-macos.sh"
+        },
+        {
+          "label": "tauri config",
+          "path": "src-tauri/tauri.conf.json"
+        }
+      ],
+      "objects": [
+        "release-workflows",
+        "release-scripts",
+        "version-drift"
+      ]
+    },
+    {
+      "id": "page-docs-drift",
+      "title": "docs drift",
+      "group": "docs",
+      "summary": "Public docs, stale egui migration docs, privacy mismatch, install guide cleanup, and QA gaps.",
+      "status": "fix",
+      "source": "README.md",
+      "links": [
+        {
+          "label": "readme",
+          "path": "README.md"
+        },
+        {
+          "label": "privacy",
+          "path": "PRIVACY.md"
+        },
+        {
+          "label": "qa checklist",
+          "path": "QA_CHECKLIST.md"
+        }
+      ],
+      "objects": [
+        "public-readme",
+        "privacy-doc",
+        "stale-egui-docs"
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "id": "flow-hotkey-record-paste",
+      "title": "hotkey record to paste",
+      "group": "runtime",
+      "summary": "macOS Fn and Windows Ctrl paths start capture, stop capture, transcribe, paste response.text, and hide the orb.",
+      "status": "keep",
+      "risk": "high",
+      "related": [
+        "main-entry"
+      ],
+      "steps": [
+        {
+          "label": "trigger",
+          "summary": "main.rs monitors Fn/Ctrl press, double-tap latch, and release."
+        },
+        {
+          "label": "start",
+          "summary": "start_recording_inner captures clipboard before audio capture begins."
+        },
+        {
+          "label": "stop",
+          "summary": "stop_recording_inner captures screenshot if enabled and stores audio."
+        },
+        {
+          "label": "paste",
+          "summary": "transcribe returns final text; hotkey path pastes response.text."
+        }
+      ]
+    },
+    {
+      "id": "flow-local-whisper-rewrite",
+      "title": "local Whisper then optional rewrite",
+      "group": "runtime",
+      "summary": "Local STT is mandatory. Cloud rewrite is opt-in, HTTPS or localhost, and falls back to raw transcript.",
+      "status": "keep",
+      "risk": "critical",
+      "related": [
+        "transcription-command"
+      ],
+      "steps": [
+        {
+          "label": "model check",
+          "summary": "Whisper model must exist in local cache before transcription."
+        },
+        {
+          "label": "local stt",
+          "summary": "WhisperEngine transcribes local audio samples first."
+        },
+        {
+          "label": "rewrite",
+          "summary": "Optional provider receives transcript, clipboard, profile, memory, and optional screenshot."
+        },
+        {
+          "label": "fallback",
+          "summary": "Rewrite errors keep success true and paste corrected local text."
+        }
+      ]
+    },
+    {
+      "id": "flow-first-run",
+      "title": "first-run onboarding",
+      "group": "runtime",
+      "summary": "First run shows onboarding, asks for accessibility, downloads Small Whisper model, marks complete, then exits.",
+      "status": "review",
+      "risk": "medium",
+      "related": [
+        "onboarding-runtime"
+      ],
+      "steps": [
+        {
+          "label": "detect",
+          "summary": "onboarding marker determines whether normal startup continues."
+        },
+        {
+          "label": "permission",
+          "summary": "macOS accessibility pane can be opened from onboarding."
+        },
+        {
+          "label": "model",
+          "summary": "Small Whisper model downloads with progress events."
+        },
+        {
+          "label": "exit",
+          "summary": "Completion marker is written and the app exits for restart."
+        }
+      ]
+    },
+    {
+      "id": "flow-plugin-load",
+      "title": "plugin discovery and hooks",
+      "group": "extension",
+      "summary": "Plugin directories with plugin.toml load into registry and attach hook adapters. Actual dynamic code loading is still a placeholder boundary.",
+      "status": "review",
+      "risk": "medium",
+      "related": [
+        "plugin-manager"
+      ],
+      "steps": [
+        {
+          "label": "discover",
+          "summary": "PluginManager scans the configured plugins directory."
+        },
+        {
+          "label": "validate",
+          "summary": "PluginManifest is parsed and validated."
+        },
+        {
+          "label": "register",
+          "summary": "Registry stores metadata and enabled state."
+        },
+        {
+          "label": "hook",
+          "summary": "PluginHookAdapter registers with the EventBus."
+        }
+      ]
+    },
+    {
+      "id": "flow-release",
+      "title": "release candidate gates",
+      "group": "release",
+      "summary": "CI gates compile/test/clippy. Release builds macOS and Windows artifacts, but local app launch and macOS permissions still need manual smoke.",
+      "status": "fix",
+      "risk": "high",
+      "related": [
+        "release-workflows"
+      ],
+      "steps": [
+        {
+          "label": "verify",
+          "summary": "fmt, cargo check, cargo test, clippy run on macOS."
+        },
+        {
+          "label": "bundle",
+          "summary": "Release workflow builds universal qVoice.app and DMG."
+        },
+        {
+          "label": "sign",
+          "summary": "Developer ID signing and notarization run only when secrets exist."
+        },
+        {
+          "label": "smoke",
+          "summary": "Visible runtime is tray/orb-driven, so green build is not enough."
+        }
+      ]
+    }
+  ],
+  "objects": [
+    {
+      "id": "repo-state",
+      "title": "workspace state",
+      "kind": "repo",
+      "group": "orientation",
+      "recommendation": "keep as the first mental model for every future task",
+      "risk": "high",
+      "status": "keep",
+      "summary": "Root Cargo.toml declares only src-tauri as the active workspace member.",
+      "evidence": "The sibling src/ crate and root tests are present but not exercised by the root workspace.",
+      "paths": [
+        "Cargo.toml",
+        "src-tauri/Cargo.toml",
+        "src/Cargo.toml"
+      ],
+      "tags": [
+        "workspace",
+        "trap"
+      ],
+      "flags": [
+        "do not treat root src/ as live without explicit reactivation"
+      ],
+      "tests": [
+        "cargo check -p Zana-app --locked"
+      ],
+      "related": [
+        "root-src-orphan",
+        "app-contracts"
+      ]
+    },
+    {
+      "id": "active-tauri-crate",
+      "title": "active Tauri crate",
+      "kind": "crate",
+      "group": "orientation",
+      "recommendation": "keep",
+      "risk": "low",
+      "status": "keep",
+      "summary": "Zana-app is the package built, tested, and released by CI.",
+      "evidence": "CI and release workflows run cargo commands against -p Zana-app.",
+      "paths": [
+        "src-tauri/Cargo.toml",
+        ".github/workflows/ci.yml",
+        ".github/workflows/release.yml"
+      ],
+      "tags": [
+        "tauri",
+        "rust"
+      ],
+      "flags": [
+        "Tauri updater dependency exists but updater plugin is disabled"
+      ],
+      "tests": [
+        "cargo test -p Zana-app --locked"
+      ],
+      "related": [
+        "main-entry",
+        "tauri-config"
+      ]
+    },
+    {
+      "id": "root-src-orphan",
+      "title": "root src/ stale crate",
+      "kind": "code",
+      "group": "orientation",
+      "recommendation": "archive or clearly label before anyone edits it",
+      "risk": "high",
+      "status": "fix",
+      "summary": "The root src/ tree looks like an egui or older app path and is not listed in the active workspace.",
+      "evidence": "Root Cargo.toml has members = [\"src-tauri\"].",
+      "paths": [
+        "src",
+        "src/Cargo.toml",
+        "tests/integration.rs"
+      ],
+      "tags": [
+        "stale-code",
+        "trap"
+      ],
+      "flags": [
+        "root tests likely target old gui modules",
+        "keep visible as legacy until intentionally deleted"
+      ],
+      "tests": [],
+      "related": [
+        "repo-state",
+        "root-tests"
+      ]
+    },
+    {
+      "id": "main-entry",
+      "title": "main Tauri entry point",
+      "kind": "runtime",
+      "group": "backend",
+      "recommendation": "keep, but treat hotkey changes as manual-QA required",
+      "risk": "high",
+      "status": "keep",
+      "summary": "Initializes app state, windows, tray menu, command handlers, Fn/Ctrl monitors, orb visibility, and paste flow.",
+      "evidence": "Registers commands and owns macOS NSPanel plus Windows orb behavior.",
+      "paths": [
+        "src-tauri/src/main.rs"
+      ],
+      "tags": [
+        "hotkey",
+        "paste",
+        "orb",
+        "manual-qa"
+      ],
+      "flags": [
+        "visible runtime is tray/orb driven",
+        "compile success does not prove user can see the app"
+      ],
+      "tests": [
+        "src-tauri/tests/app_contracts.rs"
+      ],
+      "related": [
+        "manual-qa",
+        "orb-ui"
+      ]
+    },
+    {
+      "id": "state-settings",
+      "title": "settings and recording context",
+      "kind": "runtime",
+      "group": "backend",
+      "recommendation": "keep and protect privacy defaults",
+      "risk": "critical",
+      "status": "keep",
+      "summary": "AppState owns settings, audio capture, Whisper engine, plugin manager, captured audio, clipboard snapshot, and screenshot snapshot.",
+      "evidence": "Cloud rewrite defaults off; clipboard and screenshot are per-recording context and cleared after use.",
+      "paths": [
+        "src-tauri/src/state.rs"
+      ],
+      "tags": [
+        "settings",
+        "privacy",
+        "rewrite"
+      ],
+      "flags": [
+        "cloud rewrite must stay opt-in",
+        "screenshot context is macOS only and setting-gated"
+      ],
+      "tests": [
+        "transcription rewrite unit tests",
+        "app_contracts"
+      ],
+      "related": [
+        "transcription-command",
+        "privacy-doc"
+      ]
+    },
+    {
+      "id": "audio-commands",
+      "title": "audio commands",
+      "kind": "runtime",
+      "group": "backend",
+      "recommendation": "keep",
+      "risk": "medium",
+      "status": "keep",
+      "summary": "Tauri command layer for device listing, start, stop, metrics, and recording state.",
+      "evidence": "start_recording_inner captures clipboard before capture; stop_recording_inner stores audio and captures screenshot if enabled.",
+      "paths": [
+        "src-tauri/src/commands/audio.rs"
+      ],
+      "tags": [
+        "audio",
+        "clipboard"
+      ],
+      "flags": [
+        "microphone permission and hardware behavior are runtime-only"
+      ],
+      "tests": [],
+      "related": [
+        "audio-capture",
+        "transcription-command"
+      ]
+    },
+    {
+      "id": "audio-capture",
+      "title": "cpal audio capture",
+      "kind": "runtime",
+      "group": "backend",
+      "recommendation": "keep",
+      "risk": "high",
+      "status": "keep",
+      "summary": "Captures microphone audio, exposes levels/FFT, and resamples to 16 kHz for Whisper.",
+      "evidence": "Hardware and permission behavior cannot be proven by static contract tests.",
+      "paths": [
+        "src-tauri/src/audio/capture.rs",
+        "src-tauri/src/audio/mod.rs"
+      ],
+      "tags": [
+        "audio",
+        "manual-qa"
+      ],
+      "flags": [
+        "needs mic permission smoke",
+        "needs real device smoke"
+      ],
+      "tests": [
+        "manual mic recording"
+      ],
+      "related": [
+        "manual-qa",
+        "stt-whisper"
+      ]
+    },
+    {
+      "id": "transcription-command",
+      "title": "transcription and rewrite pipeline",
+      "kind": "runtime",
+      "group": "backend",
+      "recommendation": "keep as product-critical",
+      "risk": "critical",
+      "status": "keep",
+      "summary": "Lists/downloads models, transcribes captured audio locally, applies dictionary replacements, optionally rewrites, and returns final paste text.",
+      "evidence": "Local Whisper runs before run_cloud_rewrite. Rewrite failure sets rewrite_error and leaves final text as local text.",
+      "paths": [
+        "src-tauri/src/commands/transcription.rs"
+      ],
+      "tags": [
+        "whisper",
+        "rewrite",
+        "fallback",
+        "privacy"
+      ],
+      "flags": [
+        "do not make cloud rewrite mandatory",
+        "paste path must use response.text"
+      ],
+      "tests": [
+        "build_rewrite_request_includes_clipboard_and_profile",
+        "cloud_rewrite_config_rejects_remote_without_api_key",
+        "dictionary_replacements_fix_developer_terms_before_rewrite"
+      ],
+      "related": [
+        "state-settings",
+        "preferences-ui",
+        "privacy-doc"
+      ]
+    },
+    {
+      "id": "settings-command",
+      "title": "preferences command DTO",
+      "kind": "runtime",
+      "group": "backend",
+      "recommendation": "keep",
+      "risk": "medium",
+      "status": "keep",
+      "summary": "Maps preferences UI camelCase fields to Settings, validates rewrite provider settings, and persists the config.",
+      "evidence": "Rewrite URL validation allows HTTPS or localhost/127.0.0.1 only.",
+      "paths": [
+        "src-tauri/src/commands/settings.rs"
+      ],
+      "tags": [
+        "settings",
+        "validation"
+      ],
+      "flags": [
+        "remote rewrite requires API key",
+        "writing profile fields cannot be empty"
+      ],
+      "tests": [
+        "preferences_exposes_rewrite_provider_fields",
+        "preferences_save_uses_backend_save_command"
+      ],
+      "related": [
+        "preferences-ui",
+        "state-settings"
+      ]
+    },
+    {
+      "id": "stt-whisper",
+      "title": "Whisper engine",
+      "kind": "runtime",
+      "group": "backend",
+      "recommendation": "keep",
+      "risk": "medium",
+      "status": "keep",
+      "summary": "Manages model enum, model download URLs, local model cache, context cache, and transcription.",
+      "evidence": "Models live under local Zana data directory and are downloaded from Hugging Face.",
+      "paths": [
+        "src-tauri/src/stt/whisper.rs",
+        "src-tauri/src/stt/downloader.rs"
+      ],
+      "tags": [
+        "whisper",
+        "model-cache"
+      ],
+      "flags": [
+        "first transcription depends on model cache",
+        "network is only required for model download unless rewrite is enabled"
+      ],
+      "tests": [
+        "whisper model parse tests"
+      ],
+      "related": [
+        "privacy-doc",
+        "onboarding-runtime"
+      ]
+    },
+    {
+      "id": "hooks-event-bus",
+      "title": "hook event bus",
+      "kind": "runtime",
+      "group": "extension",
+      "recommendation": "keep",
+      "risk": "medium",
+      "status": "review",
+      "summary": "Typed events, handler registration, priority dispatch, and system handlers for logging, metrics, and validation.",
+      "evidence": "Plugins attach through PluginHookAdapter and depend on event compatibility.",
+      "paths": [
+        "src-tauri/src/hooks/event.rs",
+        "src-tauri/src/hooks/bus.rs",
+        "src-tauri/src/hooks/system_handlers.rs"
+      ],
+      "tags": [
+        "hooks",
+        "plugins"
+      ],
+      "flags": [
+        "event contract drift affects plugins"
+      ],
+      "tests": [],
+      "related": [
+        "plugin-manager",
+        "plugin-docs"
+      ]
+    },
+    {
+      "id": "plugin-manager",
+      "title": "plugin manager",
+      "kind": "runtime",
+      "group": "extension",
+      "recommendation": "document placeholder boundary before selling it as complete",
+      "risk": "high",
+      "status": "fix",
+      "summary": "Discovers plugin directories, parses manifests, registers plugin metadata, and attaches hook adapters.",
+      "evidence": "create_plugin_instance is a placeholder; this is not a fully dynamic plugin runtime yet.",
+      "paths": [
+        "src-tauri/src/plugins/manager.rs",
+        "src-tauri/src/plugins/manifest.rs",
+        "src-tauri/src/plugins/hook_adapter.rs"
+      ],
+      "tags": [
+        "plugins",
+        "placeholder"
+      ],
+      "flags": [
+        "plugin docs overstate marketplace/publish surfaces",
+        "loader is metadata and hook adapter, not arbitrary plugin code execution"
+      ],
+      "tests": [
+        "manifest tests in src-tauri/src/plugins/manifest.rs"
+      ],
+      "related": [
+        "plugin-docs",
+        "hooks-event-bus"
+      ]
+    },
+    {
+      "id": "plugin-commands",
+      "title": "plugin IPC commands",
+      "kind": "runtime",
+      "group": "extension",
+      "recommendation": "review before exposing install/uninstall broadly",
+      "risk": "high",
+      "status": "review",
+      "summary": "Lists, enables, disables, installs, and uninstalls plugins from filesystem paths.",
+      "evidence": "uninstall_plugin removes plugin directories; keep UI actions as signals unless explicitly approved.",
+      "paths": [
+        "src-tauri/src/commands/plugins.rs"
+      ],
+      "tags": [
+        "plugins",
+        "filesystem"
+      ],
+      "flags": [
+        "contains recursive directory removal in product code",
+        "needs careful UX and confirmation if user-facing"
+      ],
+      "tests": [],
+      "related": [
+        "plugin-manager"
+      ]
+    },
+    {
+      "id": "onboarding-runtime",
+      "title": "first-run onboarding backend",
+      "kind": "runtime",
+      "group": "backend",
+      "recommendation": "keep",
+      "risk": "medium",
+      "status": "review",
+      "summary": "Checks first-run marker, accessibility permission, opens macOS Settings, downloads Small model, and marks onboarding complete.",
+      "evidence": "Normal Fn setup is skipped during onboarding.",
+      "paths": [
+        "src-tauri/src/onboarding.rs",
+        "src-tauri/src/commands/onboarding.rs"
+      ],
+      "tags": [
+        "onboarding",
+        "permissions",
+        "whisper"
+      ],
+      "flags": [
+        "complete_onboarding_and_exit exits app for restart"
+      ],
+      "tests": [
+        "onboarding response serialization tests"
+      ],
+      "related": [
+        "onboarding-ui",
+        "manual-qa"
+      ]
+    },
+    {
+      "id": "diagnostics",
+      "title": "diagnostics command",
+      "kind": "runtime",
+      "group": "backend",
+      "recommendation": "keep and consider surfacing in support flow",
+      "risk": "medium",
+      "status": "review",
+      "summary": "Checks runtime health areas such as accessibility, audio, model status, and settings paths.",
+      "evidence": "Most diagnostics are runtime/environment-dependent and not captured by static tests.",
+      "paths": [
+        "src-tauri/src/commands/diagnostics.rs"
+      ],
+      "tags": [
+        "diagnostics",
+        "support"
+      ],
+      "flags": [
+        "useful for first-run and release smoke triage"
+      ],
+      "tests": [],
+      "related": [
+        "manual-qa"
+      ]
+    },
+    {
+      "id": "tauri-config",
+      "title": "Tauri bundle config",
+      "kind": "release",
+      "group": "release",
+      "recommendation": "preserve identity unless explicitly approved",
+      "risk": "high",
+      "status": "keep",
+      "summary": "Defines productName qVoice, identifier app.zana, macOS signing identity, bundle targets, tray icon, and security capabilities.",
+      "evidence": "app.zana identity is important for macOS permissions continuity.",
+      "paths": [
+        "src-tauri/tauri.conf.json",
+        "src-tauri/Info.plist",
+        "src-tauri/entitlements.plist"
+      ],
+      "tags": [
+        "release",
+        "identity",
+        "macos"
+      ],
+      "flags": [
+        "tauri config version is 1.0.0 while workspace package is 0.1.0"
+      ],
+      "tests": [
+        "mac_bundle_identity_and_signing_are_stable"
+      ],
+      "related": [
+        "version-drift",
+        "release-scripts"
+      ]
+    },
+    {
+      "id": "capabilities",
+      "title": "Tauri capabilities",
+      "kind": "security",
+      "group": "release",
+      "recommendation": "review permission scope before public release",
+      "risk": "medium",
+      "status": "review",
+      "summary": "Capabilities cover main, preferences, onboarding, and orb windows with FS, shell, dialog, event, and drag permissions.",
+      "evidence": "Contract tests guard preferences and orb drag capability.",
+      "paths": [
+        "src-tauri/tauri.conf.json",
+        "src-tauri/capabilities/default.json"
+      ],
+      "tags": [
+        "tauri",
+        "permissions"
+      ],
+      "flags": [
+        "default capability includes broad fs allow-read and allow-write"
+      ],
+      "tests": [
+        "preferences_window_has_tauri_capability",
+        "orb_window_has_start_dragging_capability"
+      ],
+      "related": [
+        "app-contracts"
+      ]
+    },
+    {
+      "id": "preferences-ui",
+      "title": "preferences UI",
+      "kind": "frontend",
+      "group": "frontend",
+      "recommendation": "keep and test with backend command changes",
+      "risk": "medium",
+      "status": "keep",
+      "summary": "Vanilla preferences window exposes model, input, trigger, orb style, rewrite provider, screenshot, and writing profile fields.",
+      "evidence": "Saves through save_preferences and maps camelCase fields to Rust Preferences.",
+      "paths": [
+        "src-ui/preferences.html"
+      ],
+      "tags": [
+        "preferences",
+        "rewrite",
+        "frontend"
+      ],
+      "flags": [
+        "API key is stored locally in qVoice settings",
+        "provider fields must stay aligned with commands/settings.rs"
+      ],
+      "tests": [
+        "preferences_exposes_rewrite_provider_fields",
+        "preferences_save_uses_backend_save_command",
+        "preferences_exposes_update_check_banner"
+      ],
+      "related": [
+        "settings-command",
+        "privacy-doc"
+      ]
+    },
+    {
+      "id": "orb-ui",
+      "title": "orb UI and lifecycle",
+      "kind": "frontend",
+      "group": "frontend",
+      "recommendation": "keep",
+      "risk": "high",
+      "status": "keep",
+      "summary": "Orb window and lifecycle scripts render the visual recording surface and drag target.",
+      "evidence": "main.rs creates orb window or macOS NSPanel and relays events into it.",
+      "paths": [
+        "src-ui/orb.html",
+        "src-ui/orb-lifecycle.js",
+        "src-ui/orb-fire-v8.js",
+        "src-ui/ORB_CONFIG.md"
+      ],
+      "tags": [
+        "orb",
+        "frontend",
+        "manual-qa"
+      ],
+      "flags": [
+        "fullscreen overlay and compact hitbox require visual smoke",
+        "drag target covered by static contract test"
+      ],
+      "tests": [
+        "mac_orb_panel_uses_compact_geometry",
+        "orb_markup_exposes_explicit_drag_target"
+      ],
+      "related": [
+        "main-entry",
+        "manual-qa"
+      ]
+    },
+    {
+      "id": "onboarding-ui",
+      "title": "onboarding UI",
+      "kind": "frontend",
+      "group": "frontend",
+      "recommendation": "keep but verify against first-run state",
+      "risk": "medium",
+      "status": "review",
+      "summary": "First-run HTML guides accessibility permission and Whisper model download.",
+      "evidence": "Onboarding window is created only when onboarding::is_first_run returns true.",
+      "paths": [
+        "src-ui/onboarding.html",
+        "docs/ONBOARDING_PLAN.md"
+      ],
+      "tags": [
+        "onboarding",
+        "frontend"
+      ],
+      "flags": [
+        "first-run marker state affects whether this appears"
+      ],
+      "tests": [
+        "secondary_windows_have_close_capabilities"
+      ],
+      "related": [
+        "onboarding-runtime"
+      ]
+    },
+    {
+      "id": "legacy-main-ui",
+      "title": "legacy main UI surface",
+      "kind": "frontend",
+      "group": "frontend",
+      "recommendation": "review, label, or remove from public docs if not launched",
+      "risk": "medium",
+      "status": "fix",
+      "summary": "src-ui/index.html and app.js look like a legacy/dev surface. Startup creates onboarding, preferences, about, and orb windows, not a persistent main window.",
+      "evidence": "tauri.conf.json has windows = [] and main.rs builds windows programmatically.",
+      "paths": [
+        "src-ui/index.html",
+        "src-ui/app.js",
+        "src-ui/app.v1.js"
+      ],
+      "tags": [
+        "legacy",
+        "frontend"
+      ],
+      "flags": [
+        "do not cite as live primary UI without proving a window path"
+      ],
+      "tests": [],
+      "related": [
+        "main-entry"
+      ]
+    },
+    {
+      "id": "app-contracts",
+      "title": "active contract tests",
+      "kind": "tests",
+      "group": "verification",
+      "recommendation": "keep and extend for docs drift critical paths",
+      "risk": "low",
+      "status": "keep",
+      "summary": "Static integration-style tests verify Tauri capabilities, preferences fields, bundle identity, update banner, and orb geometry.",
+      "evidence": "Lives under src-tauri/tests and is exercised by cargo test -p Zana-app.",
+      "paths": [
+        "src-tauri/tests/app_contracts.rs"
+      ],
+      "tags": [
+        "tests",
+        "contracts"
+      ],
+      "flags": [
+        "does not prove microphone, accessibility, paste, model download, or GUI launch behavior"
+      ],
+      "tests": [
+        "cargo test -p Zana-app --locked --test app_contracts"
+      ],
+      "related": [
+        "manual-qa",
+        "capabilities"
+      ]
+    },
+    {
+      "id": "root-tests",
+      "title": "root integration tests",
+      "kind": "tests",
+      "group": "verification",
+      "recommendation": "archive or port if still valuable",
+      "risk": "medium",
+      "status": "fix",
+      "summary": "Root tests/integration.rs appears tied to the stale root src/ crate and not the active workspace member.",
+      "evidence": "Root workspace only includes src-tauri.",
+      "paths": [
+        "tests/integration.rs"
+      ],
+      "tags": [
+        "stale-tests"
+      ],
+      "flags": [
+        "easy to mistake for active coverage"
+      ],
+      "tests": [],
+      "related": [
+        "root-src-orphan"
+      ]
+    },
+    {
+      "id": "public-readme",
+      "title": "README",
+      "kind": "docs",
+      "group": "docs",
+      "recommendation": "fix before public release",
+      "risk": "medium",
+      "status": "fix",
+      "summary": "README has useful live orientation but mixes alpha status, coming soon language, missing references, and older privacy wording.",
+      "evidence": "References docs/demo.gif and docs/CONTRIBUTING.md that were not found in the file list.",
+      "paths": [
+        "README.md"
+      ],
+      "tags": [
+        "docs",
+        "stale-docs"
+      ],
+      "flags": [
+        "Current Version says 0.1.0 alpha while tauri config says 1.0.0",
+        "privacy copy says no cloud dependency while rewrite now exists as opt-in"
+      ],
+      "tests": [
+        "manual link/file existence check"
+      ],
+      "related": [
+        "version-drift",
+        "privacy-doc"
+      ]
+    },
+    {
+      "id": "privacy-doc",
+      "title": "privacy policy",
+      "kind": "docs",
+      "group": "docs",
+      "recommendation": "fix immediately to match opt-in rewrite",
+      "risk": "critical",
+      "status": "fix",
+      "summary": "PRIVACY.md still says qVoice does not integrate with third-party services, but live code supports opt-in chat-completions rewrite and optional screenshot context.",
+      "evidence": "src-tauri/src/commands/transcription.rs can call a configured provider when cloud_rewrite_enabled is true.",
+      "paths": [
+        "PRIVACY.md",
+        "src-tauri/src/commands/transcription.rs",
+        "src-tauri/src/state.rs",
+        "src-ui/preferences.html"
+      ],
+      "tags": [
+        "privacy",
+        "stale-docs",
+        "rewrite"
+      ],
+      "flags": [
+        "must distinguish local transcription from opt-in cloud rewrite",
+        "must disclose optional screenshot context"
+      ],
+      "tests": [
+        "preferences_exposes_rewrite_provider_fields"
+      ],
+      "related": [
+        "state-settings",
+        "transcription-command"
+      ]
+    },
+    {
+      "id": "install-doc",
+      "title": "INSTALL guide",
+      "kind": "docs",
+      "group": "docs",
+      "recommendation": "fix before handing to normal users",
+      "risk": "medium",
+      "status": "fix",
+      "summary": "INSTALL.md is mostly a source-build guide and includes destructive uninstall shell examples.",
+      "evidence": "Release install path is not yet the main guide despite release workflow and scripts existing.",
+      "paths": [
+        "INSTALL.md"
+      ],
+      "tags": [
+        "docs",
+        "install",
+        "stale-docs"
+      ],
+      "flags": [
+        "destructive examples should be softened or clearly warned",
+        "normal install vs developer build should be separated"
+      ],
+      "tests": [],
+      "related": [
+        "release-workflows",
+        "release-scripts"
+      ]
+    },
+    {
+      "id": "qa-checklist",
+      "title": "QA checklist",
+      "kind": "docs",
+      "group": "verification",
+      "recommendation": "extend for current release risks",
+      "risk": "medium",
+      "status": "fix",
+      "summary": "QA_CHECKLIST.md covers core surfaces but misses rewrite, screenshot, update check, and packaging smoke specifics.",
+      "evidence": "Live preferences now expose rewrite provider and screenshot fields.",
+      "paths": [
+        "QA_CHECKLIST.md",
+        "src-ui/preferences.html"
+      ],
+      "tags": [
+        "qa",
+        "manual-qa",
+        "stale-docs"
+      ],
+      "flags": [
+        "add opt-in rewrite and local-only negative tests",
+        "add update banner and GitHub release check"
+      ],
+      "tests": [
+        "manual QA"
+      ],
+      "related": [
+        "manual-qa"
+      ]
+    },
+    {
+      "id": "stale-egui-docs",
+      "title": "egui migration docs",
+      "kind": "docs",
+      "group": "docs",
+      "recommendation": "archive or label as historical, not current architecture",
+      "risk": "high",
+      "status": "fix",
+      "summary": "ARCHITECTURE, MIGRATION, and API docs contain egui/pure Rust claims that do not match the live Tauri and src-ui runtime.",
+      "evidence": "tauri.conf.json frontendDist points to ../src-ui and the active crate depends on Tauri.",
+      "paths": [
+        "docs/ARCHITECTURE.md",
+        "docs/MIGRATION.md",
+        "docs/API.md"
+      ],
+      "tags": [
+        "docs",
+        "stale-docs",
+        "egui"
+      ],
+      "flags": [
+        "can mislead future agents into editing wrong code",
+        "do not use as proof that code exists"
+      ],
+      "tests": [],
+      "related": [
+        "root-src-orphan",
+        "repo-state"
+      ]
+    },
+    {
+      "id": "planning-docs",
+      "title": "completed planning docs",
+      "kind": "docs",
+      "group": "docs",
+      "recommendation": "move to archive or annotate with current status",
+      "risk": "medium",
+      "status": "review",
+      "summary": "Integration and completion specs describe work that is partly implemented now, so their task language reads stale.",
+      "evidence": "Live AppState already has PluginManager and plugin commands, despite docs saying they need wiring.",
+      "paths": [
+        "docs/INTEGRATION_SPEC.md",
+        "docs/KVOICE_COMPLETION_SPEC.md"
+      ],
+      "tags": [
+        "docs",
+        "plans",
+        "stale-docs"
+      ],
+      "flags": [
+        "keep as history, not authoritative runtime docs"
+      ],
+      "tests": [],
+      "related": [
+        "plugin-manager"
+      ]
+    },
+    {
+      "id": "onboarding-doc",
+      "title": "onboarding plan",
+      "kind": "docs",
+      "group": "docs",
+      "recommendation": "keep with status annotation",
+      "risk": "low",
+      "status": "review",
+      "summary": "Onboarding plan broadly matches live onboarding window and commands but should say what is shipped versus planned.",
+      "evidence": "src-ui/onboarding.html and onboarding commands exist.",
+      "paths": [
+        "docs/ONBOARDING_PLAN.md",
+        "src-ui/onboarding.html",
+        "src-tauri/src/commands/onboarding.rs"
+      ],
+      "tags": [
+        "docs",
+        "onboarding"
+      ],
+      "flags": [
+        "avoid treating full plan as exact shipped behavior"
+      ],
+      "tests": [],
+      "related": [
+        "onboarding-runtime"
+      ]
+    },
+    {
+      "id": "plugin-docs",
+      "title": "plugin docs",
+      "kind": "docs",
+      "group": "docs",
+      "recommendation": "trim claims to what the runtime actually supports",
+      "risk": "medium",
+      "status": "fix",
+      "summary": "Plugin docs are useful but mix real manifest/hook behavior with marketplace or publish claims that are not proven by the runtime.",
+      "evidence": "PluginManager loads manifests and placeholder instances; marketplace publish path is not live proof.",
+      "paths": [
+        "docs/PLUGIN_DEVELOPMENT.md",
+        "docs/HOOK_HANDLER_GUIDE.md",
+        "plugins/nebula-aura/plugin.toml",
+        "plugins/nebula-aura-gpu/plugin.toml"
+      ],
+      "tags": [
+        "docs",
+        "plugins",
+        "stale-docs"
+      ],
+      "flags": [
+        "separate supported local plugin manifests from aspirational marketplace"
+      ],
+      "tests": [
+        "plugin manifest tests"
+      ],
+      "related": [
+        "plugin-manager",
+        "hooks-event-bus"
+      ]
+    },
+    {
+      "id": "release-workflows",
+      "title": "GitHub CI and release workflows",
+      "kind": "release",
+      "group": "release",
+      "recommendation": "keep, but add artifact smoke evidence before declaring release ready",
+      "risk": "medium",
+      "status": "keep",
+      "summary": "CI runs fmt, check, tests, clippy, and Windows check. Release builds macOS universal DMG and Windows NSIS, then creates a GitHub release.",
+      "evidence": "Release workflow signs and notarizes only when secrets are present.",
+      "paths": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/release.yml"
+      ],
+      "tags": [
+        "ci",
+        "release"
+      ],
+      "flags": [
+        "CI green does not prove visible tray/orb runtime",
+        "artifact launch smoke still needed"
+      ],
+      "tests": [
+        "cargo fmt --all -- --check",
+        "cargo check -p Zana-app --locked",
+        "cargo test -p Zana-app --locked",
+        "cargo clippy -p Zana-app --all-targets --all-features --locked -- -D warnings"
+      ],
+      "related": [
+        "release-scripts",
+        "manual-qa"
+      ]
+    },
+    {
+      "id": "release-scripts",
+      "title": "macOS build and notarization scripts",
+      "kind": "release",
+      "group": "release",
+      "recommendation": "keep and document environment caveats",
+      "risk": "medium",
+      "status": "review",
+      "summary": "Manual scripts build universal macOS bundles, merge binaries, sign, create DMG, and notarize.",
+      "evidence": "Prior memory shows hdiutil create can fail in this environment and app bundle smoke can be blocked by LaunchServices.",
+      "paths": [
+        "scripts/build-macos.sh",
+        "scripts/sign-and-notarize.sh"
+      ],
+      "tags": [
+        "release",
+        "macos",
+        "manual-qa"
+      ],
+      "flags": [
+        "hdiutil may fail depending on environment",
+        "capture exact artifact paths when validating"
+      ],
+      "tests": [
+        "cargo tauri build --bundles app -- --locked",
+        "codesign --verify --deep --strict"
+      ],
+      "related": [
+        "tauri-config",
+        "version-drift"
+      ]
+    },
+    {
+      "id": "update-check",
+      "title": "manual update check",
+      "kind": "runtime",
+      "group": "release",
+      "recommendation": "document as update check, not auto-update",
+      "risk": "medium",
+      "status": "review",
+      "summary": "Preferences can check latest GitHub release. The Tauri updater plugin is present but commented out.",
+      "evidence": "update.rs fetches GitHub releases/latest while main.rs comments out tauri updater plugin.",
+      "paths": [
+        "src-tauri/src/commands/update.rs",
+        "src-tauri/src/main.rs",
+        "src-ui/preferences.html"
+      ],
+      "tags": [
+        "update",
+        "release"
+      ],
+      "flags": [
+        "do not call this auto-update until updater is enabled"
+      ],
+      "tests": [
+        "preferences_exposes_update_check_banner"
+      ],
+      "related": [
+        "public-readme"
+      ]
+    },
+    {
+      "id": "version-drift",
+      "title": "version drift",
+      "kind": "release",
+      "group": "release",
+      "recommendation": "resolve before tagging",
+      "risk": "high",
+      "status": "fix",
+      "summary": "Cargo workspace version, Tauri config version, and README project status disagree.",
+      "evidence": "Cargo.toml says 0.1.0, tauri.conf.json says 1.0.0, README says 0.1.0 alpha.",
+      "paths": [
+        "Cargo.toml",
+        "src-tauri/tauri.conf.json",
+        "README.md"
+      ],
+      "tags": [
+        "release",
+        "stale-docs"
+      ],
+      "flags": [
+        "release notes and bundle filenames can drift from crate metadata"
+      ],
+      "tests": [],
+      "related": [
+        "public-readme",
+        "tauri-config"
+      ]
+    },
+    {
+      "id": "manual-qa",
+      "title": "manual QA surfaces",
+      "kind": "verification",
+      "group": "verification",
+      "recommendation": "run before claiming end-to-end release readiness",
+      "risk": "critical",
+      "status": "review",
+      "summary": "Fn/Ctrl hotkeys, accessibility, microphone permission, Whisper download, paste, orb visibility, plugin loading, rewrite provider, and bundle launch need real runtime checks.",
+      "evidence": "Static tests cover contracts, not macOS permissions, hardware, or visible app behavior.",
+      "paths": [
+        "QA_CHECKLIST.md",
+        "src-tauri/src/main.rs",
+        "src-tauri/src/audio/capture.rs",
+        "src-tauri/src/commands/transcription.rs"
+      ],
+      "tags": [
+        "manual-qa",
+        "release"
+      ],
+      "flags": [
+        "do not call this validated without real runtime evidence"
+      ],
+      "tests": [
+        "Fn hold/release",
+        "double-tap recording",
+        "microphone permission",
+        "auto-paste",
+        "rewrite failure fallback",
+        "orb fullscreen visibility",
+        "bundle launch"
+      ],
+      "related": [
+        "release-workflows",
+        "app-contracts"
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "rule-active-source",
+      "title": "active source rule",
+      "body": "Default to src-tauri and src-ui for live behavior. Treat docs and root src/ as supporting evidence only after checking the runtime path."
+    },
+    {
+      "id": "rule-privacy",
+      "title": "privacy rule",
+      "body": "Local Whisper stays first. Cloud rewrite stays opt-in. Rewrite failure falls back to raw local transcript."
+    },
+    {
+      "id": "rule-release",
+      "title": "release rule",
+      "body": "Do not claim release readiness from cargo gates alone. qVoice needs visible tray/orb, permission, paste, and bundle launch evidence."
+    }
+  ],
+  "actions": [
+    {
+      "id": "action-privacy-doc",
+      "title": "rewrite privacy policy for opt-in cloud rewrite",
+      "priority": "critical",
+      "status": "fix",
+      "summary": "PRIVACY.md must disclose local transcription, opt-in rewrite, provider endpoint/API key storage, optional screenshot context, and fallback behavior.",
+      "paths": [
+        "PRIVACY.md",
+        "src-tauri/src/commands/transcription.rs",
+        "src-ui/preferences.html"
+      ]
+    },
+    {
+      "id": "action-version-drift",
+      "title": "resolve version drift before tagging",
+      "priority": "high",
+      "status": "fix",
+      "summary": "Decide whether the release is 0.1.0 alpha or 1.0.0, then align Cargo, Tauri config, README, and release notes.",
+      "paths": [
+        "Cargo.toml",
+        "src-tauri/tauri.conf.json",
+        "README.md"
+      ]
+    },
+    {
+      "id": "action-stale-docs",
+      "title": "label or archive egui docs",
+      "priority": "high",
+      "status": "fix",
+      "summary": "ARCHITECTURE, MIGRATION, and API should not present egui/no-web architecture as the current runtime while src-tauri and src-ui are active.",
+      "paths": [
+        "docs/ARCHITECTURE.md",
+        "docs/MIGRATION.md",
+        "docs/API.md"
+      ]
+    },
+    {
+      "id": "action-install-guide",
+      "title": "split install guide for users and developers",
+      "priority": "medium",
+      "status": "fix",
+      "summary": "Separate release install from source build, and replace destructive uninstall examples with safer wording.",
+      "paths": [
+        "INSTALL.md"
+      ]
+    },
+    {
+      "id": "action-qa-checklist",
+      "title": "extend QA checklist",
+      "priority": "medium",
+      "status": "fix",
+      "summary": "Add cloud rewrite toggle, screenshot context, local-only negative path, update banner, and artifact launch smoke checks.",
+      "paths": [
+        "QA_CHECKLIST.md"
+      ]
+    },
+    {
+      "id": "action-plugin-docs",
+      "title": "tighten plugin docs to live support",
+      "priority": "medium",
+      "status": "review",
+      "summary": "Clarify manifest and hook behavior versus placeholder dynamic loader and aspirational marketplace publishing.",
+      "paths": [
+        "docs/PLUGIN_DEVELOPMENT.md",
+        "src-tauri/src/plugins/manager.rs"
+      ]
+    },
+    {
+      "id": "action-runtime-smoke",
+      "title": "run actual qVoice runtime smoke",
+      "priority": "critical",
+      "status": "review",
+      "summary": "Launch the app, verify tray/orb visibility, accessibility/mic prompts, record/transcribe/paste, preferences save, and optional rewrite fallback.",
+      "paths": [
+        "src-tauri/src/main.rs",
+        "QA_CHECKLIST.md"
+      ]
+    }
+  ],
+  "comments": [
+    {
+      "id": "comment-1779238359255",
+      "objectId": "privacy-doc",
+      "body": "browser smoke note",
+      "status": "open",
+      "createdAt": "2026-05-20T00:52:39.255Z",
+      "updatedAt": "2026-05-20T00:52:39.255Z"
+    }
+  ],
+  "decisions": []
+}

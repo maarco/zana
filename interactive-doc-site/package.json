@@ -1,0 +1,8 @@
+{
+  "type": "module",
+  "scripts": {
+    "check": "node --check server.mjs && node --check public/app.js",
+    "serve": "node server.mjs",
+    "start": "node server.mjs"
+  }
+}

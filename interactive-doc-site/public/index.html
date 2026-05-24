@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>qVoice Codebase Hub</title>
+    <link rel="stylesheet" href="/app.css">
+  </head>
+  <body>
+    <aside class="side">
+      <div class="brand">
+        <span class="eyebrow">interactive doc site</span>
+        <h1>qVoice</h1>
+        <p>local-first voice pipeline, release map, and docs drift surface</p>
+      </div>
+      <nav>
+        <a href="#overview">overview</a>
+        <a href="#flows">flows</a>
+        <a href="#inventory">inventory</a>
+        <a href="#actions">actions</a>
+        <a href="/api/site">json</a>
+      </nav>
+      <div id="nav-status" class="nav-status"></div>
+    </aside>
+
+    <main class="shell">
+      <section id="overview" class="hero">
+        <div>
+          <span class="eyebrow">docs portal + inventory explorer</span>
+          <h2 id="site-title">qVoice Codebase Hub</h2>
+          <p id="site-subtitle"></p>
+        </div>
+        <div class="filters" aria-label="inventory filters">
+          <input id="search" type="search" placeholder="search files, risks, docs, commands">
+          <select id="group-filter" aria-label="group filter"></select>
+          <select id="risk-filter" aria-label="risk filter"></select>
+          <select id="status-filter" aria-label="status filter"></select>
+        </div>
+      </section>
+
+      <section id="metrics" class="metrics"></section>
+
+      <section class="panel">
+        <div class="section-title">
+          <span>01</span>
+          <h3>start here</h3>
+        </div>
+        <div id="pages" class="page-grid"></div>
+      </section>
+
+      <section id="flows" class="panel">
+        <div class="section-title">
+          <span>02</span>
+          <h3>runtime flows</h3>
+        </div>
+        <div id="flow-list" class="flow-list"></div>
+      </section>
+
+      <section id="inventory" class="panel">
+        <div class="section-title">
+          <span>03</span>
+          <h3>inventory</h3>
+        </div>
+        <div id="items" class="item-grid"></div>
+      </section>
+
+      <section id="actions" class="panel">
+        <div class="section-title">
+          <span>04</span>
+          <h3>action queue</h3>
+        </div>
+        <div id="queue" class="queue"></div>
+      </section>
+    </main>
+
+    <aside id="detail" class="detail" aria-live="polite"></aside>
+    <script src="/app.js"></script>
+  </body>
+</html>
