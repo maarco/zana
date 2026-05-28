@@ -42,8 +42,11 @@ jobs:
       - name: Check build
         run: cargo check -p Zana-app --locked
 
-      - name: Run tests
-        run: cargo test -p Zana-app --locked
+      - name: Compile tests
+        run: cargo test -p Zana-app --locked --no-run
+
+      - name: Run contract tests
+        run: cargo test -p Zana-app --locked --test app_contracts
 
       - name: Run clippy
         run: cargo clippy -p Zana-app --all-targets --all-features --locked -- -D warnings
