@@ -19,7 +19,7 @@ env:
 jobs:
   verify:
     name: Verify release candidate
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     permissions:
       contents: read
 
@@ -50,7 +50,7 @@ jobs:
   build-macos:
     name: Build macOS universal app
     needs: verify
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     permissions:
       contents: read
     env:
