@@ -159,10 +159,8 @@ impl ValidationHandler {
                     return Err(format!("Invalid audio peak: {}", peak));
                 }
             }
-            HookEvent::TranscriptionProgress { percent } => {
-                if !(0.0..=100.0).contains(percent) {
-                    return Err(format!("Invalid progress percentage: {}", percent));
-                }
+            HookEvent::TranscriptionProgress { percent } if !(0.0..=100.0).contains(percent) => {
+                return Err(format!("Invalid progress percentage: {}", percent));
             }
             HookEvent::TranscriptionSegment {
                 start_ms,

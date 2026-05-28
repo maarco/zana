@@ -329,18 +329,17 @@ impl PluginManifest {
                     }
                 }
             }
-            ConfigOptionType::Select => {
+            ConfigOptionType::Select
                 if option
                     .options
                     .as_ref()
                     .map(|o| o.is_empty())
-                    .unwrap_or(true)
-                {
-                    anyhow::bail!(
-                        "Config option '{}': select type requires non-empty options array",
-                        option.key
-                    );
-                }
+                    .unwrap_or(true) =>
+            {
+                anyhow::bail!(
+                    "Config option '{}': select type requires non-empty options array",
+                    option.key
+                );
             }
             _ => {}
         }
