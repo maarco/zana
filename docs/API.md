@@ -1,5 +1,9 @@
 # Zana API Reference
 
+> Historical note: this document predates the current public Zana Tauri
+> runtime and may describe stale library or egui-era APIs. Use `src-tauri/` and
+> `docs/README.md` as the current source of truth.
+
 This document describes the public API of Zana for developers who want to use it as a library or extend it.
 
 ---

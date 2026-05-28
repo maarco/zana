@@ -683,7 +683,7 @@ async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<Rewrite
                             },
                             "project_memories": {
                                 "type": "array",
-                                "description": "Optional JSON strings like {\"key\":\"current_project\",\"value\":\"qVoice\",\"reason\":\"active dictation context\"}.",
+                                "description": "Optional JSON strings like {\"key\":\"current_project\",\"value\":\"Zana\",\"reason\":\"active dictation context\"}.",
                                 "items": { "type": "string" }
                             }
                         },

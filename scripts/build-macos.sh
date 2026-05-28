@@ -1,10 +1,10 @@
 #!/bin/bash
 set -e
 
-# qVoice macOS Build Script
+# Zana macOS Build Script
 # Builds a universal binary (Intel + Apple Silicon)
 
-echo "=== qVoice macOS Build ==="
+echo "=== Zana macOS Build ==="
 
 # Colors
 RED='\033[0;31m'
@@ -63,9 +63,9 @@ if [ "$UNIVERSAL" = true ]; then
 
     # Create universal binary
     echo "Creating universal binary..."
-    ARM_APP="target/aarch64-apple-darwin/release/bundle/macos/qVoice.app"
-    INTEL_APP="target/x86_64-apple-darwin/release/bundle/macos/qVoice.app"
-    UNIVERSAL_APP="target/universal-apple-darwin/release/bundle/macos/qVoice.app"
+    ARM_APP="target/aarch64-apple-darwin/release/bundle/macos/Zana.app"
+    INTEL_APP="target/x86_64-apple-darwin/release/bundle/macos/Zana.app"
+    UNIVERSAL_APP="target/universal-apple-darwin/release/bundle/macos/Zana.app"
     EXECUTABLE="Zana-app"
 
     mkdir -p "$(dirname "$UNIVERSAL_APP")"

@@ -55,7 +55,7 @@ pub async fn check_for_updates() -> UpdateStatus {
 async fn fetch_latest_release(url: &str) -> Result<GitHubRelease, String> {
     let response = reqwest::Client::new()
         .get(url)
-        .header(reqwest::header::USER_AGENT, "qVoice-updater")
+        .header(reqwest::header::USER_AGENT, "Zana-updater")
         .send()
         .await
         .map_err(|error| format!("Update check failed: {error}"))?;
@@ -74,7 +74,7 @@ async fn fetch_latest_release(url: &str) -> Result<GitHubRelease, String> {
 }
 
 fn update_repository() -> Option<(String, String)> {
-    std::env::var("QVOICE_UPDATE_REPOSITORY")
+    std::env::var("ZANA_UPDATE_REPOSITORY")
         .ok()
         .or_else(|| std::env::var("GITHUB_REPOSITORY").ok())
         .or_else(|| Some(env!("CARGO_PKG_REPOSITORY").to_string()))
@@ -133,16 +133,16 @@ mod tests {
     #[test]
     fn parses_supported_github_repository_formats() {
         assert_eq!(
-            parse_github_repository("https://github.com/malmazan/qVoice"),
-            Some(("malmazan".to_string(), "qVoice".to_string()))
+            parse_github_repository("https://github.com/maarco/zana"),
+            Some(("maarco".to_string(), "zana".to_string()))
         );
         assert_eq!(
-            parse_github_repository("git@github.com:malmazan/qVoice.git"),
-            Some(("malmazan".to_string(), "qVoice".to_string()))
+            parse_github_repository("git@github.com:maarco/zana.git"),
+            Some(("maarco".to_string(), "zana".to_string()))
         );
         assert_eq!(
-            parse_github_repository("malmazan/qVoice"),
-            Some(("malmazan".to_string(), "qVoice".to_string()))
+            parse_github_repository("maarco/zana"),
+            Some(("maarco".to_string(), "zana".to_string()))
         );
     }
 

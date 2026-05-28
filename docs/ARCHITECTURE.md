@@ -1,5 +1,9 @@
 # Zana Architecture Specification
 
+> Historical note: this document predates the current public Zana Tauri
+> runtime and describes an egui/wgpu redesign path. Use `src-tauri/`,
+> `src-ui/`, and `docs/README.md` as the current source of truth.
+
 ## Build Status (Jan 2026)
 
 status: ARCHITECTURE REDESIGN IN PROGRESS
@@ -204,7 +208,7 @@ version = "1.0.0"
 description = "Cosmic nebula visualization with swirling particles"
 author = "Zana Team"
 license = "MIT"
-homepage = "https://Zana.app/plugins/nebula-aura"
+homepage = "https://github.com/maarco/zana"
 
 [plugin.type]
 kind = "orb-style"

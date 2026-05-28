@@ -158,8 +158,8 @@ fn mac_bundle_identity_and_signing_are_stable() {
     );
     assert_eq!(
         tauri_config.get("productName").and_then(Value::as_str),
-        Some("qVoice"),
-        "generated macOS bundle should be qVoice.app while identifier stays app.zana"
+        Some("Zana"),
+        "generated macOS bundle should be Zana.app while identifier stays app.zana"
     );
 
     let plist = read_repo_file("src-tauri/Info.plist");
@@ -168,9 +168,77 @@ fn mac_bundle_identity_and_signing_are_stable() {
         "Zana must not advertise Carbon-only launch requirements"
     );
     assert!(
-        plist.contains("<key>CFBundleDisplayName</key>")
-            && plist.contains("<string>qVoice</string>"),
-        "visible app display name should be qVoice while bundle identity stays stable"
+        plist.contains("<key>CFBundleDisplayName</key>") && plist.contains("<string>Zana</string>"),
+        "visible app display name should be Zana while bundle identity stays stable"
+    );
+}
+
+#[test]
+fn mac_release_requires_stable_developer_id_signature() {
+    let tauri_config: Value =
+        serde_json::from_str(&read_repo_file("src-tauri/tauri.conf.json")).unwrap();
+    let signing_identity = tauri_config
+        .pointer("/bundle/macOS/signingIdentity")
+        .and_then(Value::as_str);
+    let sign_script = read_repo_file("scripts/sign-and-notarize.sh");
+    let release_script = read_repo_file("scripts/release-macos.sh");
+
+    assert_ne!(
+        signing_identity,
+        Some("-"),
+        "tauri.conf.json must not default macOS builds to ad-hoc signing"
+    );
+    assert!(
+        sign_script.contains("APPLE_SIGNING_IDENTITY")
+            && sign_script.contains("codesign -dv --verbose=4")
+            && sign_script.contains("spctl --assess"),
+        "macOS signing must use a stable Developer ID identity and verify install identity"
+    );
+    assert!(
+        release_script.contains("scripts/sign-and-notarize.sh")
+            && release_script.contains("APPLE_SIGNING_IDENTITY"),
+        "local macOS release builds must run signing/notarization as part of the release flow"
+    );
+}
+
+#[test]
+fn cut_release_is_tag_driven_and_guarded() {
+    let workflow = read_repo_file(".github/workflows/release.yml");
+    let script = read_repo_file("scripts/cut-release.sh");
+
+    assert!(
+        workflow.contains("tags:") && workflow.contains("\"v*\""),
+        "GitHub release workflow must run from v* tags"
+    );
+    assert!(
+        script.contains("git diff --quiet")
+            && script.contains("git tag -a")
+            && script.contains("git push origin"),
+        "cut-release script must require a clean tree, create an annotated tag, and push it"
+    );
+}
+
+#[test]
+fn public_release_metadata_is_consistent() {
+    let root_cargo = read_repo_file("Cargo.toml");
+    let tauri_config: Value =
+        serde_json::from_str(&read_repo_file("src-tauri/tauri.conf.json")).unwrap();
+    let readme = read_repo_file("README.md");
+
+    assert!(
+        root_cargo.contains("repository = \"https://github.com/maarco/zana\""),
+        "public repository metadata must point at the intended GitHub repo"
+    );
+    assert_eq!(
+        tauri_config.get("version").and_then(Value::as_str),
+        Some("0.1.0"),
+        "Tauri bundle version must stay aligned with the workspace version before public release"
+    );
+    assert!(
+        readme.contains("[CONTRIBUTING.md](CONTRIBUTING.md)")
+            && !readme.contains("docs/demo.gif")
+            && !readme.contains("Coming Soon"),
+        "README must link existing public docs and avoid broken demo/coming-soon release copy"
     );
 }
 

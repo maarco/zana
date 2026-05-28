@@ -1,5 +1,9 @@
 # Zana First-Run Onboarding - Implementation Plan
 
+> Historical note: this is an implementation plan, not current user
+> documentation. Use `README.md`, `INSTALL.md`, and the live `src-ui/` assets for
+> current behavior.
+
 ## Vision
 
 **Zero-friction onboarding**: User downloads app, launches it, completes 3-step wizard, starts transcribing. Total time: <2 minutes.

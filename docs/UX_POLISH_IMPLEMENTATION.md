@@ -1,5 +1,9 @@
 # Zana UX Polish Implementation
 
+> Historical note: this implementation record is preserved for context and may
+> mention older module names or plans. Use the live app files for current
+> behavior.
+
 ## Overview
 This document describes the UX polish features implemented for Zana to provide a professional, polished user experience.
 

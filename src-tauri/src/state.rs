@@ -431,7 +431,7 @@ async fn capture_screenshot_data_url() -> Result<String, String> {
 #[cfg(target_os = "macos")]
 fn capture_macos_screenshot_data_url() -> Result<String, String> {
     let path = std::env::temp_dir().join(format!(
-        "qvoice-rewrite-context-{}-{}.jpg",
+        "zana-rewrite-context-{}-{}.jpg",
         std::process::id(),
         chrono::Utc::now().timestamp_millis()
     ));

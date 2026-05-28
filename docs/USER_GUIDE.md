@@ -1,5 +1,8 @@
 # Zana User Guide
 
+> Historical note: this guide predates the current public Zana packaging and
+> branding. Use `README.md` and `INSTALL.md` for current user instructions.
+
 Welcome to Zana - a beautiful, extensible speech-to-text application with GPU-accelerated audio visualizations.
 
 ---
@@ -782,7 +785,7 @@ pulseaudio --start
 
 **Before Requesting Help:**
 1. Check this guide thoroughly
-2. Search existing issues: https://github.com/Zana/Zana/issues
+2. Search existing GitHub Issues after the repository is published
 3. Gather this information:
    - Zana version (run `Zana --version`)
    - Operating system and version
@@ -799,15 +802,13 @@ RUST_LOG=debug Zana
 ```
 
 **Reporting Issues:**
-- GitHub: https://github.com/Zana/Zana/issues
+- GitHub: use GitHub Issues after the repository is published
 - Include error logs
 - Describe what you expected vs what happened
 - Include system information
 
 **Community:**
-- Discord: https://discord.gg/Zana
-- Forums: https://Zana.app/forum
-- Email: support@Zana.app
+- Use GitHub Issues after the repository is published
 
 ---
 
@@ -1015,7 +1016,7 @@ A: Yes, Zana is released under MIT license. See LICENSE file.
 
 ## Changelog
 
-See [CHANGELOG.md](https://github.com/Zana/Zana/blob/main/CHANGELOG.md) for version history.
+See [CHANGELOG.md](../CHANGELOG.md) for version history.
 
 ---
 
@@ -1027,11 +1028,8 @@ Zana is released under the MIT License.
 
 ## Support
 
-- Website: https://Zana.app
-- Documentation: https://Zana.app/docs
-- GitHub: https://github.com/Zana/Zana
-- Discord: https://discord.gg/Zana
-- Email: support@Zana.app
+- Documentation: see `docs/README.md`
+- GitHub: use this repository after publication
 
 ---
 

@@ -1,6 +1,6 @@
-# qVoice interactive doc site summary
+# Zana interactive doc site summary
 
-Generated for `/Users/malmazan/dev/qVoice`.
+Generated for this repository.
 
 ## chosen structure
 
@@ -20,16 +20,16 @@ Generated for `/Users/malmazan/dev/qVoice`.
 ## highest-risk findings captured in the site
 
 - `src-tauri` is the active workspace; root `src/` is not in the root workspace.
-- `PRIVACY.md` is stale against the opt-in cloud rewrite implementation.
-- version metadata disagrees across `Cargo.toml`, `src-tauri/tauri.conf.json`, and `README.md`.
-- egui migration docs should be archived or labeled as historical.
+- `PRIVACY.md` was updated to disclose opt-in rewrite behavior.
+- release metadata now points at the intended public repository.
+- egui migration docs are labeled as historical.
 - plugin docs overstate live dynamic/plugin marketplace support.
 - build/test gates do not prove visible tray/orb runtime or macOS permissions.
 
 ## run
 
 ```bash
-cd /Users/malmazan/dev/qVoice/interactive-doc-site
+cd interactive-doc-site
 npm run serve
 ```
 

@@ -1,10 +1,8 @@
-# qVoice
+# Zana
 
 **Voice-to-text transcription powered by local Whisper AI**
 
-qVoice is a macOS menubar app that provides instant voice transcription using the Fn key. Press Fn to record, release to transcribe and paste - all processed locally with no cloud dependency.
-
-![qVoice Demo](docs/demo.gif)
+Zana is a macOS menubar app that provides instant voice transcription using the Fn key. Press Fn to record, release to transcribe and paste - all processed locally by default.
 
 ## Features
 
@@ -18,18 +16,18 @@ qVoice is a macOS menubar app that provides instant voice transcription using th
 
 ## System Requirements
 
-- **macOS**: 26.3+ (macOS Sequoia or newer)
+- **macOS**: 13 Ventura or newer recommended
 - **Processor**: Apple Silicon (M1/M2/M3) or Intel
 - **RAM**: 8GB minimum (16GB recommended for larger Whisper models)
 - **Storage**: ~2GB for app + Whisper models
 
 ## Installation
 
-### Option 1: Download Pre-built Binary (Coming Soon)
+### Option 1: Download a Release DMG
 
-1. Download the qVoice DMG from Releases
-2. Open the DMG and drag qVoice to Applications
-3. Launch qVoice from Applications folder
+1. Download the Zana DMG from GitHub Releases once releases are published
+2. Open the DMG and drag Zana to Applications
+3. Launch Zana from Applications folder
 4. Grant accessibility permissions (required for Fn key monitoring)
 
 ### Option 2: Build from Source
@@ -56,8 +54,8 @@ qVoice is a macOS menubar app that provides instant voice transcription using th
 
 ```bash
 # Clone the repository
-git clone <repo-url>
-cd qVoice
+git clone https://github.com/maarco/zana.git
+cd zana
 
 # Build the app (debug mode - faster compile)
 cargo build -p Zana-app
@@ -77,7 +75,7 @@ The compiled binary will be at:
 
 ### 1. Grant Accessibility Permissions
 
-qVoice needs accessibility access to monitor the Fn key globally.
+Zana needs accessibility access to monitor the Fn key globally.
 
 **On first launch, you'll see:**
 ```
@@ -89,14 +87,14 @@ Grant access in System Settings > Privacy & Security > Accessibility
 1. Open **System Settings** > **Privacy & Security** > **Accessibility**
 2. Click the **lock icon** and authenticate
 3. Find **Zana-app** in the list and toggle it **ON**
-4. Restart qVoice
+4. Restart Zana
 
 ### 2. Download Whisper Model
 
-On first transcription, qVoice will automatically download the Whisper model:
+On first transcription, Zana will automatically download the Whisper model:
 - **Small model** (~500MB) - Default, best balance of speed and accuracy
 - **Tiny model** (~75MB) - Faster, less accurate
-- **Base/Medium/Large** - Available via settings (coming soon)
+- **Base/Medium/Large** - Available via settings when downloaded
 
 Models are cached in: `~/Library/Application Support/Zana/models/`
 
@@ -156,7 +154,7 @@ Plugins are automatically loaded on startup. See [docs/HOOK_HANDLER_GUIDE.md](do
 ## Architecture
 
 ```
-qVoice
+Zana
 ├── src-tauri/          Rust backend (Tauri app)
 │   ├── src/
 │   │   ├── audio/      Audio capture via cpal
@@ -180,8 +178,8 @@ qVoice
 
 1. Check if Fn is mapped to system functions:
    - System Settings > Keyboard > Keyboard Shortcuts > Function Keys
-2. Restart qVoice after granting accessibility permissions
-3. Check logs: `tail -f /tmp/qVoice-run.log`
+2. Restart Zana after granting accessibility permissions
+3. Check logs: `tail -f /tmp/Zana-run.log`
 
 ### Orb disappears immediately after double-tap
 
@@ -199,7 +197,7 @@ qVoice
 ### Transcription is inaccurate
 
 - Default model is "Small" (~94% accuracy)
-- For better accuracy, use Medium or Large model (coming soon)
+- For better accuracy, use Medium or Large model from settings
 - Ensure good audio quality (quiet environment, close to mic)
 
 ### App crashes on hide
@@ -218,8 +216,8 @@ cargo run -p Zana-app
 RUST_LOG=debug cargo run -p Zana-app
 
 # Run in tmux for background operation
-tmux new-session -d -s qVoice "cargo run -p Zana-app 2>&1 | tee /tmp/qVoice-run.log"
-tmux attach -t qVoice
+tmux new-session -d -s Zana "cargo run -p Zana-app 2>&1 | tee /tmp/Zana-run.log"
+tmux attach -t Zana
 ```
 
 ### Running Tests
@@ -241,18 +239,17 @@ cargo test -- --nocapture
 # Build optimized binary
 cargo build -p Zana-app --release
 
-# Create macOS app bundle and DMG
-cargo tauri build
-
-# Build universal binary (Intel + Apple Silicon)
-./scripts/build-macos.sh --universal
-
-# Sign and notarize with a stable Developer ID certificate
-export APPLE_DEVELOPER_ID="Developer ID Application: Your Name (TEAMID)"
+# Build, sign, notarize, and verify a universal macOS DMG.
+# Release DMGs must use the same Developer ID identity so macOS Accessibility
+# permissions stay attached across installs.
+export APPLE_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)"
 export APPLE_ID="you@example.com"
 export APPLE_APP_PASSWORD="app-specific-password"
 export APPLE_TEAM_ID="TEAMID"
-./scripts/sign-and-notarize.sh
+./scripts/release-macos.sh
+
+# Cut a GitHub release from a clean tree.
+./scripts/cut-release.sh v0.1.1
 ```
 
 GitHub releases are created from `v*` tags by `.github/workflows/release.yml`.
@@ -275,12 +272,11 @@ Set these repository secrets before publishing signed builds:
 - [x] Fullscreen support
 
 **Roadmap:**
-- [ ] Model selection UI
-- [ ] Settings panel
+- [x] Model selection UI
+- [x] Settings panel
 - [ ] Keyboard shortcuts customization
 - [ ] Multi-language support
 - [ ] GPU acceleration for Whisper
-- [ ] Cloud backup (optional)
 - [x] Signed macOS app bundle
 - [ ] Auto-update
 - [x] System tray icon
@@ -289,7 +285,7 @@ Set these repository secrets before publishing signed builds:
 
 ## Contributing
 
-Contributions welcome! Please see [CONTRIBUTING.md](docs/CONTRIBUTING.md) for guidelines.
+Contributions welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ### Key Areas
 
@@ -313,8 +309,8 @@ MIT License - see [LICENSE](LICENSE) for details
 
 - **Issues**: GitHub Issues
 - **Discussions**: GitHub Discussions
-- **Email**: support@qvoice.app
+- **Support**: use GitHub Issues after the repository is published
 
 ---
 
-Made by the qVoice team
+Made by the Zana team

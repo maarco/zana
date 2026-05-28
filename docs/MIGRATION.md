@@ -1,5 +1,9 @@
 # Migration Guide: Tauri to egui+wgpu
 
+> Historical note: this migration is not the current public architecture. Zana
+> is currently a Tauri 2 app under `src-tauri/` with vanilla UI assets under
+> `src-ui/`.
+
 This document outlines the migration from Tauri architecture to pure Rust with egui+wgpu.
 
 ---

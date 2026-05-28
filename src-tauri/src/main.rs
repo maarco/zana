@@ -129,8 +129,8 @@ static WIN_ORB_VISIBLE: AtomicBool = AtomicBool::new(false);
 /// Create application menu with standard shortcuts
 fn create_app_menu(app: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, tauri::Error> {
     // App menu (macOS standard)
-    let app_menu = SubmenuBuilder::new(app, "qVoice")
-        .item(&PredefinedMenuItem::about(app, Some("About qVoice"), None)?)
+    let app_menu = SubmenuBuilder::new(app, "Zana")
+        .item(&PredefinedMenuItem::about(app, Some("About Zana"), None)?)
         .separator()
         .item(
             &MenuItemBuilder::with_id("preferences", "Preferences...")
@@ -140,11 +140,11 @@ fn create_app_menu(app: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, tauri::Er
         .separator()
         .item(&PredefinedMenuItem::services(app, None)?)
         .separator()
-        .item(&PredefinedMenuItem::hide(app, Some("Hide qVoice"))?)
+        .item(&PredefinedMenuItem::hide(app, Some("Hide Zana"))?)
         .item(&PredefinedMenuItem::hide_others(app, Some("Hide Others"))?)
         .item(&PredefinedMenuItem::show_all(app, None)?)
         .separator()
-        .item(&PredefinedMenuItem::quit(app, Some("Quit qVoice"))?)
+        .item(&PredefinedMenuItem::quit(app, Some("Quit Zana"))?)
         .build()?;
 
     // Edit menu with standard editing commands
@@ -169,7 +169,7 @@ fn create_app_menu(app: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, tauri::Er
     // Help menu
     let help_menu = SubmenuBuilder::new(app, "Help")
         .item(
-            &MenuItemBuilder::with_id("show_help", "qVoice Help")
+            &MenuItemBuilder::with_id("show_help", "Zana Help")
                 .accelerator("CmdOrCtrl+?")
                 .build(app)?,
         )
@@ -282,7 +282,7 @@ fn main() {
                     "onboarding",
                     WebviewUrl::App("onboarding.html".into()),
                 )
-                .title("qVoice Genesis")
+                .title("Zana Genesis")
                 .inner_size(900.0, 700.0)
                 .center()
                 .resizable(false)
@@ -393,7 +393,7 @@ fn main() {
                         if let Some(ref panel) = *panel_guard {
                             let escaped = style.replace('\\', "\\\\").replace('"', "\\\"");
                             let js = format!(
-                                "localStorage.setItem('qVoice_orb_style', '{}'); location.reload()",
+                                "localStorage.setItem('Zana_orb_style', '{}'); location.reload()",
                                 escaped
                             );
                             eval_js_in_panel(panel, &js);
@@ -411,9 +411,8 @@ fn main() {
 
             // Setup system tray menu (tray icon created via config in tauri.conf.json)
             {
-                let quit =
-                    MenuItem::with_id(app, "quit", "Quit qVoice", true, Some("CmdOrCtrl+Q"))?;
-                let about = MenuItem::with_id(app, "about", "About qVoice", true, None::<&str>)?;
+                let quit = MenuItem::with_id(app, "quit", "Quit Zana", true, Some("CmdOrCtrl+Q"))?;
+                let about = MenuItem::with_id(app, "about", "About Zana", true, None::<&str>)?;
                 let preferences = MenuItem::with_id(
                     app,
                     "preferences",
@@ -447,7 +446,7 @@ fn main() {
                                     "about",
                                     WebviewUrl::App("about.html".into()),
                                 )
-                                .title("About qVoice")
+                                .title("About Zana")
                                 .inner_size(400.0, 500.0)
                                 .center()
                                 .resizable(false)
@@ -465,7 +464,7 @@ fn main() {
                                     "preferences",
                                     WebviewUrl::App("preferences.html".into()),
                                 )
-                                .title("qVoice Preferences")
+                                .title("Zana Preferences")
                                 .inner_size(500.0, 600.0)
                                 .center()
                                 .resizable(false)
@@ -483,7 +482,7 @@ fn main() {
                 log::info!("System tray configured");
             }
 
-            log::info!("qVoice initialized successfully");
+            log::info!("Zana initialized successfully");
 
             // Warm up orb window (create, show, hide to preload NSPanel and webview)
             #[cfg(target_os = "macos")]
@@ -575,7 +574,7 @@ fn create_orb_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::E
 
     // Create WebviewWindow - compact, positioned bottom-right
     let orb = WebviewWindowBuilder::new(app, "orb", WebviewUrl::App("orb.html".into()))
-        .title("qVoice Orb")
+        .title("Zana Orb")
         .inner_size(orb_width, orb_height)
         .position(pos_x, pos_y)
         .resizable(false)
@@ -809,8 +808,6 @@ fn setup_config_watcher(app: tauri::AppHandle) {
             // Development paths
             std::path::PathBuf::from("src-ui/orb_config.json"),
             std::path::PathBuf::from("../src-ui/orb_config.json"),
-            // Absolute dev path
-            std::path::PathBuf::from("/Users/malmazan/dev/qVoice/src-ui/orb_config.json"),
         ];
 
         let config_path = possible_paths.into_iter().find(|p| p.exists());
@@ -1540,7 +1537,7 @@ fn win_create_orb_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::erro
     log::info!("[WinOrb] Creating orb window...");
 
     let orb = WebviewWindowBuilder::new(app, "orb", WebviewUrl::App("orb.html".into()))
-        .title("qVoice Orb")
+        .title("Zana Orb")
         .inner_size(400.0, 300.0)
         .position(880.0, 480.0)
         .resizable(false)

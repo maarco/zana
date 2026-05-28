@@ -1,5 +1,5 @@
 /**
- * qVoice - Main Application
+ * Zana - Main Application
  *
  * Pure vanilla JS with WebGPU rendering.
  * No frameworks, no build step required.
@@ -811,7 +811,7 @@ function setupEventListeners() {
 // ============================================================================
 
 async function init() {
-  console.log('[qVoice] Initializing...');
+  console.log('[Zana] Initializing...');
 
   // Initialize renderer
   window.renderer = new NebulaRenderer(elements.canvas);
@@ -826,7 +826,7 @@ async function init() {
   await loadDevices();
   await loadModels();
 
-  console.log('[qVoice] Ready');
+  console.log('[Zana] Ready');
 }
 
 // Start when DOM is ready

@@ -1,10 +1,10 @@
 #!/bin/bash
 set -e
 
-# qVoice macOS Code Signing and Notarization Script
+# Zana macOS Code Signing and Notarization Script
 # Requires Apple Developer account and certificates
 
-echo "=== qVoice Code Signing & Notarization ==="
+echo "=== Zana Code Signing & Notarization ==="
 
 # Colors
 RED='\033[0;31m'
@@ -13,7 +13,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # Configuration - Set these environment variables or modify here
-DEVELOPER_ID="${APPLE_DEVELOPER_ID:-${APPLE_SIGNING_IDENTITY:-}}" # "Developer ID Application: Your Name (TEAMID)"
+DEVELOPER_ID="${APPLE_SIGNING_IDENTITY:-${APPLE_DEVELOPER_ID:-}}" # "Developer ID Application: Your Name (TEAMID)"
 APPLE_ID="${APPLE_ID:-}"                          # Your Apple ID email
 APP_PASSWORD="${APPLE_APP_PASSWORD:-}"            # App-specific password from appleid.apple.com
 TEAM_ID="${APPLE_TEAM_ID:-}"                      # Your 10-character Team ID
@@ -24,7 +24,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # Find the app bundle
 APP_PATH=""
-APP_NAME="qVoice"
+APP_NAME="Zana"
 EXECUTABLE="Zana-app"
 
 if [ -d "$PROJECT_ROOT/target/universal-apple-darwin/release/bundle/macos/$APP_NAME.app" ]; then
@@ -43,8 +43,8 @@ echo "App bundle: $APP_PATH"
 
 # Check for required credentials
 if [ -z "$DEVELOPER_ID" ]; then
-    echo -e "${YELLOW}Warning: APPLE_DEVELOPER_ID/APPLE_SIGNING_IDENTITY not set${NC}"
-    echo "Set environment variable: export APPLE_DEVELOPER_ID=\"Developer ID Application: Your Name (TEAMID)\""
+    echo -e "${YELLOW}Warning: APPLE_SIGNING_IDENTITY/APPLE_DEVELOPER_ID not set${NC}"
+    echo "Set environment variable: export APPLE_SIGNING_IDENTITY=\"Developer ID Application: Your Name (TEAMID)\""
     echo ""
     echo "Available signing identities:"
     security find-identity -v -p codesigning
@@ -73,6 +73,8 @@ sign_app() {
     # Verify signature
     echo "Verifying signature..."
     codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+    codesign -dv --verbose=4 "$APP_PATH"
+    spctl --assess --type execute --verbose=4 "$APP_PATH"
 
     echo -e "${GREEN}App signed successfully!${NC}"
 }
@@ -82,7 +84,7 @@ create_dmg() {
     echo -e "${YELLOW}Creating DMG...${NC}"
 
     DMG_PATH="${APP_PATH%%.app}.dmg"
-    TEMP_DMG="/tmp/qVoice-temp.dmg"
+    TEMP_DMG="/tmp/Zana-temp.dmg"
 
     # Remove existing
     rm -f "$DMG_PATH" "$TEMP_DMG"
@@ -97,6 +99,7 @@ create_dmg() {
 
     # Sign the DMG
     codesign --force --sign "$DEVELOPER_ID" "$DMG_PATH"
+    codesign -dv --verbose=4 "$DMG_PATH"
 
     echo -e "${GREEN}DMG created: $DMG_PATH${NC}"
 }

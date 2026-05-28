@@ -7,7 +7,7 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 authors = ["Marco Almazan"]
-repository = "https://github.com/malmazan/qVoice"
+repository = "https://github.com/maarco/zana"
 
 [workspace.dependencies]
 # GUI Framework

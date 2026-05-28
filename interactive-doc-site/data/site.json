@@ -1,13 +1,13 @@
 {
   "version": 1,
   "meta": {
-    "title": "qVoice Codebase Hub",
+    "title": "Zana Codebase Hub",
     "subtitle": "A repo-local map of the live Tauri app, voice pipeline, docs drift, release gates, and manual QA surfaces.",
     "structure": "docs-portal + inventory-explorer",
     "interactionLevel": 2,
     "generatedAt": "2026-05-20T00:55:00Z",
     "repository": {
-      "root": "/Users/malmazan/dev/qVoice",
+      "root": ".",
       "branch": "main",
       "activeWorkspace": "src-tauri",
       "workspaceNote": "Root Cargo.toml lists only src-tauri as a workspace member. Treat root src/ as a stale trap unless reactivated intentionally."
@@ -355,7 +355,7 @@
         },
         {
           "label": "bundle",
-          "summary": "Release workflow builds universal qVoice.app and DMG."
+          "summary": "Release workflow builds universal Zana.app and DMG."
         },
         {
           "label": "sign",
@@ -818,7 +818,7 @@
       "recommendation": "preserve identity unless explicitly approved",
       "risk": "high",
       "status": "keep",
-      "summary": "Defines productName qVoice, identifier app.zana, macOS signing identity, bundle targets, tray icon, and security capabilities.",
+      "summary": "Defines productName Zana, identifier app.zana, macOS signing identity, bundle targets, tray icon, and security capabilities.",
       "evidence": "app.zana identity is important for macOS permissions continuity.",
       "paths": [
         "src-tauri/tauri.conf.json",
@@ -889,7 +889,7 @@
         "frontend"
       ],
       "flags": [
-        "API key is stored locally in qVoice settings",
+        "API key is stored locally in Zana settings",
         "provider fields must stay aligned with commands/settings.rs"
       ],
       "tests": [
@@ -1048,21 +1048,21 @@
       "title": "README",
       "kind": "docs",
       "group": "docs",
-      "recommendation": "fix before public release",
+      "recommendation": "keep current before public release",
       "risk": "medium",
-      "status": "fix",
-      "summary": "README has useful live orientation but mixes alpha status, coming soon language, missing references, and older privacy wording.",
-      "evidence": "References docs/demo.gif and docs/CONTRIBUTING.md that were not found in the file list.",
+      "status": "keep",
+      "summary": "README now orients public readers to the active Zana build, release, and privacy posture.",
+      "evidence": "Broken demo reference and coming-soon model language were removed; current public docs are linked from docs/README.md.",
       "paths": [
         "README.md"
       ],
       "tags": [
         "docs",
-        "stale-docs"
+        "public-docs"
       ],
       "flags": [
-        "Current Version says 0.1.0 alpha while tauri config says 1.0.0",
-        "privacy copy says no cloud dependency while rewrite now exists as opt-in"
+        "keep version metadata aligned before tagging",
+        "keep optional rewrite privacy copy in sync with runtime"
       ],
       "tests": [
         "manual link/file existence check"
@@ -1077,11 +1077,11 @@
       "title": "privacy policy",
       "kind": "docs",
       "group": "docs",
-      "recommendation": "fix immediately to match opt-in rewrite",
+      "recommendation": "keep aligned with opt-in rewrite behavior",
       "risk": "critical",
-      "status": "fix",
-      "summary": "PRIVACY.md still says qVoice does not integrate with third-party services, but live code supports opt-in chat-completions rewrite and optional screenshot context.",
-      "evidence": "src-tauri/src/commands/transcription.rs can call a configured provider when cloud_rewrite_enabled is true.",
+      "status": "keep",
+      "summary": "PRIVACY.md now distinguishes local transcription from opt-in rewrite provider calls.",
+      "evidence": "The policy discloses model downloads, GitHub update checks, and optional rewrite provider requests.",
       "paths": [
         "PRIVACY.md",
         "src-tauri/src/commands/transcription.rs",
@@ -1205,7 +1205,7 @@
       "evidence": "Live AppState already has PluginManager and plugin commands, despite docs saying they need wiring.",
       "paths": [
         "docs/INTEGRATION_SPEC.md",
-        "docs/KVOICE_COMPLETION_SPEC.md"
+        "docs/ZANA_COMPLETION_SPEC.md"
       ],
       "tags": [
         "docs",
@@ -1453,7 +1453,7 @@
     {
       "id": "rule-release",
       "title": "release rule",
-      "body": "Do not claim release readiness from cargo gates alone. qVoice needs visible tray/orb, permission, paste, and bundle launch evidence."
+      "body": "Do not claim release readiness from cargo gates alone. Zana needs visible tray/orb, permission, paste, and bundle launch evidence."
     }
   ],
   "actions": [
@@ -1526,7 +1526,7 @@
     },
     {
       "id": "action-runtime-smoke",
-      "title": "run actual qVoice runtime smoke",
+      "title": "run actual Zana runtime smoke",
       "priority": "critical",
       "status": "review",
       "summary": "Launch the app, verify tray/orb visibility, accessibility/mic prompts, record/transcribe/paste, preferences save, and optional rewrite fallback.",

@@ -6,6 +6,7 @@ src-tauri/target/
 
 # macOS
 .DS_Store
+**/.DS_Store
 
 # IDEs
 .vscode/
@@ -16,3 +17,21 @@ src-tauri/target/
 # Zana specific
 .Zana/
 models/
+
+# Local app state and credentials
+.env
+.env.*
+!.env.example
+*.log
+*.tmp
+*.bak
+*.dmg
+*.app
+*.ips
+*.p12
+*.cer
+*.mobileprovision
+*.key
+*.pem
+*.sqlite
+*.db

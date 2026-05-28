@@ -867,6 +867,5 @@ impl OrbStylePlugin for FrequencyBars {
 
 ## Support
 
-- Documentation: https://Zana.app/docs/plugins
-- Discord: https://discord.gg/Zana
-- Issues: https://github.com/Zana/Zana/issues
+- Documentation: see `docs/README.md`
+- Issues: use GitHub Issues after the repository is published

@@ -1,4 +1,8 @@
 # Zana Completion Specification
+
+> Historical note: this document is a planning artifact from earlier Zana/Zana
+> development. It is preserved for context, not as the current release plan.
+
 ## Multi-Agent Parallel Development Plan
 
 **Objective**: Complete Zana speech-to-text application with GPU orb visualizations

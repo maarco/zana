@@ -1,0 +1,8 @@
+[allowlist]
+description = "Ignore generated build and schema artifacts"
+paths = [
+  '''^target/''',
+  '''^src-tauri/target/''',
+  '''^src-tauri/gen/schemas/''',
+  '''^Cargo\.lock$''',
+]

@@ -1,5 +1,9 @@
 # Zana Plugin & Hook Integration Spec
 
+> Historical note: this document is an implementation planning artifact. It may
+> describe deleted, renamed, or completed work. Use `src-tauri/` and
+> `docs/README.md` as the current source of truth.
+
 ## Overview
 Complete the integration of three partially-implemented systems in Zana to enable full plugin functionality.
 
