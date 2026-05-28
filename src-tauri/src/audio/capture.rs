@@ -660,10 +660,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires local audio hardware and can hang on hosted macOS runners"]
     fn test_list_devices() {
-        // This may fail in CI without audio devices
         let result = AudioCapture::list_devices();
-        // Just check it doesn't panic
         let _ = result;
     }
 }
