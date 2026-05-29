@@ -6,92 +6,153 @@
   <title>Zana Preferences</title>
   <style>
     :root {
-      --background: oklch(0.13 0 0);
-      --foreground: oklch(0.97 0 0);
-      --card: oklch(0.17 0 0);
-      --card-foreground: oklch(0.97 0 0);
-      --primary: oklch(0.65 0.18 250);
-      --primary-foreground: oklch(0.98 0 0);
-      --muted: oklch(0.22 0 0);
-      --muted-foreground: oklch(0.65 0 0);
-      --accent: oklch(0.25 0 0);
-      --border: oklch(1 0 0 / 8%);
-      --input: oklch(1 0 0 / 12%);
-      --ring: oklch(0.65 0.18 250);
-      --destructive: oklch(0.704 0.191 22.216);
+      --background: #101012;
+      --foreground: #f4f4f5;
+      --card: #1a1a1d;
+      --card-foreground: #f4f4f5;
+      --primary: #c76612;
+      --primary-foreground: #fff7ed;
+      --muted: #242428;
+      --muted-foreground: #8b8994;
+      --accent: #2b2b30;
+      --border: rgba(255, 255, 255, 0.06);
+      --input: rgba(255, 255, 255, 0.12);
+      --ring: #f97316;
+      --destructive: #f87171;
+      --ok: #5cb88a;
+      --settings: #a0927b;
+      --workflow: #b07ee8;
+      --speech: #5b9ef5;
       --radius: 6px;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: Inter, -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
-      background: var(--background);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 120px),
+        var(--background);
       color: var(--foreground);
       min-height: 100vh;
       -webkit-app-region: drag;
+      overflow: hidden;
     }
     .titlebar {
-      height: 38px;
-      background: var(--card);
+      height: 44px;
+      background: rgba(26, 26, 29, 0.96);
       display: flex;
       align-items: center;
-      padding: 0 76px;
-      border-bottom: 1px solid var(--border);
-      gap: 12px;
+      padding: 0 14px;
+      box-shadow: inset 0 -1px rgba(255, 255, 255, 0.04);
+      gap: 10px;
+    }
+    .brand-mark {
+      width: 22px;
+      height: 22px;
+      border-radius: 5px;
+      background: linear-gradient(135deg, #f97316, #7c2d12);
+      display: grid;
+      place-items: center;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+      flex: 0 0 auto;
+    }
+    .brand-mark svg {
+      width: 15px;
+      height: 15px;
+      fill: #111113;
+    }
+    .title-copy {
+      min-width: 0;
+      line-height: 1.1;
     }
     .titlebar h1 {
       font-size: 13px;
-      font-weight: 700;
+      font-weight: 750;
       color: var(--foreground);
-      width: 100%;
-      text-align: center;
+      text-align: left;
+    }
+    .titlebar p {
+      margin-top: 2px;
+      font-size: 10px;
+      color: var(--muted-foreground);
     }
     .update-banner {
-      position: absolute;
-      right: 14px;
+      margin-left: auto;
       height: 24px;
-      padding: 0 10px;
+      padding: 0 9px;
       display: none;
       align-items: center;
       border-radius: var(--radius);
-      background: oklch(0.22 0.11 145);
-      border-color: oklch(0.54 0.14 145 / 48%);
+      background: rgba(92, 184, 138, 0.14);
+      border: 0;
       color: var(--foreground);
       font-size: 11px;
-      font-weight: 650;
+      font-weight: 700;
       -webkit-app-region: no-drag;
     }
     .update-banner.visible {
       display: inline-flex;
     }
     .content {
-      padding: 24px;
+      height: calc(100vh - 44px);
+      padding: 14px;
+      overflow: auto;
       -webkit-app-region: no-drag;
     }
     .section {
-      margin-bottom: 32px;
+      position: relative;
+      margin-bottom: 14px;
+      padding-left: 10px;
+    }
+    .section::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 3px;
+      bottom: 8px;
+      width: 2px;
+      border-radius: 2px;
+      background: var(--settings);
+    }
+    .section[data-section="speech"]::before { background: var(--speech); }
+    .section[data-section="polish"]::before { background: var(--workflow); }
+    .section[data-section="recording"]::before { background: var(--primary); }
+    .section[data-section="shortcuts"]::before { background: var(--settings); }
+    .section[data-section="appearance"]::before { background: var(--ok); }
+    .section[data-section="diagnostics"]::before { background: var(--destructive); }
+    .section-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
     }
     .section-title {
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 800;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: 0;
+      color: var(--foreground);
+      margin-bottom: 0;
+    }
+    .section-meta {
+      font-size: 10px;
       color: var(--muted-foreground);
-      margin-bottom: 12px;
+      white-space: nowrap;
     }
     .setting-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 16px;
-      padding: 12px 16px;
+      gap: 12px;
+      padding: 10px 12px;
       background: var(--card);
-      border: 1px solid var(--border);
+      border: 0;
       border-radius: var(--radius);
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
     .setting-label {
       font-size: 14px;
-      font-weight: 650;
+      font-weight: 700;
       color: var(--card-foreground);
     }
     .setting-desc {
@@ -104,9 +165,9 @@
     }
     select, input[type="text"], input[type="password"], input[type="number"], input[type="url"] {
       background: var(--muted);
-      border: 1px solid transparent;
+      border: 0;
       border-radius: var(--radius);
-      padding: 8px 12px;
+      padding: 7px 10px;
       color: var(--foreground);
       font-size: 13px;
       min-width: 180px;
@@ -119,20 +180,21 @@
     select:focus, input:focus {
       outline: none;
       border-color: var(--ring);
-      box-shadow: 0 0 0 3px oklch(0.65 0.18 250 / 24%);
+      box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.18);
     }
     .toggle {
       position: relative;
       width: 40px;
       height: 24px;
       background: var(--muted);
-      border: 1px solid var(--border);
+      border: 0;
       border-radius: 12px;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: background 0.2s, border-color 0.2s;
     }
     .toggle.active {
-      background: oklch(0.65 0.18 250 / 60%);
+      background: rgba(249, 115, 22, 0.56);
+      border-color: rgba(249, 115, 22, 0.7);
     }
     .toggle::after {
       content: '';
@@ -152,7 +214,7 @@
       width: 100%;
       min-height: 72px;
       background: var(--muted);
-      border: 1px solid transparent;
+      border: 0;
       border-radius: var(--radius);
       padding: 8px 12px;
       color: var(--foreground);
@@ -162,7 +224,7 @@
     textarea:focus {
       outline: none;
       border-color: var(--ring);
-      box-shadow: 0 0 0 3px oklch(0.65 0.18 250 / 24%);
+      box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.18);
     }
     .provider-grid {
       display: grid;
@@ -175,9 +237,9 @@
       grid-template-columns: 180px 1fr;
       align-items: center;
       gap: 12px;
-      padding: 12px 16px;
+      padding: 10px 12px;
       background: var(--card);
-      border: 1px solid var(--border);
+      border: 0;
       border-radius: var(--radius);
     }
     .provider-field input {
@@ -195,9 +257,9 @@
       grid-template-columns: minmax(150px, 0.34fr) minmax(0, 1fr);
       align-items: start;
       gap: 16px;
-      padding: 12px 16px;
+      padding: 10px 12px;
       background: var(--card);
-      border: 1px solid var(--border);
+      border: 0;
       border-radius: var(--radius);
     }
     .writing-profile-field input,
@@ -206,7 +268,24 @@
       min-width: 0;
     }
     .writing-profile-field textarea {
-      min-height: 92px;
+      min-height: 118px;
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .template-vars {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .template-vars code {
+      padding: 4px 7px;
+      border-radius: 4px;
+      background: var(--muted);
+      color: var(--foreground);
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+      font-size: 11px;
     }
     @media (max-width: 560px) {
       .setting-row,
@@ -223,13 +302,16 @@
       }
     }
     .button-row {
+      position: sticky;
+      bottom: -14px;
       display: flex;
       align-items: center;
       justify-content: flex-end;
-      gap: 12px;
-      margin-top: 24px;
-      padding-top: 24px;
-      border-top: 1px solid var(--border);
+      gap: 8px;
+      margin-top: 14px;
+      padding: 10px 0 0;
+      background: linear-gradient(180deg, transparent, var(--background) 16%);
+      box-shadow: inset 0 1px rgba(255, 255, 255, 0.04);
     }
     .save-status {
       margin-right: auto;
@@ -240,14 +322,150 @@
     .save-status.error {
       color: var(--destructive);
     }
+    .inline-status {
+      color: var(--muted-foreground);
+      font-size: 12px;
+      min-height: 16px;
+      text-align: right;
+    }
+    .inline-status.ok {
+      color: var(--ok);
+    }
+    .inline-status.error {
+      color: var(--destructive);
+    }
+    .orb-picker {
+      padding: 10px 12px 12px;
+      background: var(--card);
+      border-radius: var(--radius);
+      margin-bottom: 6px;
+      min-height: 390px;
+    }
+    .orb-picker-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .orb-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--muted-foreground);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .orb-brand::before {
+      content: '';
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--orb-accent, var(--ok));
+      box-shadow: 0 0 14px var(--orb-accent, var(--ok));
+    }
+    .orb-count {
+      color: var(--muted-foreground);
+      font-size: 10px;
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    }
+    .orb-carousel {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr) 34px;
+      align-items: center;
+      gap: 10px;
+    }
+    .orb-arrow {
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      display: grid;
+      place-items: center;
+      background: var(--muted);
+      color: var(--foreground);
+      font-size: 18px;
+    }
+    .orb-arrow:hover {
+      background: var(--accent);
+    }
+    .orb-preview-shell {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(260px, 1fr);
+      align-items: center;
+      gap: 12px;
+    }
+    .orb-preview-frame {
+      width: min(320px, 62vw);
+      aspect-ratio: 1;
+      overflow: hidden;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,255,255,0.04), transparent 68%);
+      position: relative;
+      justify-self: center;
+    }
+    .orb-preview-frame iframe {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 320px;
+      height: 320px;
+      border: 0;
+      background: transparent;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      transform-origin: center;
+    }
+    .orb-preview-copy {
+      min-width: 0;
+      max-width: 620px;
+      justify-self: center;
+      text-align: center;
+    }
+    .orb-preview-name {
+      color: var(--foreground);
+      font-size: 15px;
+      font-weight: 800;
+      line-height: 1.15;
+    }
+    .orb-preview-desc {
+      margin-top: 4px;
+      color: var(--muted-foreground);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .orb-picker-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .orb-active-label {
+      color: var(--muted-foreground);
+      font-size: 11px;
+    }
+    #orb-style {
+      display: none;
+    }
+    @media (max-width: 560px) {
+      .orb-preview-shell {
+        grid-template-columns: 1fr;
+      }
+      .orb-preview-frame {
+        width: min(180px, 100%);
+        justify-self: center;
+      }
+    }
     button {
-      padding: 8px 20px;
+      padding: 7px 14px;
       border-radius: var(--radius);
       font-size: 13px;
       font-weight: 500;
       cursor: pointer;
-      border: 1px solid var(--border);
-      transition: all 0.2s;
+      border: 0;
+      transition: background 0.2s, border-color 0.2s, transform 0.2s;
     }
     button:disabled {
       cursor: not-allowed;
@@ -263,23 +481,43 @@
     .btn-primary {
       background: var(--primary);
       color: var(--primary-foreground);
-      box-shadow: 0 1px 0 oklch(0.65 0.18 250 / 28%);
+      border: 0;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
     }
     .btn-primary:hover {
-      background: oklch(0.7 0.18 250);
+      background: #ea580c;
       transform: translateY(-1px);
+    }
+    #doctor-results {
+      display: none;
+      margin-top: 8px;
+      padding: 10px 12px;
+      background: var(--card);
+      border: 0;
+      border-radius: var(--radius);
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+      font-size: 12px;
     }
   </style>
 </head>
 <body>
   <div class="titlebar">
-    <h1>Preferences</h1>
+    <div class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><path d="M8.9 7h5.2l-2.6 4.4L8.9 7Zm13.5-4.9C21.7.9 20.4.1 18.9.1L9.4 0C7.9 0 6.5.8 5.8 2.1c-.8 1.3-.8 2.8 0 4.1l4.3 7.5c-.3.3-.8.5-1.3.5-.7 0-1.2-.3-1.6-.9L2.6 5.1c-.2-.3-.4-.6-.5-1.1-.1-.7.1-1.3.5-2 .4-.6 1-1.1 1.7-1.4L6.1.1 4.1.1C2.6.1 1.3.9.6 2.1c-.8 1.3-.8 2.8 0 4.1l4.7 8.2c.7 1.3 2.1 2.1 3.6 2.1s2.9-.8 3.6-2.1L16.8 7c.5.1.9.4 1.1.9.3.6.3 1.2 0 1.8L13 17.8c-.2.3-.4.6-.7.9-.5.4-1.2.5-2 .5-.7 0-1.5-.3-2.1-.8l-1.3-1.1 1 1.7c.7 1.2 2.1 2 3.6 2s2.8-.8 3.6-2l4.8-8.1c.8-1.3.8-2.9 0-4.2s-2.1-2.1-3.6-2.1H7.6c-.1-.5-.1-1 .2-1.4.3-.6.9-.9 1.6-.9h.1l9.4.1c.4 0 .7 0 1.1.2.7.2 1.1.7 1.5 1.4.4.6.5 1.4.4 2.2l-.3 1.7 1-1.7c.6-1.3.6-2.8-.2-4.1Z"/></svg>
+    </div>
+    <div class="title-copy">
+      <h1>Preferences</h1>
+      <p>Local voice, rewrite, and capture controls</p>
+    </div>
     <button id="update-banner" class="update-banner" type="button">Update</button>
   </div>
 
   <div class="content">
-    <div class="section">
-      <div class="section-title">Speech Recognition</div>
+    <div class="section" data-section="speech">
+      <div class="section-head">
+        <div class="section-title">Speech Recognition</div>
+        <div class="section-meta">local</div>
+      </div>
 
       <div class="setting-row">
         <div class="setting-copy">
@@ -312,8 +550,11 @@
       </div>
     </div>
 
-    <div class="section">
-      <div class="section-title">Writing Polish</div>
+    <div class="section" data-section="polish">
+      <div class="section-head">
+        <div class="section-title">Writing Polish</div>
+        <div class="section-meta">optional</div>
+      </div>
 
       <div class="setting-row">
         <div class="setting-copy">
@@ -367,37 +608,70 @@
           </div>
           <input type="number" id="rewrite-timeout-ms" value="15000" min="1000" step="1000">
         </div>
+
+        <div class="provider-field">
+          <div>
+            <div class="setting-label">AI Connection</div>
+            <div class="setting-desc">Send a small provider check with the current fields</div>
+          </div>
+          <div style="display: grid; gap: 6px; justify-items: end;">
+            <button class="btn-secondary" id="test-ai-button" onclick="testAiConnection()">
+              Test AI
+            </button>
+            <div class="inline-status" id="test-ai-status" role="status"></div>
+          </div>
+        </div>
       </div>
 
       <div class="writing-profile-grid">
         <div class="writing-profile-field">
           <div class="setting-copy">
-            <div class="setting-label">Purpose</div>
-            <div class="setting-desc">Why this text is being rewritten</div>
+            <div class="setting-label">System Prompt</div>
+            <div class="setting-desc">Template for the rewrite model role and boundaries</div>
           </div>
-          <textarea id="writing-purpose" placeholder="e.g. Write a polished follow-up email"></textarea>
+          <textarea id="writing-purpose" spellcheck="false"></textarea>
         </div>
 
         <div class="writing-profile-field">
           <div class="setting-copy">
-            <div class="setting-label">Tone</div>
-            <div class="setting-desc">Desired writing style</div>
+            <div class="setting-label">Prompt</div>
+            <div class="setting-desc">Template that receives context and the captured speech</div>
           </div>
-          <input type="text" id="writing-tone" value="clear and concise">
+          <textarea id="writing-tone" spellcheck="false"></textarea>
         </div>
 
         <div class="writing-profile-field">
           <div class="setting-copy">
-            <div class="setting-label">Format</div>
-            <div class="setting-desc">Expected output shape</div>
+            <div class="setting-label">Response Contract</div>
+            <div class="setting-desc">Rules for exactly what the model should return</div>
           </div>
-          <input type="text" id="writing-format" value="one short paragraph">
+          <textarea id="writing-format" spellcheck="false"></textarea>
+        </div>
+
+        <div class="writing-profile-field">
+          <div class="setting-copy">
+            <div class="setting-label">Variables</div>
+            <div class="setting-desc">Use these in prompt templates</div>
+          </div>
+          <div class="template-vars">
+            <code>{time}</code>
+            <code>{captured}</code>
+            <code>{clipboard}</code>
+            <code>{screen_shot}</code>
+            <code>{dictionary}</code>
+            <code>{history}</code>
+            <code>{style_memory}</code>
+            <code>{project_memory}</code>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="section">
-      <div class="section-title">Recording</div>
+    <div class="section" data-section="recording">
+      <div class="section-head">
+        <div class="section-title">Recording</div>
+        <div class="section-meta">input</div>
+      </div>
 
       <div class="setting-row">
         <div>
@@ -431,8 +705,11 @@
       </div>
     </div>
 
-    <div class="section">
-      <div class="section-title">Keyboard Shortcuts</div>
+    <div class="section" data-section="shortcuts">
+      <div class="section-head">
+        <div class="section-title">Keyboard Shortcuts</div>
+        <div class="section-meta">system</div>
+      </div>
 
       <div class="setting-row">
         <div>
@@ -456,25 +733,37 @@
       </div>
     </div>
 
-    <div class="section">
-      <div class="section-title">Appearance</div>
+    <div class="section" data-section="appearance">
+      <div class="section-head">
+        <div class="section-title">Appearance</div>
+        <div class="section-meta">orb</div>
+      </div>
 
-      <div class="setting-row">
-        <div>
-          <div class="setting-label">Orb Style</div>
-          <div class="setting-desc">Visual style for the recording indicator</div>
+      <div class="orb-picker" id="orb-picker">
+        <select id="orb-style" aria-label="Orb style"></select>
+        <div class="orb-picker-head">
+          <div class="orb-brand">Zana orb</div>
+          <div class="orb-count" id="orb-count">01 / 09</div>
         </div>
-        <select id="orb-style">
-          <option value="fire-v8" selected>Cosmic Fire V8 (Latest)</option>
-          <option value="fire-v7">Cosmic Fire V7</option>
-          <option value="fire-v6">Cosmic Fire V6</option>
-          <option value="fire-v5">Cosmic Fire V5</option>
-          <option value="fire-v4">Cosmic Fire V4</option>
-          <option value="fire-v3">Cosmic Fire V3</option>
-          <option value="fire-v2">Cosmic Fire V2</option>
-          <option value="fire">Cosmic Fire V1</option>
-          <option value="nebula">Nebula Aura</option>
-        </select>
+        <div class="orb-carousel">
+          <button class="orb-arrow" type="button" onclick="shiftOrbPreview(-1)" aria-label="Previous orb">&lt;</button>
+          <div class="orb-preview-shell">
+            <div class="orb-preview-frame">
+              <iframe id="orb-preview" title="Orb preview" src="orb.html?style=fire-v8"></iframe>
+            </div>
+            <div class="orb-preview-copy">
+              <div class="orb-preview-name" id="orb-preview-name">Zana Cosmos</div>
+              <div class="orb-preview-desc" id="orb-preview-desc">
+                wide field stars, soft voice rings, clean transparent edge
+              </div>
+            </div>
+          </div>
+          <button class="orb-arrow" type="button" onclick="shiftOrbPreview(1)" aria-label="Next orb">&gt;</button>
+        </div>
+        <div class="orb-picker-actions">
+          <div class="orb-active-label" id="orb-active-label">selected: Zana Cosmos</div>
+          <button class="btn-primary" id="orb-select-button" type="button" onclick="selectPreviewedOrb()">Select</button>
+        </div>
       </div>
 
       <div class="setting-row">
@@ -486,8 +775,11 @@
       </div>
     </div>
 
-    <div class="section">
-      <div class="section-title">Diagnostics</div>
+    <div class="section" data-section="diagnostics">
+      <div class="section-head">
+        <div class="section-title">Diagnostics</div>
+        <div class="section-meta">health</div>
+      </div>
 
       <div class="setting-row">
         <div>
@@ -497,7 +789,7 @@
         <button class="btn-primary" onclick="runDoctor()">Doctor</button>
       </div>
 
-      <div id="doctor-results" style="display: none; margin-top: 12px; padding: 12px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); font-family: monospace; font-size: 12px;">
+      <div id="doctor-results">
         <div style="margin-bottom: 8px; font-weight: 600;" id="doctor-status">running checks...</div>
         <div id="doctor-output"></div>
       </div>
@@ -510,7 +802,12 @@
     </div>
   </div>
 
+  <script src="orb-styles.js"></script>
   <script>
+    const ORB_STYLES = window.ZANA_ORB_STYLES || [];
+    let previewOrbIndex = 0;
+    let selectedOrbStyle = 'fire-v8';
+
     // Toggle switches
     document.querySelectorAll('.toggle').forEach(toggle => {
       toggle.addEventListener('click', () => {
@@ -522,6 +819,12 @@
       const status = document.getElementById('save-status');
       status.textContent = message;
       status.className = type ? `save-status ${type}` : 'save-status';
+    }
+
+    function setInlineStatus(id, message, type = '') {
+      const status = document.getElementById(id);
+      status.textContent = message;
+      status.className = type ? `inline-status ${type}` : 'inline-status';
     }
 
     // window.close() is a no-op for Tauri v2 secondary windows (the standard
@@ -558,6 +861,76 @@
       const field = document.getElementById(id);
       if (value !== undefined && value !== null) {
         field.value = String(value);
+      }
+    }
+
+    function setupOrbOptions() {
+      const select = document.getElementById('orb-style');
+      select.innerHTML = '';
+      ORB_STYLES.forEach(style => {
+        const option = document.createElement('option');
+        option.value = style.id;
+        option.textContent = style.name;
+        select.appendChild(option);
+      });
+    }
+
+    function getOrbIndex(styleId) {
+      const index = ORB_STYLES.findIndex(style => style.id === styleId);
+      return index >= 0 ? index : 0;
+    }
+
+    function renderOrbPreview() {
+      if (!ORB_STYLES.length) {
+        return;
+      }
+
+      const style = ORB_STYLES[previewOrbIndex];
+      const picker = document.getElementById('orb-picker');
+      const preview = document.getElementById('orb-preview');
+      const count = document.getElementById('orb-count');
+      const name = document.getElementById('orb-preview-name');
+      const desc = document.getElementById('orb-preview-desc');
+      const active = document.getElementById('orb-active-label');
+      const selectButton = document.getElementById('orb-select-button');
+      const isSelected = selectedOrbStyle === style.id;
+
+      picker.style.setProperty('--orb-accent', style.accent);
+      preview.src = `orb.html?style=${encodeURIComponent(style.id)}`;
+      count.textContent = `${String(previewOrbIndex + 1).padStart(2, '0')} / ${String(ORB_STYLES.length).padStart(2, '0')}`;
+      name.textContent = style.name;
+      desc.textContent = style.description;
+      active.textContent = `selected: ${ORB_STYLES[getOrbIndex(selectedOrbStyle)].name}`;
+      selectButton.textContent = isSelected ? 'Selected' : 'Select';
+      selectButton.disabled = isSelected;
+    }
+
+    function shiftOrbPreview(direction) {
+      previewOrbIndex = (previewOrbIndex + direction + ORB_STYLES.length) % ORB_STYLES.length;
+      renderOrbPreview();
+    }
+
+    function setOrbStyleValue(styleId) {
+      selectedOrbStyle = ORB_STYLES.some(style => style.id === styleId) ? styleId : 'fire-v8';
+      const select = document.getElementById('orb-style');
+      select.value = selectedOrbStyle;
+      previewOrbIndex = getOrbIndex(selectedOrbStyle);
+      renderOrbPreview();
+    }
+
+    async function selectPreviewedOrb() {
+      const style = ORB_STYLES[previewOrbIndex];
+      selectedOrbStyle = style.id;
+      document.getElementById('orb-style').value = style.id;
+      renderOrbPreview();
+
+      if (window.__TAURI__) {
+        try {
+          const { invoke } = window.__TAURI__.core;
+          await invoke('set_orb_style', { style: style.id });
+        } catch (e) {
+          console.warn('Failed to live-apply orb style:', e);
+        }
       }
     }
 
@@ -605,7 +978,7 @@
       setFieldValue('min-hold', prefs.minHoldDuration);
       setFieldValue('trigger-key', prefs.triggerKey);
       setFieldValue('global-shortcut', prefs.globalShortcut);
-      setFieldValue('orb-style', prefs.orbStyle);
+      setOrbStyleValue(prefs.orbStyle);
       setToggle('menubar-toggle', prefs.showInMenuBar);
       setToggle('cloud-rewrite-toggle', prefs.cloudRewriteEnabled);
       setToggle('rewrite-screenshot-toggle', prefs.rewriteIncludeScreenshot);
@@ -694,6 +1067,35 @@
       }
     }
 
+    async function testAiConnection() {
+      const button = document.getElementById('test-ai-button');
+      setInlineStatus('test-ai-status', 'testing...');
+      button.disabled = true;
+
+      if (!window.__TAURI__) {
+        setInlineStatus('test-ai-status', 'only works in the app', 'error');
+        button.disabled = false;
+        return;
+      }
+
+      try {
+        const { invoke } = window.__TAURI__.core;
+        const result = await invoke('test_ai_connection', {
+          preferences: collectPreferences()
+        });
+
+        if (result.success) {
+          setInlineStatus('test-ai-status', result.message || 'connected', 'ok');
+        } else {
+          setInlineStatus('test-ai-status', result.message || 'test failed', 'error');
+        }
+      } catch (e) {
+        setInlineStatus('test-ai-status', String(e), 'error');
+      } finally {
+        button.disabled = false;
+      }
+    }
+
     async function openAccessibilitySettings() {
       const { open } = window.__TAURI__.shell;
       open('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
@@ -762,6 +1164,9 @@
 
     // Load current preferences on page load
     document.addEventListener('DOMContentLoaded', async () => {
+      setupOrbOptions();
+      setOrbStyleValue('fire-v8');
+
       if (!window.__TAURI__) {
         await loadAudioInputs();
         return;

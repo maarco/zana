@@ -407,6 +407,17 @@ function render() {
     }
   }
 
+  // Fade the canvas to transparent before the rectangular panel edge.
+  ctx.globalCompositeOperation = 'destination-in';
+  const fadeGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxRadius * 0.98);
+  fadeGrad.addColorStop(0, 'rgba(255,255,255,1)');
+  fadeGrad.addColorStop(0.52, 'rgba(255,255,255,1)');
+  fadeGrad.addColorStop(0.78, 'rgba(255,255,255,0.22)');
+  fadeGrad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = fadeGrad;
+  ctx.fillRect(0, 0, w, h);
+  ctx.globalCompositeOperation = 'source-over';
+
   animationId = requestAnimationFrame(render);
 }
 

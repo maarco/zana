@@ -49,6 +49,14 @@
     #drag-region:active { cursor: grabbing; }
     .status.recording { color: rgba(255,100,100,0.9); }
     .status.processing { color: rgba(100,200,255,0.9); }
+    body.preview {
+      cursor: default;
+      -webkit-app-region: no-drag;
+    }
+    body.preview #drag-region,
+    body.preview .status {
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -60,6 +68,7 @@
   <script src="notifications.js"></script>
   <!-- Pauses animation loops while the hidden orb panel is inactive -->
   <script src="orb-runtime.js"></script>
+  <script src="orb-styles.js"></script>
   <!-- Orb lifecycle framework (activates only for migrated renderers) -->
   <script src="orb-lifecycle.js"></script>
   <!-- Orb renderer loaded dynamically based on preference -->
@@ -78,8 +87,14 @@
       'fire-v8': 'orb-fire-v8.js'
     };
 
-    // Get orb style from localStorage (set by Rust via eval_js on macOS)
-    const orbStyle = localStorage.getItem('Zana_orb_style')
+    const params = new URLSearchParams(window.location.search);
+    const previewStyle = params.get('style');
+    if (previewStyle) {
+      document.body.classList.add('preview');
+    }
+
+    // Get orb style from URL preview or localStorage (set by Rust via eval_js on macOS)
+    const orbStyle = previewStyle
       || localStorage.getItem('Zana_orb_style')
       || 'fire-v8';
 
@@ -100,6 +115,19 @@
       }
       if (window.__orbRuntime) {
         window.__orbRuntime.installControlBridge();
+      }
+      if (previewStyle) {
+        const runPreviewSignal = () => {
+          if (window.resetOrb) window.resetOrb();
+          if (window.fadeIn) window.fadeIn();
+          if (window.setRecordingState) window.setRecordingState(true, false);
+        };
+        runPreviewSignal();
+        window.__orbPreviewAudio = window.setInterval(() => {
+          const pulse = 0.16 + Math.sin(Date.now() / 260) * 0.05;
+          if (window.setRecordingState) window.setRecordingState(true, false);
+          if (window.setAudioLevel) window.setAudioLevel(pulse, pulse + 0.18);
+        }, 120);
       }
     };
 
@@ -146,7 +174,11 @@
 
         listen('audio-level', (event) => {
           if (window.setAudioLevel) {
-            window.setAudioLevel(event.payload);
+            if (event.payload && typeof event.payload === 'object') {
+              window.setAudioLevel(event.payload.level, event.payload.peak);
+            } else {
+              window.setAudioLevel(event.payload);
+            }
           }
         });
 

@@ -182,7 +182,8 @@ void main() {
   float vig = 1.0 - smoothstep(0.25, 0.7, d);
   col *= vig;
 
-  alpha = clamp(alpha, 0.0, 1.0) * uOpacity;
+  float edgeMask = 1.0 - smoothstep(0.52, 0.78, d);
+  alpha = clamp(alpha, 0.0, 1.0) * edgeMask * uOpacity;
   fragColor = vec4(col * alpha, alpha);
 }`;
 

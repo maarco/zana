@@ -25,11 +25,14 @@ let config = {
   window: { size: 300, panelLevel: 1000, fadeOutDelay: 1000, animationCompleteDelay: 3600 }
 };
 
-// Load config from JSON file (once at startup)
-fetch('orb_config.json')
-  .then(r => r.json())
-  .then(c => { config = c; console.log('[Orb] Config loaded'); })
-  .catch(e => console.warn('[Orb] Using default config:', e));
+// Load config from JSON file when the app serves assets. File previews cannot
+// fetch sibling files, so they keep the bundled defaults.
+if (window.location.protocol !== 'file:') {
+  fetch('orb_config.json')
+    .then(r => r.json())
+    .then(c => { config = c; console.log('[Orb] Config loaded'); })
+    .catch(e => console.warn('[Orb] Using default config:', e));
+}
 
 // Hot reload: Rust pushes config updates via this function
 window.updateConfig = function(jsonStr) {
@@ -350,6 +353,17 @@ function render() {
       isPoofing = false;
     }
   }
+
+  // Fade the canvas to transparent before the rectangular panel edge.
+  ctx.globalCompositeOperation = 'destination-in';
+  const fadeGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxRadius * 0.98);
+  fadeGrad.addColorStop(0, 'rgba(255,255,255,1)');
+  fadeGrad.addColorStop(0.52, 'rgba(255,255,255,1)');
+  fadeGrad.addColorStop(0.78, 'rgba(255,255,255,0.22)');
+  fadeGrad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = fadeGrad;
+  ctx.fillRect(0, 0, w, h);
+  ctx.globalCompositeOperation = 'source-over';
 
   animationId = requestAnimationFrame(render);
 }

@@ -16,20 +16,20 @@ use tokio::sync::{Mutex, RwLock};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WritingProfile {
-    /// Why and where the rewritten text will be used
+    /// System prompt template for the rewrite provider
     pub purpose: String,
-    /// Tone for rewritten output
+    /// User prompt template for the rewrite provider
     pub tone: String,
-    /// Output shape/structure expectation
+    /// Response contract appended to the prompt
     pub format: String,
 }
 
 impl Default for WritingProfile {
     fn default() -> Self {
         Self {
-            purpose: "Produce clear, useful text".to_string(),
-            tone: "clear and concise".to_string(),
-            format: "one short paragraph".to_string(),
+            purpose: "You are a local-first AI writing engine inside Zana. The time is {time}.".to_string(),
+            tone: "Context may be attached to help rewrite speech captured through a local Whisper speech-to-text system.\n\nScreenshot: {screen_shot}\nClipboard: {clipboard}\n\nHere is what Whisper captured:\n{captured}".to_string(),
+            format: "Respond with only the final paste-ready text. Preserve the user's meaning, point of view, names, numbers, and action items. Do not explain what changed.".to_string(),
         }
     }
 }

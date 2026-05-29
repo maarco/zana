@@ -5,7 +5,9 @@
 use crate::state::{AppState, Settings};
 use crate::stt::WhisperModel;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tauri::{AppHandle, Emitter, State};
+use tokio::time::{timeout, Duration};
 
 /// Response for settings operations
 #[derive(Debug, Serialize, Deserialize)]
@@ -13,6 +15,14 @@ pub struct SettingsResponse {
     pub success: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+/// Response for testing the configured AI rewrite provider.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiTestResponse {
+    pub success: bool,
+    pub message: String,
 }
 
 /// Preferences edited in the Preferences window.
@@ -92,15 +102,15 @@ impl Preferences {
         }
 
         if self.writing_purpose.trim().is_empty() {
-            return Err("Writing purpose cannot be empty".to_string());
+            return Err("System prompt cannot be empty".to_string());
         }
 
         if self.writing_tone.trim().is_empty() {
-            return Err("Writing tone cannot be empty".to_string());
+            return Err("Prompt template cannot be empty".to_string());
         }
 
         if self.writing_format.trim().is_empty() {
-            return Err("Writing format cannot be empty".to_string());
+            return Err("Response contract cannot be empty".to_string());
         }
 
         if self.cloud_rewrite_enabled
@@ -154,6 +164,28 @@ impl Preferences {
         settings.orb_style = Some(self.orb_style.clone());
         settings.show_in_menu_bar = self.show_in_menu_bar;
     }
+
+    fn validate_ai_test(&self) -> Result<(), String> {
+        if self.rewrite_model.trim().is_empty() {
+            return Err("Rewrite model cannot be empty".to_string());
+        }
+
+        if !is_allowed_rewrite_url(&self.rewrite_api_url) {
+            return Err(
+                "Rewrite API URL must use https unless it is localhost or 127.0.0.1".to_string(),
+            );
+        }
+
+        if !is_local_rewrite_url(&self.rewrite_api_url) && self.rewrite_api_key.trim().is_empty() {
+            return Err("Rewrite API key is required for remote providers".to_string());
+        }
+
+        if self.rewrite_timeout_ms == 0 {
+            return Err("Rewrite timeout must be greater than zero".to_string());
+        }
+
+        Ok(())
+    }
 }
 
 fn is_local_rewrite_url(url: &str) -> bool {
@@ -164,6 +196,21 @@ fn is_local_rewrite_url(url: &str) -> bool {
 
 fn is_allowed_rewrite_url(url: &str) -> bool {
     url.starts_with("https://") || is_local_rewrite_url(url)
+}
+
+fn normalize_ai_test_url(url: &str) -> String {
+    let trimmed = url.trim();
+    if !is_local_rewrite_url(trimmed) {
+        return trimmed.to_string();
+    }
+
+    match reqwest::Url::parse(trimmed) {
+        Ok(mut parsed) if parsed.path() == "/" || parsed.path().is_empty() => {
+            parsed.set_path("/v1/chat/completions");
+            parsed.to_string()
+        }
+        _ => trimmed.to_string(),
+    }
 }
 
 /// Load preferences for the Preferences window.
@@ -208,6 +255,80 @@ pub async fn save_preferences(
     })
 }
 
+/// Test the AI rewrite provider using the current Preferences form values.
+#[tauri::command]
+pub async fn test_ai_connection(preferences: Preferences) -> Result<AiTestResponse, String> {
+    if let Err(error) = preferences.validate_ai_test() {
+        return Ok(AiTestResponse {
+            success: false,
+            message: error,
+        });
+    }
+
+    let request_body = json!({
+        "model": preferences.rewrite_model.trim(),
+        "messages": [
+            {
+                "role": "system",
+                "content": "Reply with exactly: Zana AI test ok"
+            },
+            {
+                "role": "user",
+                "content": "Zana AI connection test."
+            }
+        ],
+        "temperature": 0,
+        "max_tokens": 16
+    });
+
+    let client = reqwest::Client::new();
+    let url = normalize_ai_test_url(&preferences.rewrite_api_url);
+    let call = async {
+        let mut request = client.post(&url).json(&request_body);
+
+        if !preferences.rewrite_api_key.trim().is_empty() {
+            request = request.bearer_auth(preferences.rewrite_api_key.trim());
+        }
+
+        let response = request
+            .send()
+            .await
+            .map_err(|error| format!("AI test request failed: {}", error))?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            let detail = body.trim();
+            let message = if detail.is_empty() {
+                format!("AI test failed with status {}", status)
+            } else {
+                format!("AI test failed with status {}: {}", status, detail)
+            };
+            return Err(message);
+        }
+
+        response
+            .json::<serde_json::Value>()
+            .await
+            .map_err(|error| format!("AI test response parse failed: {}", error))
+    };
+
+    match timeout(Duration::from_millis(preferences.rewrite_timeout_ms), call).await {
+        Ok(Ok(_payload)) => Ok(AiTestResponse {
+            success: true,
+            message: "AI provider responded".to_string(),
+        }),
+        Ok(Err(error)) => Ok(AiTestResponse {
+            success: false,
+            message: error,
+        }),
+        Err(_) => Ok(AiTestResponse {
+            success: false,
+            message: "AI test timed out".to_string(),
+        }),
+    }
+}
+
 /// Set the orb visual style
 ///
 /// Saves the style to settings and notifies the orb window to reload.
@@ -238,6 +359,74 @@ pub async fn set_orb_style(
         success: true,
         error: None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Preferences;
+
+    fn test_preferences() -> Preferences {
+        Preferences {
+            cloud_rewrite_enabled: true,
+            whisper_model: "small".to_string(),
+            language: "auto".to_string(),
+            audio_input: "default".to_string(),
+            double_tap_enabled: true,
+            min_hold_duration: 300,
+            trigger_key: "fn".to_string(),
+            global_shortcut: "Cmd+Shift+Space".to_string(),
+            orb_style: "fire-v8".to_string(),
+            show_in_menu_bar: true,
+            rewrite_api_key: "sk-test".to_string(),
+            rewrite_model: "gpt-4o-mini".to_string(),
+            rewrite_api_url: "https://api.openai.com/v1/chat/completions".to_string(),
+            rewrite_timeout_ms: 15_000,
+            rewrite_include_screenshot: false,
+            writing_purpose: "Write polished text".to_string(),
+            writing_tone: "clear and concise".to_string(),
+            writing_format: "one short paragraph".to_string(),
+        }
+    }
+
+    #[test]
+    fn ai_test_requires_remote_api_key() {
+        let mut prefs = test_preferences();
+        prefs.rewrite_api_key.clear();
+
+        let error = prefs.validate_ai_test().unwrap_err();
+
+        assert_eq!(error, "Rewrite API key is required for remote providers");
+    }
+
+    #[test]
+    fn ai_test_allows_local_url_without_api_key() {
+        let mut prefs = test_preferences();
+        prefs.rewrite_api_key.clear();
+        prefs.rewrite_api_url = "http://localhost:11434/v1/chat/completions".to_string();
+
+        assert!(prefs.validate_ai_test().is_ok());
+    }
+
+    #[test]
+    fn ai_test_rejects_insecure_remote_url() {
+        let mut prefs = test_preferences();
+        prefs.rewrite_api_url = "http://example.com/v1/chat/completions".to_string();
+
+        let error = prefs.validate_ai_test().unwrap_err();
+
+        assert_eq!(
+            error,
+            "Rewrite API URL must use https unless it is localhost or 127.0.0.1"
+        );
+    }
+
+    #[test]
+    fn ai_test_expands_local_server_root() {
+        assert_eq!(
+            super::normalize_ai_test_url("http://localhost:11434"),
+            "http://localhost:11434/v1/chat/completions"
+        );
+    }
 }
 
 /// Get the current orb style

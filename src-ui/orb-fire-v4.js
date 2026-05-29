@@ -339,10 +339,10 @@ function render() {
   // ========================================
   // Use destination-in compositing to fade edges to transparent
   ctx.globalCompositeOperation = 'destination-in';
-  const fadeGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
+  const fadeGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR * 0.98);
   fadeGrad.addColorStop(0, 'rgba(255,255,255,1)');
-  fadeGrad.addColorStop(0.6, 'rgba(255,255,255,1)');
-  fadeGrad.addColorStop(0.85, 'rgba(255,255,255,0.5)');
+  fadeGrad.addColorStop(0.52, 'rgba(255,255,255,1)');
+  fadeGrad.addColorStop(0.78, 'rgba(255,255,255,0.22)');
   fadeGrad.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = fadeGrad;
   ctx.fillRect(0, 0, w, h);

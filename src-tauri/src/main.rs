@@ -524,6 +524,7 @@ fn main() {
             commands::get_orb_style,
             commands::get_preferences,
             commands::save_preferences,
+            commands::test_ai_connection,
             // Updates
             commands::check_for_updates,
         ])

@@ -486,57 +486,131 @@ fn build_rewrite_request(
     project_memories: &[ProjectMemory],
     text: &str,
 ) -> String {
-    let mut prompt = String::new();
+    let use_minimal_context = should_use_minimal_rewrite_context(text);
+    let context = build_template_context(
+        if use_minimal_context { None } else { clipboard },
+        None,
+        dictionary_replacements,
+        if use_minimal_context {
+            &[]
+        } else {
+            transcript_history
+        },
+        if use_minimal_context {
+            &[]
+        } else {
+            style_memories
+        },
+        if use_minimal_context {
+            &[]
+        } else {
+            project_memories
+        },
+        text,
+    );
+    let mut prompt = render_prompt_template(&profile.tone, &context);
 
-    if let Some(previous_clipboard) = clipboard {
-        if !previous_clipboard.trim().is_empty() {
-            prompt.push_str("Context (last copied text):\n");
-            prompt.push_str(&previous_clipboard);
-            prompt.push('\n');
-            prompt.push('\n');
-        }
+    if prompt.trim().is_empty() {
+        prompt.push_str("Here is what Whisper captured:\n");
+        prompt.push_str(text);
     }
 
-    prompt.push_str("Rewrite the transcription into final paste-ready text.\n");
-    prompt.push_str("- Return only the rewritten text.\n");
-    prompt.push_str("- Do not explain, comment, ask questions, or mention missing context.\n");
-    prompt.push_str("- If the input is a test phrase, clean it up as a test phrase.\n");
-    prompt.push_str("- Keep all original meaning.\n");
-    prompt.push_str("- Preserve the speaker's point of view and grammatical person.\n");
-    prompt.push_str("- If the speaker says I, me, my, we, or our, keep that perspective.\n");
-    prompt.push_str("- Do not turn the speaker into the assistant, user, or a third person.\n");
-    prompt.push_str("- Do not add intent, context, claims, or details that were not spoken.\n");
-    prompt.push_str("- Preserve names, numbers, and action items.\n");
-    prompt.push_str("- Use learned dictionary, style, project, and recent transcript memory.\n");
-    prompt.push_str("- Propose new memory only when it is clearly useful for future dictation.\n");
-    prompt.push_str("- Do not propose memory for one-off facts or sensitive secrets.\n");
-    prompt.push_str(&format!("- Tone: {}\n", profile.tone));
-    prompt.push_str(&format!("- Purpose: {}\n", profile.purpose));
-    prompt.push_str(&format!("- Format: {}\n", profile.format));
-    prompt.push('\n');
+    if use_minimal_context {
+        prompt.push_str("\n\nIgnore clipboard, screenshots, and prior conversation context.");
+    }
 
-    append_memory_context(
-        &mut prompt,
-        dictionary_replacements,
-        transcript_history,
-        style_memories,
-        project_memories,
-    );
-
-    prompt.push_str("Input:\n");
-    prompt.push_str(text);
+    let response_contract = render_prompt_template(&profile.format, &context);
+    if !response_contract.trim().is_empty() {
+        prompt.push_str("\n\nResponse contract:\n");
+        prompt.push_str(&response_contract);
+    }
 
     prompt
 }
 
-fn append_memory_context(
-    prompt: &mut String,
+fn build_system_prompt(profile: &WritingProfile, context: &PromptTemplateContext) -> String {
+    let rendered = render_prompt_template(&profile.purpose, context);
+    let mut system_prompt = if rendered.trim().is_empty() {
+        "You rewrite dictated speech into final paste-ready text.".to_string()
+    } else {
+        rendered
+    };
+    system_prompt.push_str("\n\nTechnical contract: submit exactly one submit_result tool call. Do not explain, ask questions, mention uncertainty, or describe what you changed.");
+    system_prompt
+}
+
+struct PromptTemplateContext {
+    time: String,
+    clipboard: String,
+    screen_shot: String,
+    captured: String,
+    dictionary: String,
+    history: String,
+    style_memory: String,
+    project_memory: String,
+}
+
+fn build_template_context(
+    clipboard: Option<String>,
+    screenshot_data_url: Option<&str>,
     dictionary_replacements: &[DictionaryReplacement],
     transcript_history: &[TranscriptHistoryEntry],
     style_memories: &[StyleMemory],
     project_memories: &[ProjectMemory],
-) {
-    let active_replacements: Vec<_> = dictionary_replacements
+    text: &str,
+) -> PromptTemplateContext {
+    PromptTemplateContext {
+        time: chrono::Local::now().to_rfc3339(),
+        clipboard: clipboard
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| "none".to_string()),
+        screen_shot: screenshot_data_url
+            .map(|_| "attached")
+            .unwrap_or("not attached")
+            .to_string(),
+        captured: text.to_string(),
+        dictionary: format_dictionary_context(dictionary_replacements),
+        history: format_history_context(transcript_history),
+        style_memory: format_style_memory_context(style_memories),
+        project_memory: format_project_memory_context(project_memories),
+    }
+}
+
+fn render_prompt_template(template: &str, context: &PromptTemplateContext) -> String {
+    template
+        .replace("{time}", &context.time)
+        .replace("{clipboard}", &context.clipboard)
+        .replace("{screen_shot}", &context.screen_shot)
+        .replace("{captured}", &context.captured)
+        .replace("{dictionary}", &context.dictionary)
+        .replace("{history}", &context.history)
+        .replace("{style_memory}", &context.style_memory)
+        .replace("{project_memory}", &context.project_memory)
+}
+
+fn should_use_minimal_rewrite_context(text: &str) -> bool {
+    let normalized = text.trim().to_ascii_lowercase();
+    let word_count = normalized.split_whitespace().count();
+
+    if word_count <= 8
+        && (normalized.contains("test")
+            || normalized.contains("testing")
+            || (normalized.contains("one")
+                && normalized.contains("two")
+                && normalized.contains("three")))
+    {
+        return true;
+    }
+
+    normalized.contains("testing")
+        && normalized.contains("one")
+        && normalized.contains("two")
+        && normalized.contains("three")
+        && word_count <= 24
+}
+
+fn format_dictionary_context(dictionary_replacements: &[DictionaryReplacement]) -> String {
+    let entries: Vec<_> = dictionary_replacements
         .iter()
         .filter(|entry| {
             entry.enabled && !entry.from.trim().is_empty() && !entry.to.trim().is_empty()
@@ -545,58 +619,82 @@ fn append_memory_context(
         .take(30)
         .collect();
 
-    if !active_replacements.is_empty() {
-        prompt.push_str("Learned dictionary corrections:\n");
-        for entry in active_replacements.into_iter().rev() {
-            prompt.push_str(&format!("- {} => {}\n", entry.from, entry.to));
-        }
-        prompt.push('\n');
+    if entries.is_empty() {
+        return "none".to_string();
     }
 
-    let style_entries: Vec<_> = style_memories
-        .iter()
-        .filter(|entry| !entry.rule.trim().is_empty())
+    entries
+        .into_iter()
         .rev()
-        .take(20)
-        .collect();
-    if !style_entries.is_empty() {
-        prompt.push_str("Learned style memory:\n");
-        for entry in style_entries.into_iter().rev() {
-            prompt.push_str(&format!("- {}\n", entry.rule));
-        }
-        prompt.push('\n');
-    }
+        .map(|entry| format!("- {} => {}", entry.from, entry.to))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
-    let project_entries: Vec<_> = project_memories
-        .iter()
-        .filter(|entry| !entry.key.trim().is_empty() && !entry.value.trim().is_empty())
-        .rev()
-        .take(20)
-        .collect();
-    if !project_entries.is_empty() {
-        prompt.push_str("Learned project memory:\n");
-        for entry in project_entries.into_iter().rev() {
-            prompt.push_str(&format!("- {}: {}\n", entry.key, entry.value));
-        }
-        prompt.push('\n');
-    }
-
-    let history_entries: Vec<_> = transcript_history
+fn format_history_context(transcript_history: &[TranscriptHistoryEntry]) -> String {
+    let entries: Vec<_> = transcript_history
         .iter()
         .filter(|entry| !entry.raw_text.trim().is_empty())
         .rev()
         .take(8)
         .collect();
-    if !history_entries.is_empty() {
-        prompt.push_str("Recent dictation history:\n");
-        for entry in history_entries.into_iter().rev() {
-            prompt.push_str(&format!("- said: {}\n", entry.raw_text));
-            if entry.used_rewrite && entry.final_text != entry.raw_text {
-                prompt.push_str(&format!("  pasted: {}\n", entry.final_text));
-            }
-        }
-        prompt.push('\n');
+
+    if entries.is_empty() {
+        return "none".to_string();
     }
+
+    entries
+        .into_iter()
+        .rev()
+        .map(|entry| {
+            if entry.used_rewrite && entry.final_text != entry.raw_text {
+                format!("- said: {}\n  pasted: {}", entry.raw_text, entry.final_text)
+            } else {
+                format!("- said: {}", entry.raw_text)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn format_style_memory_context(style_memories: &[StyleMemory]) -> String {
+    let entries: Vec<_> = style_memories
+        .iter()
+        .filter(|entry| !entry.rule.trim().is_empty())
+        .rev()
+        .take(20)
+        .collect();
+
+    if entries.is_empty() {
+        return "none".to_string();
+    }
+
+    entries
+        .into_iter()
+        .rev()
+        .map(|entry| format!("- {}", entry.rule))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn format_project_memory_context(project_memories: &[ProjectMemory]) -> String {
+    let entries: Vec<_> = project_memories
+        .iter()
+        .filter(|entry| !entry.key.trim().is_empty() && !entry.value.trim().is_empty())
+        .rev()
+        .take(20)
+        .collect();
+
+    if entries.is_empty() {
+        return "none".to_string();
+    }
+
+    entries
+        .into_iter()
+        .rev()
+        .map(|entry| format!("- {}: {}", entry.key, entry.value))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn build_rewrite_message_content(
@@ -633,6 +731,38 @@ async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<Rewrite
     drop(settings);
 
     let config = cloud_rewrite_config(&rewrite_settings)?;
+    let use_minimal_context = should_use_minimal_rewrite_context(transcript);
+    let screenshot_for_prompt = if use_minimal_context {
+        None
+    } else {
+        screenshot.as_deref()
+    };
+    let system_context = build_template_context(
+        if use_minimal_context {
+            None
+        } else {
+            clipboard.clone()
+        },
+        screenshot_for_prompt,
+        &dictionary_replacements,
+        if use_minimal_context {
+            &[]
+        } else {
+            &transcript_history
+        },
+        if use_minimal_context {
+            &[]
+        } else {
+            &style_memories
+        },
+        if use_minimal_context {
+            &[]
+        } else {
+            &project_memories
+        },
+        transcript,
+    );
+    let system_prompt = build_system_prompt(&profile, &system_context);
     let user_content = build_rewrite_message_content(
         build_rewrite_request(
             clipboard.clone(),
@@ -643,7 +773,11 @@ async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<Rewrite
             &project_memories,
             transcript,
         ),
-        screenshot,
+        if use_minimal_context {
+            None
+        } else {
+            screenshot
+        },
     );
 
     let request_body = json!({
@@ -651,7 +785,7 @@ async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<Rewrite
         "messages": [
             {
                 "role": "system",
-                "content": "You rewrite dictated speech into the speaker's final paste-ready text and may propose local memory updates for future dictation. Preserve the speaker's point of view, grammatical person, and meaning exactly. Submit exactly one submit_result tool call. Do not become the speaker, do not refer to the speaker as the user, and do not explain, ask questions, mention uncertainty, or describe what you changed."
+                "content": system_prompt
             },
             {
                 "role": "user",
@@ -779,17 +913,32 @@ async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<Rewrite
         Err(_) => return Err("Cloud rewrite timed out".to_string()),
     };
 
-    if rewritten.text.trim().is_empty() {
+    validate_rewrite_text(transcript, &rewritten.text)?;
+
+    Ok(rewritten)
+}
+
+fn validate_rewrite_text(transcript: &str, rewritten: &str) -> Result<(), String> {
+    if rewritten.trim().is_empty() {
         return Err("Cloud rewrite returned empty text".to_string());
     }
 
-    if looks_like_assistant_meta_response(&rewritten.text) {
+    if looks_like_assistant_meta_response(rewritten) {
         return Err(
             "Cloud rewrite returned assistant commentary instead of rewritten text".to_string(),
         );
     }
 
-    Ok(rewritten)
+    let raw_len = transcript.trim().chars().count();
+    let rewritten_len = rewritten.trim().chars().count();
+    if raw_len > 0 && raw_len <= 120 {
+        let max_reasonable_len = (raw_len * 3).max(raw_len + 80);
+        if rewritten_len > max_reasonable_len {
+            return Err("Cloud rewrite expanded short transcript too much".to_string());
+        }
+    }
+
+    Ok(())
 }
 
 async fn apply_learned_memory(state: &AppState, memory: LearnedMemory) -> anyhow::Result<()> {
@@ -1087,41 +1236,105 @@ fn normalize_rewrite_url(url: &str) -> String {
 mod tests {
     use super::{
         apply_dictionary_replacements, build_rewrite_message_content, build_rewrite_request,
-        cloud_rewrite_config, cloud_rewrite_config_with_env, looks_like_assistant_meta_response,
-        looks_like_malformed_tool_call, rewrite_result_from_tool_arguments,
+        build_system_prompt, cloud_rewrite_config, cloud_rewrite_config_with_env,
+        looks_like_assistant_meta_response, looks_like_malformed_tool_call,
+        rewrite_result_from_tool_arguments, should_use_minimal_rewrite_context,
+        validate_rewrite_text,
     };
     use crate::state::{CloudRewriteSettings, DictionaryReplacement, WritingProfile};
 
     #[test]
-    fn build_rewrite_request_includes_clipboard_and_profile() {
+    fn build_rewrite_request_renders_prompt_template_variables() {
         let profile = WritingProfile {
-            purpose: "send a follow-up email".to_string(),
-            tone: "warm".to_string(),
-            format: "two sentences".to_string(),
+            purpose: "system".to_string(),
+            tone: "Clipboard: {clipboard}\nCaptured: {captured}\nDictionary:\n{dictionary}"
+                .to_string(),
+            format: "Return {captured} as one paragraph.".to_string(),
         };
 
         let prompt = build_rewrite_request(
             Some("team status: launch next week".to_string()),
             &profile,
-            &[],
+            &[DictionaryReplacement::enabled(
+                "cloud code",
+                "claude code",
+                None,
+            )],
             &[],
             &[],
             &[],
             "hey we shipped feature x yesterday",
         );
 
-        assert!(prompt.contains("Context (last copied text):"));
+        assert!(prompt.contains("Clipboard:"));
         assert!(prompt.contains("team status: launch next week"));
-        assert!(prompt.contains("Return only the rewritten text."));
-        assert!(prompt.contains("Do not explain, comment, ask questions"));
-        assert!(prompt.contains("Preserve the speaker's point of view"));
-        assert!(prompt.contains("If the speaker says I, me, my, we, or our"));
-        assert!(prompt.contains("Do not turn the speaker into the assistant"));
-        assert!(prompt.contains("Tone: warm"));
-        assert!(prompt.contains("Purpose: send a follow-up email"));
-        assert!(prompt.contains("Format: two sentences"));
-        assert!(prompt.contains("Input:"));
+        assert!(prompt.contains("Captured:"));
         assert!(prompt.contains("hey we shipped feature x yesterday"));
+        assert!(prompt.contains("- cloud code => claude code"));
+        assert!(prompt.contains("Response contract:"));
+        assert!(prompt.contains("Return hey we shipped feature x yesterday as one paragraph."));
+        assert!(!prompt.contains("{captured}"));
+    }
+
+    #[test]
+    fn build_system_prompt_renders_time_and_attached_screenshot() {
+        let profile = WritingProfile {
+            purpose: "You are Zana. The time is {time}. Screenshot: {screen_shot}.".to_string(),
+            ..WritingProfile::default()
+        };
+
+        let context = super::build_template_context(
+            None,
+            Some("data:image/jpeg;base64,abc"),
+            &[],
+            &[],
+            &[],
+            &[],
+            "Testing testing one two three",
+        );
+        let prompt = build_system_prompt(&profile, &context);
+
+        assert!(prompt.contains("You are Zana. The time is "));
+        assert!(prompt.contains("Screenshot: attached."));
+        assert!(prompt.contains("submit_result tool call"));
+    }
+
+    #[test]
+    fn test_phrase_omits_clipboard_and_memory_context() {
+        let profile = WritingProfile::default();
+        let prompt = build_rewrite_request(
+            Some("The test is verified and unverified, so I am testing this now.".to_string()),
+            &profile,
+            &[DictionaryReplacement::enabled(
+                "testing",
+                "verified and unverified",
+                None,
+            )],
+            &[crate::state::TranscriptHistoryEntry {
+                raw_text: "Testing testing one two three".to_string(),
+                final_text: "The test is verified and unverified.".to_string(),
+                used_rewrite: true,
+                timestamp: "2026-05-28T17:52:14Z".to_string(),
+            }],
+            &[],
+            &[],
+            "Testing testing one two three",
+        );
+
+        assert!(prompt.contains("Ignore clipboard, screenshots, and prior conversation context."));
+        assert!(prompt.contains("Clipboard: none"));
+        assert!(prompt.contains("Here is what Whisper captured:\nTesting testing one two three"));
+        assert!(!prompt.contains("verified and unverified"));
+    }
+
+    #[test]
+    fn longer_dictation_keeps_context() {
+        assert!(should_use_minimal_rewrite_context(
+            "Testing testing one two three"
+        ));
+        assert!(!should_use_minimal_rewrite_context(
+            "Can you prepare the repo for public release and make sure the checklist is updated"
+        ));
     }
 
     #[test]
@@ -1242,6 +1455,24 @@ mod tests {
         assert!(!looks_like_assistant_meta_response(
             "The transcription that goes through the LLM does not get transcribed correctly."
         ));
+    }
+
+    #[test]
+    fn rejects_rewrite_that_bloats_short_transcript() {
+        let transcript = "This is a test, testing one, two, three.";
+        let rewritten = "The test is verified and unverified, so I am testing this now. This is a test, testing, testing, one, two, three. This is a test, testing, testing, one, two, three. This is a test, testing, testing, one, two, three.";
+
+        let error = validate_rewrite_text(transcript, rewritten).unwrap_err();
+
+        assert!(error.contains("expanded short transcript"));
+    }
+
+    #[test]
+    fn allows_normal_cleanup_of_short_transcript() {
+        let transcript = "this is a test testing one two three";
+        let rewritten = "This is a test. Testing one, two, three.";
+
+        assert!(validate_rewrite_text(transcript, rewritten).is_ok());
     }
 
     #[test]

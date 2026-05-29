@@ -28,12 +28,24 @@ class OrbLifecycle {
     this.lastFrameTime = 0;
 
     // configurable speeds
-    const opts = Object.assign({
+    const defaults = {
       genesis: { birthSpeed: 0.05, deathSpeed: 0.015 },
       opacity: { fadeIn: 0.08, fadeOut: 0.27 },
-      audio: { smoothing: 0.18 },
+      audio: {
+        gain: 3.2,
+        peakGain: 1.6,
+        noiseFloor: 0.012,
+        attack: 0.46,
+        release: 0.18
+      },
       poof: { duration: 1.0 }
-    }, options);
+    };
+    const opts = Object.assign({}, defaults, options, {
+      genesis: Object.assign({}, defaults.genesis, options.genesis || {}),
+      opacity: Object.assign({}, defaults.opacity, options.opacity || {}),
+      audio: Object.assign({}, defaults.audio, options.audio || {}),
+      poof: Object.assign({}, defaults.poof, options.poof || {})
+    });
 
     this.config = opts;
 
@@ -115,8 +127,11 @@ class OrbLifecycle {
     }
   }
 
-  setAudioLevel(level) {
-    this.targetAudioLevel = level;
+  setAudioLevel(level, peak) {
+    const raw = (typeof level === 'object' && level !== null) ? level : { level, peak };
+    const normalizedLevel = this._normalizeAudioSignal(raw.level, this.config.audio.gain);
+    const normalizedPeak = this._normalizeAudioSignal(raw.peak, this.config.audio.peakGain);
+    this.targetAudioLevel = Math.max(normalizedLevel, normalizedPeak);
   }
 
   // ── internal ──
@@ -133,8 +148,8 @@ class OrbLifecycle {
   _installBridge() {
     const lc = this;
 
-    window.setAudioLevel = function(level) {
-      lc.setAudioLevel(level);
+    window.setAudioLevel = function(level, peak) {
+      lc.setAudioLevel(level, peak);
     };
 
     window.setRecordingState = function(recording, processing) {
@@ -233,8 +248,11 @@ class OrbLifecycle {
       : cfg.genesis.deathSpeed;
     this.genesis += (this.targetGenesis - this.genesis) * genSpeed;
 
-    // audio smoothing
-    this.audioLevel += (this.targetAudioLevel - this.audioLevel) * cfg.audio.smoothing;
+    // audio envelope: snap up on speech, decay gently between syllables.
+    const audioSpeed = this.targetAudioLevel > this.audioLevel
+      ? cfg.audio.attack
+      : cfg.audio.release;
+    this.audioLevel += (this.targetAudioLevel - this.audioLevel) * audioSpeed;
 
     // poof timer
     if (this.state === OrbState.COMPLETE) {
@@ -255,5 +273,15 @@ class OrbLifecycle {
       this._transition(OrbState.DORMANT);
       this.globalOpacity = 0;
     }
+  }
+
+  _normalizeAudioSignal(value, gain) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue) || numericValue <= this.config.audio.noiseFloor) {
+      return 0;
+    }
+
+    const lifted = (numericValue - this.config.audio.noiseFloor) * gain;
+    return Math.min(Math.pow(Math.max(lifted, 0), 0.62), 1);
   }
 }

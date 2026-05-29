@@ -111,7 +111,8 @@ function render(fc) {
   ctx.clearRect(0, 0, w, h);
   ctx.globalAlpha = globalOpacity;
 
-  const audio = Math.min(audioLevel * 2.5, 1);
+  const audio = Math.min(audioLevel, 1);
+  const voiceFlicker = audio * (0.75 + Math.sin(t * 18) * 0.12 + Math.sin(t * 31) * 0.08);
   const breathe = Math.sin(t * 0.4) * 0.5 + 0.5;
 
   // ========================================
@@ -132,8 +133,8 @@ function render(fc) {
     const sy = star.y * h;
 
     const twinkle = Math.sin(t * star.twinkleSpeed + star.twinkleOffset) * 0.5 + 0.5;
-    const alpha = star.brightness * (0.15 + twinkle * 0.35) * (0.3 + genesis * 0.2 + audio * 0.2);
-    const size = star.size * (0.8 + twinkle * 0.4 + audio * 0.3);
+    const alpha = star.brightness * (0.15 + twinkle * 0.35) * (0.3 + genesis * 0.2 + voiceFlicker * 0.55);
+    const size = star.size * (0.8 + twinkle * 0.4 + voiceFlicker * 0.9);
 
     if (alpha > 0.03) {
       const warmth = 180 + twinkle * 75;
@@ -158,8 +159,8 @@ function render(fc) {
     const ny = neb.y * h;
 
     const pulse = Math.sin(t * neb.speed + i) * 0.15 + 1;
-    const nebSize = Math.max(w, h) * neb.size * pulse * (0.6 + genesis * 0.2 + audio * 0.2);
-    const nebAlpha = (0.08 + genesis * 0.08 + audio * 0.1) * (0.6 + breathe * 0.2);
+    const nebSize = Math.max(w, h) * neb.size * pulse * (0.6 + genesis * 0.2 + voiceFlicker * 0.45);
+    const nebAlpha = (0.08 + genesis * 0.08 + voiceFlicker * 0.25) * (0.6 + breathe * 0.2);
 
     const col = fireColor(neb.hue + breathe * 20, 0.8, 0.3);
 
@@ -181,9 +182,9 @@ function render(fc) {
   for (let i = 0; i < particles.length; i++) {
     const p = particles[i];
 
-    p.x += Math.cos(p.angle) * p.speed * (1 + audio * 2);
-    p.y += Math.sin(p.angle) * p.speed * (1 + audio * 2);
-    p.angle += (Math.random() - 0.5) * 0.02;
+    p.x += Math.cos(p.angle) * p.speed * (1 + voiceFlicker * 5);
+    p.y += Math.sin(p.angle) * p.speed * (1 + voiceFlicker * 5);
+    p.angle += (Math.random() - 0.5) * (0.02 + voiceFlicker * 0.035);
 
     if (p.x < -0.1) p.x = 1.1;
     if (p.x > 1.1) p.x = -0.1;
@@ -193,8 +194,8 @@ function render(fc) {
     const px = p.x * w;
     const py = p.y * h;
 
-    const pAlpha = p.brightness * (0.2 + genesis * 0.15 + audio * 0.15);
-    const pSize = p.size * (1 + audio * 0.5);
+    const pAlpha = p.brightness * (0.2 + genesis * 0.15 + voiceFlicker * 0.45);
+    const pSize = p.size * (1 + voiceFlicker * 1.2);
 
     if (pAlpha > 0.02) {
       const col = fireColor(p.hue, 0.7, 0.4);
@@ -209,7 +210,7 @@ function render(fc) {
   // CENTRAL ORB
   // ========================================
   const orbBaseSize = maxR * 0.12;
-  const orbSize = orbBaseSize * (0.3 + genesis * 0.7) * (1 + audio * 1.5 + breathe * 0.1);
+  const orbSize = orbBaseSize * (0.3 + genesis * 0.7) * (1 + voiceFlicker * 2.2 + breathe * 0.1);
 
   // Dormant ember
   const dormantAlpha = Math.pow(1 - genesis, 1.5) * 0.6;
@@ -260,11 +261,11 @@ function render(fc) {
     ctx.fill();
 
     // Audio pulse rings
-    if (audio > 0.08) {
-      for (let i = 0; i < 3; i++) {
-        const pulsePhase = (t * 2 + i * 0.4) % 1;
-        const pulseRadius = orbSize * (1 + pulsePhase * 2);
-        const pulseAlpha = (1 - pulsePhase) * audio * 0.4 * alive;
+    if (audio > 0.03) {
+      for (let i = 0; i < 4; i++) {
+        const pulsePhase = (t * (2.4 + audio * 1.4) + i * 0.28) % 1;
+        const pulseRadius = orbSize * (1 + pulsePhase * (2.1 + audio));
+        const pulseAlpha = (1 - pulsePhase) * voiceFlicker * 0.75 * alive;
 
         const pr = Math.round(255 * (1 - b * 0.4));
         const pg = Math.round(200 * (1 - b * 0.1) + b * 30);
@@ -332,34 +333,13 @@ function render(fc) {
   }
 
   // ========================================
-  // CORNER VIGNETTE (black corners)
-  // ========================================
-  const vigSize = Math.max(w, h) * 0.6;
-  const corners = [
-    [0, 0],
-    [w, 0],
-    [0, h],
-    [w, h]
-  ];
-
-  for (const [vx, vy] of corners) {
-    const vigGrad = ctx.createRadialGradient(vx, vy, 0, vx, vy, vigSize);
-    vigGrad.addColorStop(0, 'rgba(0, 0, 0, 0.25)');
-    vigGrad.addColorStop(0.3, 'rgba(0, 0, 0, 0.12)');
-    vigGrad.addColorStop(0.6, 'rgba(0, 0, 0, 0.04)');
-    vigGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = vigGrad;
-    ctx.fillRect(0, 0, w, h);
-  }
-
-  // ========================================
   // EDGE FADE (for the window boundary)
   // ========================================
   ctx.globalCompositeOperation = 'destination-in';
-  const fadeGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(w, h) * 0.7);
+  const fadeGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR * 0.98);
   fadeGrad.addColorStop(0, 'rgba(255,255,255,1)');
-  fadeGrad.addColorStop(0.6, 'rgba(255,255,255,1)');
-  fadeGrad.addColorStop(0.85, 'rgba(255,255,255,0.5)');
+  fadeGrad.addColorStop(0.52, 'rgba(255,255,255,1)');
+  fadeGrad.addColorStop(0.78, 'rgba(255,255,255,0.22)');
   fadeGrad.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = fadeGrad;
   ctx.fillRect(0, 0, w, h);

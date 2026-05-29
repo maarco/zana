@@ -6,88 +6,162 @@
   <title>About Zana</title>
   <style>
     :root {
-      --background: oklch(0.13 0 0);
-      --foreground: oklch(0.97 0 0);
-      --card: oklch(0.17 0 0);
-      --muted: oklch(0.22 0 0);
-      --muted-foreground: oklch(0.65 0 0);
-      --primary: oklch(0.65 0.18 250);
-      --border: oklch(1 0 0 / 8%);
+      --background: #101012;
+      --foreground: #f4f4f5;
+      --card: #1a1a1d;
+      --muted: #242428;
+      --muted-foreground: #8b8994;
+      --primary: #f97316;
+      --primary-quiet: rgba(249, 115, 22, 0.14);
+      --border: rgba(255, 255, 255, 0.06);
+      --speech: #5b9ef5;
+      --workflow: #b07ee8;
+      --ok: #5cb88a;
+      --settings: #a0927b;
       --radius: 6px;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: var(--background);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 120px),
+        var(--background);
       color: var(--foreground);
       min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       -webkit-app-region: drag;
+      overflow: hidden;
     }
     .about-container {
-      text-align: center;
-      padding: 32px;
-      max-width: 400px;
+      width: 100%;
+      height: 100vh;
+      padding: 18px;
       background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
+      border: 0;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 18px;
+    }
+    .banner {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
     }
     .logo {
-      width: 84px;
-      height: 84px;
-      margin: 0 auto 24px;
-      background: var(--muted);
-      border: 1px solid var(--border);
+      width: 58px;
+      height: 58px;
+      background: linear-gradient(135deg, #241511, #171719);
+      border: 0;
       border-radius: var(--radius);
       display: flex;
       align-items: center;
       justify-content: center;
-      color: var(--primary);
-      font-size: 42px;
-      font-weight: 900;
+      box-shadow: none;
+    }
+    .logo svg {
+      width: 42px;
+      height: 42px;
+    }
+    .logo-bg {
+      fill: url(#logo-bg);
+    }
+    .logo-halo {
+      fill: #f97316;
+      opacity: 0.08;
     }
     h1 {
-      font-size: 28px;
-      font-weight: 900;
+      font-size: 30px;
+      font-weight: 850;
       color: var(--foreground);
-      margin-bottom: 8px;
+      line-height: 1;
+      letter-spacing: 0;
     }
     .version {
-      font-size: 14px;
+      font-size: 12px;
       color: var(--muted-foreground);
-      margin-bottom: 24px;
+      margin-top: 6px;
     }
     .description {
-      font-size: 15px;
-      line-height: 1.6;
+      font-size: 13px;
+      line-height: 1.5;
       color: var(--muted-foreground);
-      margin-bottom: 32px;
+      margin: 0;
+    }
+    .body-panel {
+      display: grid;
+      gap: 10px;
+      align-content: start;
+      -webkit-app-region: no-drag;
+    }
+    .summary {
+      padding: 12px;
+      background: #141416;
+      border: 0;
+      border-radius: var(--radius);
+    }
+    .summary-label {
+      color: var(--primary);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      margin-bottom: 6px;
+    }
+    .feature-grid {
+      display: grid;
+      gap: 6px;
     }
     .feature {
-      display: inline-block;
-      background: var(--muted);
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      padding: 6px 14px;
-      font-size: 12px;
+      display: grid;
+      grid-template-columns: 3px 1fr auto;
+      align-items: center;
+      gap: 10px;
+      min-height: 34px;
+      background: #141416;
+      border: 0;
+      border-radius: var(--radius);
+      padding: 8px 10px;
       color: var(--foreground);
-      margin: 4px;
+    }
+    .feature::before {
+      content: '';
+      width: 3px;
+      height: 18px;
+      border-radius: 2px;
+      background: var(--speech);
+    }
+    .feature:nth-child(2)::before { background: var(--ok); }
+    .feature:nth-child(3)::before { background: var(--workflow); }
+    .feature:nth-child(4)::before { background: var(--settings); }
+    .feature-name {
+      font-size: 12px;
+      font-weight: 720;
+      color: var(--foreground);
+    }
+    .feature-meta {
+      font-size: 10px;
+      color: var(--muted-foreground);
+      white-space: nowrap;
     }
     .copyright {
-      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      box-shadow: inset 0 1px rgba(255, 255, 255, 0.04);
+      padding-top: 12px;
+      font-size: 11px;
       color: var(--muted-foreground);
-      margin-top: 32px;
+      -webkit-app-region: no-drag;
     }
     .close-btn {
       -webkit-app-region: no-drag;
       position: absolute;
       top: 12px;
       right: 12px;
-      width: 24px;
-      height: 24px;
-      border: 1px solid var(--border);
+      width: 28px;
+      height: 28px;
+      border: 0;
       background: var(--muted);
       border-radius: var(--radius);
       color: var(--muted-foreground);
@@ -96,7 +170,7 @@
       transition: all 0.2s;
     }
     .close-btn:hover {
-      background: oklch(0.25 0 0);
+      background: #2b2b30;
       color: var(--foreground);
     }
   </style>
@@ -105,25 +179,66 @@
   <button class="close-btn" onclick="closeWindow()">&times;</button>
 
   <div class="about-container">
-    <div class="logo">q</div>
-    <h1>Zana</h1>
-    <div class="version">Version 1.0.0</div>
+    <div class="banner">
+      <div class="logo" aria-hidden="true">
+        <svg viewBox="0 0 1024 1024" role="img">
+          <defs>
+            <radialGradient id="logo-bg" cx="50%" cy="42%" r="72%">
+              <stop offset="0%" stop-color="#20133d"/>
+              <stop offset="58%" stop-color="#0f1020"/>
+              <stop offset="100%" stop-color="#07070b"/>
+            </radialGradient>
+            <linearGradient id="logo-mark" x1="18%" y1="10%" x2="88%" y2="92%">
+              <stop offset="0%" stop-color="#ffb86b"/>
+              <stop offset="46%" stop-color="#f97316"/>
+              <stop offset="100%" stop-color="#ef4444"/>
+            </linearGradient>
+          </defs>
+          <rect width="1024" height="1024" rx="224" class="logo-bg"/>
+          <circle cx="512" cy="512" r="372" class="logo-halo"/>
+          <g transform="translate(162 190) scale(30.4)">
+            <path fill="url(#logo-mark)" d="M8.9206 6.94777H14.0781L11.4985 11.3918L8.9206 6.94777ZM22.4384 2.14534C21.6978 0.86847 20.3693 0.0983505 18.8864 0.0850151L9.3942 0H9.35556C7.8659 0 6.53075 0.761791 5.77836 2.04533C5.01925 3.33887 5.0159 4.88578 5.76997 6.18432L10.1164 13.6738C9.78215 14.0222 9.3203 14.2189 8.82318 14.2189H8.81479C8.16149 14.2156 7.57872 13.8772 7.25627 13.3104L2.58407 5.08914C2.40437 4.77409 2.23811 4.45571 2.15413 4.02064C2.03153 3.34886 2.27337 2.7521 2.67476 2.06199C3.0392 1.43356 3.65891 0.926818 4.37435 0.671778L6.06555 0.0683499L4.11236 0.0866837C2.62942 0.100019 1.30265 0.870139 0.560342 2.14701C-0.18029 3.42388 -0.187006 4.95412 0.541871 6.23765L5.21407 14.459C5.9547 15.7625 7.29658 16.546 8.80303 16.5526C10.3061 16.561 11.6564 15.7892 12.4105 14.4923L16.7569 7.00278C17.2305 7.1178 17.6335 7.41951 17.8821 7.85291C18.2062 8.418 18.2029 9.08811 17.8703 9.64986L13.0503 17.7862C12.8656 18.0979 12.6725 18.4012 12.3366 18.6913C11.8143 19.1314 11.1727 19.223 10.3716 19.223C9.64276 19.223 8.89204 18.943 8.31096 18.4529L6.94221 17.2994L7.9314 18.9713C8.68379 20.2415 10.0189 21 11.5002 21C12.9815 21 14.3166 20.2415 15.069 18.9713L19.889 10.835C20.6532 9.54485 20.6632 7.99626 19.9176 6.69606C19.1702 5.39585 17.825 4.61907 16.3202 4.61907H7.62742C7.49139 4.154 7.55353 3.65559 7.80544 3.22552C8.13126 2.66876 8.71066 2.33871 9.35724 2.33871H9.37405L18.8662 2.42372C19.229 2.42706 19.5917 2.44206 20.0116 2.58708C20.6565 2.81712 21.0562 3.32386 21.4559 4.01397C21.8204 4.64241 21.9514 5.4292 21.817 6.17432L21.4962 7.93126L22.4569 6.24266C23.1874 4.95912 23.1807 3.42888 22.4384 2.15201V2.14534Z"/>
+          </g>
+        </svg>
+      </div>
+      <div>
+        <h1>Zana</h1>
+        <div class="version">Version 1.0.0</div>
+      </div>
+    </div>
 
-    <p class="description">
-      Privacy-first speech-to-text with beautiful audio visualizations.
-      Your voice never leaves your device.
-    </p>
+    <div class="body-panel">
+      <div class="summary">
+        <div class="summary-label">local-first voice</div>
+        <p class="description">
+          Speech-to-text for your Mac. Zana records locally, transcribes with
+          Whisper, and pastes at the cursor without sending your voice away.
+        </p>
+      </div>
 
-    <div class="features">
-      <span class="feature">Local Whisper AI</span>
-      <span class="feature">Privacy First</span>
-      <span class="feature">Beautiful Orb</span>
-      <span class="feature">Fn Key Trigger</span>
+      <div class="feature-grid">
+        <div class="feature">
+          <span class="feature-name">Local Whisper</span>
+          <span class="feature-meta">on device</span>
+        </div>
+        <div class="feature">
+          <span class="feature-name">Privacy First</span>
+          <span class="feature-meta">no telemetry</span>
+        </div>
+        <div class="feature">
+          <span class="feature-name">Fn Hold</span>
+          <span class="feature-meta">fast capture</span>
+        </div>
+        <div class="feature">
+          <span class="feature-name">Writing Polish</span>
+          <span class="feature-meta">optional</span>
+        </div>
+      </div>
     </div>
 
     <p class="copyright">
-      Copyright 2025 Zana<br>
-      Built with Tauri + Whisper.cpp
+      <span>Copyright 2026 Zana</span>
+      <span>Tauri + Whisper.cpp</span>
     </p>
   </div>
   <script>

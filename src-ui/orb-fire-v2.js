@@ -174,7 +174,8 @@ void main() {
   alpha = max(alpha, ripples * genesis);
   alpha = clamp(alpha + length(col) * 0.35, 0.0, 1.0);
 
-  alpha *= uOpacity;
+  float edgeMask = 1.0 - smoothstep(0.52, 0.78, d);
+  alpha *= edgeMask * uOpacity;
   fragColor = vec4(col * alpha, alpha);
 }`;
 

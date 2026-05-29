@@ -229,9 +229,13 @@ fn public_release_metadata_is_consistent() {
         root_cargo.contains("repository = \"https://github.com/maarco/zana\""),
         "public repository metadata must point at the intended GitHub repo"
     );
+    let workspace_version = root_cargo
+        .lines()
+        .find_map(|line| line.strip_prefix("version = "))
+        .and_then(|value| value.trim().trim_matches('"').split_whitespace().next());
     assert_eq!(
         tauri_config.get("version").and_then(Value::as_str),
-        Some("0.1.0"),
+        workspace_version,
         "Tauri bundle version must stay aligned with the workspace version before public release"
     );
     assert!(
