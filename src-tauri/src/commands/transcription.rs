@@ -338,18 +338,21 @@ pub async fn transcribe_captured_audio(state: &AppState) -> Result<Transcription
                 rewrite_error = Some(error);
             }
         }
-        if let Err(error) = record_transcript_history(
-            state,
-            &corrected_local_text,
-            &final_text,
-            used_cloud_rewrite,
-        )
-        .await
-        {
-            log::warn!("Failed to save transcript history: {}", error);
-        }
     } else {
         state.clear_recording_context().await;
+    }
+
+    // Persist every transcription locally, whether or not AI polish ran.
+    // Local-only dictation records raw == final with used_rewrite = false.
+    if let Err(error) = record_transcript_history(
+        state,
+        &corrected_local_text,
+        &final_text,
+        used_cloud_rewrite,
+    )
+    .await
+    {
+        log::warn!("Failed to save transcript history: {}", error);
     }
 
     Ok(TranscriptionResponse {
@@ -486,26 +489,13 @@ fn build_rewrite_request(
     project_memories: &[ProjectMemory],
     text: &str,
 ) -> String {
-    let use_minimal_context = should_use_minimal_rewrite_context(text);
     let context = build_template_context(
-        if use_minimal_context { None } else { clipboard },
+        clipboard,
         None,
         dictionary_replacements,
-        if use_minimal_context {
-            &[]
-        } else {
-            transcript_history
-        },
-        if use_minimal_context {
-            &[]
-        } else {
-            style_memories
-        },
-        if use_minimal_context {
-            &[]
-        } else {
-            project_memories
-        },
+        transcript_history,
+        style_memories,
+        project_memories,
         text,
     );
     let mut prompt = render_prompt_template(&profile.tone, &context);
@@ -515,28 +505,16 @@ fn build_rewrite_request(
         prompt.push_str(text);
     }
 
-    if use_minimal_context {
-        prompt.push_str("\n\nIgnore clipboard, screenshots, and prior conversation context.");
-    }
-
-    let response_contract = render_prompt_template(&profile.format, &context);
-    if !response_contract.trim().is_empty() {
-        prompt.push_str("\n\nResponse contract:\n");
-        prompt.push_str(&response_contract);
-    }
-
     prompt
 }
 
 fn build_system_prompt(profile: &WritingProfile, context: &PromptTemplateContext) -> String {
     let rendered = render_prompt_template(&profile.purpose, context);
-    let mut system_prompt = if rendered.trim().is_empty() {
+    if rendered.trim().is_empty() {
         "You rewrite dictated speech into final paste-ready text.".to_string()
     } else {
         rendered
-    };
-    system_prompt.push_str("\n\nTechnical contract: submit exactly one submit_result tool call. Do not explain, ask questions, mention uncertainty, or describe what you changed.");
-    system_prompt
+    }
 }
 
 struct PromptTemplateContext {
@@ -588,27 +566,6 @@ fn render_prompt_template(template: &str, context: &PromptTemplateContext) -> St
         .replace("{project_memory}", &context.project_memory)
 }
 
-fn should_use_minimal_rewrite_context(text: &str) -> bool {
-    let normalized = text.trim().to_ascii_lowercase();
-    let word_count = normalized.split_whitespace().count();
-
-    if word_count <= 8
-        && (normalized.contains("test")
-            || normalized.contains("testing")
-            || (normalized.contains("one")
-                && normalized.contains("two")
-                && normalized.contains("three")))
-    {
-        return true;
-    }
-
-    normalized.contains("testing")
-        && normalized.contains("one")
-        && normalized.contains("two")
-        && normalized.contains("three")
-        && word_count <= 24
-}
-
 fn format_dictionary_context(dictionary_replacements: &[DictionaryReplacement]) -> String {
     let entries: Vec<_> = dictionary_replacements
         .iter()
@@ -647,7 +604,10 @@ fn format_history_context(transcript_history: &[TranscriptHistoryEntry]) -> Stri
         .into_iter()
         .rev()
         .map(|entry| {
-            if entry.used_rewrite && entry.final_text != entry.raw_text {
+            if entry.used_rewrite
+                && entry.final_text != entry.raw_text
+                && validate_rewrite_text(&entry.raw_text, &entry.final_text).is_ok()
+            {
                 format!("- said: {}\n  pasted: {}", entry.raw_text, entry.final_text)
             } else {
                 format!("- said: {}", entry.raw_text)
@@ -731,35 +691,13 @@ async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<Rewrite
     drop(settings);
 
     let config = cloud_rewrite_config(&rewrite_settings)?;
-    let use_minimal_context = should_use_minimal_rewrite_context(transcript);
-    let screenshot_for_prompt = if use_minimal_context {
-        None
-    } else {
-        screenshot.as_deref()
-    };
     let system_context = build_template_context(
-        if use_minimal_context {
-            None
-        } else {
-            clipboard.clone()
-        },
-        screenshot_for_prompt,
+        clipboard.clone(),
+        screenshot.as_deref(),
         &dictionary_replacements,
-        if use_minimal_context {
-            &[]
-        } else {
-            &transcript_history
-        },
-        if use_minimal_context {
-            &[]
-        } else {
-            &style_memories
-        },
-        if use_minimal_context {
-            &[]
-        } else {
-            &project_memories
-        },
+        &transcript_history,
+        &style_memories,
+        &project_memories,
         transcript,
     );
     let system_prompt = build_system_prompt(&profile, &system_context);
@@ -773,11 +711,7 @@ async fn run_cloud_rewrite(state: &AppState, transcript: &str) -> Result<Rewrite
             &project_memories,
             transcript,
         ),
-        if use_minimal_context {
-            None
-        } else {
-            screenshot
-        },
+        screenshot,
     );
 
     let request_body = json!({
@@ -1185,6 +1119,14 @@ fn looks_like_assistant_meta_response(text: &str) -> bool {
         return true;
     }
 
+    if normalized.contains("please provide the text") && normalized.contains("rewrite") {
+        return true;
+    }
+
+    if normalized.contains("provide the text you would like me to") {
+        return true;
+    }
+
     let refusal_or_meta_markers = [
         "i am unable to",
         "i'm unable to",
@@ -1237,11 +1179,12 @@ mod tests {
     use super::{
         apply_dictionary_replacements, build_rewrite_message_content, build_rewrite_request,
         build_system_prompt, cloud_rewrite_config, cloud_rewrite_config_with_env,
-        looks_like_assistant_meta_response, looks_like_malformed_tool_call,
-        rewrite_result_from_tool_arguments, should_use_minimal_rewrite_context,
-        validate_rewrite_text,
+        format_history_context, looks_like_assistant_meta_response, looks_like_malformed_tool_call,
+        rewrite_result_from_tool_arguments, validate_rewrite_text,
     };
-    use crate::state::{CloudRewriteSettings, DictionaryReplacement, WritingProfile};
+    use crate::state::{
+        CloudRewriteSettings, DictionaryReplacement, TranscriptHistoryEntry, WritingProfile,
+    };
 
     #[test]
     fn build_rewrite_request_renders_prompt_template_variables() {
@@ -1271,8 +1214,8 @@ mod tests {
         assert!(prompt.contains("Captured:"));
         assert!(prompt.contains("hey we shipped feature x yesterday"));
         assert!(prompt.contains("- cloud code => claude code"));
-        assert!(prompt.contains("Response contract:"));
-        assert!(prompt.contains("Return hey we shipped feature x yesterday as one paragraph."));
+        assert!(!prompt.contains("Response contract:"));
+        assert!(!prompt.contains("Return hey we shipped feature x yesterday as one paragraph."));
         assert!(!prompt.contains("{captured}"));
     }
 
@@ -1296,11 +1239,46 @@ mod tests {
 
         assert!(prompt.contains("You are Zana. The time is "));
         assert!(prompt.contains("Screenshot: attached."));
-        assert!(prompt.contains("submit_result tool call"));
+        assert!(!prompt.contains("submit_result tool call"));
     }
 
     #[test]
-    fn test_phrase_omits_clipboard_and_memory_context() {
+    fn rewrite_prompts_are_exact_rendered_user_templates() {
+        let profile = WritingProfile {
+            purpose: "system {captured}".to_string(),
+            tone: "prompt {captured} {clipboard}".to_string(),
+            format: "legacy response contract must not be appended".to_string(),
+        };
+
+        let prompt = build_rewrite_request(
+            Some("clipboard text".to_string()),
+            &profile,
+            &[DictionaryReplacement::enabled("alpha", "beta", None)],
+            &[],
+            &[],
+            &[],
+            "Testing testing one two three",
+        );
+        let context = super::build_template_context(
+            Some("clipboard text".to_string()),
+            None,
+            &[],
+            &[],
+            &[],
+            &[],
+            "Testing testing one two three",
+        );
+        let system_prompt = build_system_prompt(&profile, &context);
+
+        assert_eq!(
+            prompt,
+            "prompt Testing testing one two three clipboard text"
+        );
+        assert_eq!(system_prompt, "system Testing testing one two three");
+    }
+
+    #[test]
+    fn prompt_template_controls_clipboard_and_memory_context() {
         let profile = WritingProfile::default();
         let prompt = build_rewrite_request(
             Some("The test is verified and unverified, so I am testing this now.".to_string()),
@@ -1321,20 +1299,9 @@ mod tests {
             "Testing testing one two three",
         );
 
-        assert!(prompt.contains("Ignore clipboard, screenshots, and prior conversation context."));
-        assert!(prompt.contains("Clipboard: none"));
+        assert!(prompt.contains("Clipboard: The test is verified and unverified"));
         assert!(prompt.contains("Here is what Whisper captured:\nTesting testing one two three"));
-        assert!(!prompt.contains("verified and unverified"));
-    }
-
-    #[test]
-    fn longer_dictation_keeps_context() {
-        assert!(should_use_minimal_rewrite_context(
-            "Testing testing one two three"
-        ));
-        assert!(!should_use_minimal_rewrite_context(
-            "Can you prepare the repo for public release and make sure the checklist is updated"
-        ));
+        assert!(prompt.contains("verified and unverified"));
     }
 
     #[test]
@@ -1452,9 +1419,26 @@ mod tests {
         let response = "I am unable to rewrite or edit your transcription, as I cannot access private documents or modify user input. Please provide a clear, accurate version of what you intended to say.";
 
         assert!(looks_like_assistant_meta_response(response));
+        assert!(looks_like_assistant_meta_response(
+            "Please provide the text you would like me to rewrite clearly and concisely in a single short paragraph."
+        ));
         assert!(!looks_like_assistant_meta_response(
             "The transcription that goes through the LLM does not get transcribed correctly."
         ));
+    }
+
+    #[test]
+    fn history_context_omits_bad_rewrite_outputs() {
+        let history = format_history_context(&[TranscriptHistoryEntry {
+            raw_text: "Testing testing one two three".to_string(),
+            final_text: "Please provide the text you would like me to rewrite clearly and concisely in a single short paragraph.".to_string(),
+            used_rewrite: true,
+            timestamp: "2026-05-29T11:30:00Z".to_string(),
+        }]);
+
+        assert!(history.contains("- said: Testing testing one two three"));
+        assert!(!history.contains("pasted:"));
+        assert!(!history.contains("Please provide the text"));
     }
 
     #[test]

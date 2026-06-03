@@ -6,7 +6,7 @@ use crate::state::{AppState, Settings};
 use crate::stt::WhisperModel;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::time::{timeout, Duration};
 
 /// Response for settings operations
@@ -23,6 +23,16 @@ pub struct SettingsResponse {
 pub struct AiTestResponse {
     pub success: bool,
     pub message: String,
+}
+
+/// Transcript history item shown in Preferences.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptHistoryItem {
+    pub raw_text: String,
+    pub final_text: String,
+    pub used_rewrite: bool,
+    pub timestamp: String,
 }
 
 /// Preferences edited in the Preferences window.
@@ -109,8 +119,8 @@ impl Preferences {
             return Err("Prompt template cannot be empty".to_string());
         }
 
-        if self.writing_format.trim().is_empty() {
-            return Err("Response contract cannot be empty".to_string());
+        if !self.writing_tone.contains("{captured}") {
+            return Err("User prompt must include {captured}".to_string());
         }
 
         if self.cloud_rewrite_enabled
@@ -213,11 +223,59 @@ fn normalize_ai_test_url(url: &str) -> String {
     }
 }
 
+fn transcript_history_items(settings: &Settings) -> Vec<TranscriptHistoryItem> {
+    settings
+        .transcript_history
+        .iter()
+        .rev()
+        .map(|entry| TranscriptHistoryItem {
+            raw_text: entry.raw_text.clone(),
+            final_text: entry.final_text.clone(),
+            used_rewrite: entry.used_rewrite,
+            timestamp: entry.timestamp.clone(),
+        })
+        .collect()
+}
+
 /// Load preferences for the Preferences window.
 #[tauri::command]
 pub async fn get_preferences(state: State<'_, AppState>) -> Result<Preferences, String> {
     let settings = state.settings.read().await;
     Ok(Preferences::from_settings(&settings))
+}
+
+/// Load recent locally saved transcriptions for the Preferences window.
+#[tauri::command]
+pub async fn get_transcript_history(
+    state: State<'_, AppState>,
+) -> Result<Vec<TranscriptHistoryItem>, String> {
+    let settings = state.settings.read().await;
+    Ok(transcript_history_items(&settings))
+}
+
+/// Open (or focus) the standalone Transcriptions window.
+#[tauri::command]
+pub async fn open_transcriptions_window(app: AppHandle) -> Result<(), String> {
+    use tauri::{WebviewUrl, WebviewWindowBuilder};
+
+    if let Some(window) = app.get_webview_window("transcriptions") {
+        let _ = window.show();
+        let _ = window.set_focus();
+        return Ok(());
+    }
+
+    WebviewWindowBuilder::new(
+        &app,
+        "transcriptions",
+        WebviewUrl::App("transcriptions.html".into()),
+    )
+    .title("Zana Transcriptions")
+    .inner_size(560.0, 640.0)
+    .center()
+    .build()
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
 }
 
 /// Persist all preferences edited in the Preferences window.
@@ -363,7 +421,8 @@ pub async fn set_orb_style(
 
 #[cfg(test)]
 mod tests {
-    use super::Preferences;
+    use super::{transcript_history_items, Preferences};
+    use crate::state::{Settings, TranscriptHistoryEntry};
 
     fn test_preferences() -> Preferences {
         Preferences {
@@ -383,9 +442,39 @@ mod tests {
             rewrite_timeout_ms: 15_000,
             rewrite_include_screenshot: false,
             writing_purpose: "Write polished text".to_string(),
-            writing_tone: "clear and concise".to_string(),
-            writing_format: "one short paragraph".to_string(),
+            writing_tone: "Rewrite this:\n{captured}".to_string(),
+            writing_format: String::new(),
         }
+    }
+
+    #[test]
+    fn transcript_history_items_are_newest_first() {
+        let settings = Settings {
+            transcript_history: vec![
+                TranscriptHistoryEntry {
+                    raw_text: "first raw".to_string(),
+                    final_text: "first final".to_string(),
+                    used_rewrite: true,
+                    timestamp: "2026-05-28T17:00:00Z".to_string(),
+                },
+                TranscriptHistoryEntry {
+                    raw_text: "second raw".to_string(),
+                    final_text: "second raw".to_string(),
+                    used_rewrite: false,
+                    timestamp: "2026-05-28T17:05:00Z".to_string(),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let history = transcript_history_items(&settings);
+
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].raw_text, "second raw");
+        assert_eq!(history[0].final_text, "second raw");
+        assert!(!history[0].used_rewrite);
+        assert_eq!(history[1].raw_text, "first raw");
+        assert!(history[1].used_rewrite);
     }
 
     #[test]
@@ -396,6 +485,16 @@ mod tests {
         let error = prefs.validate_ai_test().unwrap_err();
 
         assert_eq!(error, "Rewrite API key is required for remote providers");
+    }
+
+    #[test]
+    fn enabled_rewrite_requires_captured_variable_in_user_prompt() {
+        let mut prefs = test_preferences();
+        prefs.writing_tone = "clear and concise".to_string();
+
+        let error = prefs.validate().unwrap_err();
+
+        assert_eq!(error, "User prompt must include {captured}");
     }
 
     #[test]

@@ -20,17 +20,57 @@ pub struct WritingProfile {
     pub purpose: String,
     /// User prompt template for the rewrite provider
     pub tone: String,
-    /// Response contract appended to the prompt
+    /// Deprecated legacy response-contract field kept for settings compatibility
     pub format: String,
 }
 
 impl Default for WritingProfile {
     fn default() -> Self {
         Self {
-            purpose: "You are a local-first AI writing engine inside Zana. The time is {time}.".to_string(),
-            tone: "Context may be attached to help rewrite speech captured through a local Whisper speech-to-text system.\n\nScreenshot: {screen_shot}\nClipboard: {clipboard}\n\nHere is what Whisper captured:\n{captured}".to_string(),
-            format: "Respond with only the final paste-ready text. Preserve the user's meaning, point of view, names, numbers, and action items. Do not explain what changed.".to_string(),
+            purpose: "You are a local-first AI writing engine inside Zana. The time is {time}.\n\nSubmit exactly one submit_result tool call. Do not explain, ask questions, mention uncertainty, or describe what you changed.".to_string(),
+            tone: "Context may be attached to help rewrite speech captured through a local Whisper speech-to-text system.\n\nScreenshot: {screen_shot}\nClipboard: {clipboard}\nDictionary:\n{dictionary}\nRecent history:\n{history}\nStyle memory:\n{style_memory}\nProject memory:\n{project_memory}\n\nHere is what Whisper captured:\n{captured}\n\nRespond with only the final paste-ready text. Preserve the user's meaning, point of view, names, numbers, and action items.".to_string(),
+            format: String::new(),
         }
+    }
+}
+
+impl WritingProfile {
+    fn migrate_legacy_fields(&mut self) {
+        if self.tone.contains("{captured}") {
+            return;
+        }
+
+        let legacy_purpose = self.purpose.trim();
+        let legacy_tone = self.tone.trim();
+        let legacy_format = self.format.trim();
+
+        if legacy_purpose.is_empty() && legacy_tone.is_empty() && legacy_format.is_empty() {
+            *self = Self::default();
+            return;
+        }
+
+        let defaults = Self::default();
+        let purpose_line = if legacy_purpose.is_empty() {
+            String::new()
+        } else {
+            format!("\n\nGoal: {legacy_purpose}")
+        };
+        let tone_line = if legacy_tone.is_empty() {
+            "Tone: preserve the speaker's natural style".to_string()
+        } else {
+            format!("Tone: {legacy_tone}")
+        };
+        let format_line = if legacy_format.is_empty() {
+            "Format: final paste-ready text".to_string()
+        } else {
+            format!("Format: {legacy_format}")
+        };
+
+        self.purpose = format!("{}{}", defaults.purpose, purpose_line);
+        self.tone = format!(
+            "Rewrite the captured speech using these visible preferences.\n\n{tone_line}\n{format_line}\n\nScreenshot: {{screen_shot}}\nClipboard: {{clipboard}}\nDictionary:\n{{dictionary}}\nRecent history:\n{{history}}\nStyle memory:\n{{style_memory}}\nProject memory:\n{{project_memory}}\n\nCaptured speech:\n{{captured}}\n\nReturn only the final paste-ready text. Preserve the speaker's meaning, point of view, names, numbers, and action items."
+        );
+        self.format = String::new();
     }
 }
 
@@ -174,6 +214,7 @@ impl Settings {
         if self.dictionary_replacements.is_empty() {
             self.dictionary_replacements = default_dictionary_replacements();
         }
+        self.writing_profile.migrate_legacy_fields();
     }
 
     /// Save to disk
@@ -461,4 +502,68 @@ fn capture_macos_screenshot_data_url() -> Result<String, String> {
     }
 
     Ok(format!("data:image/jpeg;base64,{}", BASE64.encode(bytes)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Settings, WritingProfile};
+
+    #[test]
+    fn legacy_writing_profile_is_migrated_to_exact_prompt_templates() {
+        let mut settings = Settings {
+            writing_profile: WritingProfile {
+                purpose: "Produce clear, useful text".to_string(),
+                tone: "clear and concise".to_string(),
+                format: "one short paragraph".to_string(),
+            },
+            ..Default::default()
+        };
+
+        settings.hydrate_learned_defaults();
+
+        assert!(settings
+            .writing_profile
+            .purpose
+            .contains("Produce clear, useful text"));
+        assert!(settings
+            .writing_profile
+            .purpose
+            .contains("submit_result tool call"));
+        assert!(settings
+            .writing_profile
+            .tone
+            .contains("Tone: clear and concise"));
+        assert!(settings
+            .writing_profile
+            .tone
+            .contains("Format: one short paragraph"));
+        assert!(settings
+            .writing_profile
+            .tone
+            .contains("Captured speech:\n{captured}"));
+        assert!(settings
+            .writing_profile
+            .tone
+            .contains("Clipboard: {clipboard}"));
+        assert!(settings.writing_profile.format.is_empty());
+    }
+
+    #[test]
+    fn custom_prompt_template_with_captured_is_not_rewritten() {
+        let profile = WritingProfile {
+            purpose: "custom system".to_string(),
+            tone: "custom prompt {captured}".to_string(),
+            format: "legacy ignored".to_string(),
+        };
+        let mut settings = Settings {
+            writing_profile: profile.clone(),
+            ..Default::default()
+        };
+
+        settings.hydrate_learned_defaults();
+
+        assert_eq!(settings.writing_profile.purpose, profile.purpose);
+        assert_eq!(settings.writing_profile.tone, profile.tone);
+        assert_eq!(settings.writing_profile.format, profile.format);
+    }
 }

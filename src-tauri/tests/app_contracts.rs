@@ -131,6 +131,110 @@ fn preferences_exposes_rewrite_provider_fields() {
 }
 
 #[test]
+fn transcriptions_live_in_their_own_window() {
+    let prefs = read_repo_file("src-ui/preferences.html");
+    let window = read_repo_file("src-ui/transcriptions.html");
+    let settings = read_repo_file("src-tauri/src/commands/settings.rs");
+    let main = read_repo_file("src-tauri/src/main.rs");
+
+    // Preferences keeps only a launcher; the history list no longer lives inline.
+    assert!(
+        prefs.contains("viewTranscriptions"),
+        "preferences must keep a launcher for the standalone transcriptions window"
+    );
+    assert!(
+        prefs.contains("open_transcriptions_window"),
+        "preferences launcher must open the standalone transcriptions window"
+    );
+    assert!(
+        !prefs.contains("transcript-history-list"),
+        "the transcript history list must not be rendered inline in preferences"
+    );
+
+    // The transcript history list itself lives in the dedicated window.
+    for marker in ["transcript-history-list", "get_transcript_history"] {
+        assert!(
+            window.contains(marker),
+            "transcriptions window must render local history via marker {marker}"
+        );
+    }
+
+    assert!(
+        settings.contains("pub async fn get_transcript_history"),
+        "settings commands must expose transcript history to the transcriptions window"
+    );
+    assert!(
+        settings.contains("pub async fn open_transcriptions_window"),
+        "settings commands must expose a command to open the transcriptions window"
+    );
+    for handler in [
+        "commands::get_transcript_history",
+        "commands::open_transcriptions_window",
+    ] {
+        assert!(
+            main.contains(handler),
+            "Tauri command handler must register {handler}"
+        );
+    }
+}
+
+#[test]
+fn transcripts_persist_in_local_only_mode() {
+    let src = read_repo_file("src-tauri/src/commands/transcription.rs");
+
+    // Regression guard: transcript history must be recorded for every dictation,
+    // not only when cloud rewrite is enabled. Local-only dictation used to hit the
+    // `else` branch and silently drop the transcript.
+    assert!(
+        src.contains("Persist every transcription locally"),
+        "transcribe flow must record history regardless of AI-polish mode"
+    );
+
+    let else_branch = src
+        .find("state.clear_recording_context().await;")
+        .expect("local-only branch must clear recording context");
+    let save_call = src
+        .find("record_transcript_history(")
+        .expect("transcribe flow must call record_transcript_history");
+    assert!(
+        save_call > else_branch,
+        "record_transcript_history must run after the rewrite if/else so local-only dictation is saved too"
+    );
+}
+
+#[test]
+fn preferences_exposes_exact_ai_messages() {
+    let html = read_repo_file("src-ui/preferences.html");
+    let transcription = read_repo_file("src-tauri/src/commands/transcription.rs");
+    let state = read_repo_file("src-tauri/src/state.rs");
+
+    assert!(
+        html.contains("Exact system message sent to the rewrite model"),
+        "preferences must explain that System Prompt controls the exact system message"
+    );
+    assert!(
+        html.contains("Exact user message sent after variable replacement"),
+        "preferences must explain that User Prompt controls the exact user message"
+    );
+    assert!(
+        !html.contains("<div class=\"setting-label\">Response Contract</div>"),
+        "preferences must not expose a third visible prompt layer when only two AI messages are sent"
+    );
+    assert!(
+        !transcription.contains("Technical contract:"),
+        "rewrite pipeline must not append hidden system instructions outside the visible template"
+    );
+    assert!(
+        !transcription.contains("Response contract:\\n"),
+        "rewrite pipeline must not append a hidden response contract outside the visible template"
+    );
+    assert!(
+        state.contains("Submit exactly one submit_result tool call"),
+        "default system prompt should include the tool-call instruction users can edit"
+    );
+}
+
+#[test]
 fn set_model_persists_selected_model() {
     let source = read_repo_file("src-tauri/src/commands/transcription.rs");
     let start = source.find("pub async fn set_model").unwrap();

@@ -420,11 +420,22 @@ fn main() {
                     true,
                     Some("CmdOrCtrl+,"),
                 )?;
+                let transcriptions =
+                    MenuItem::with_id(app, "transcriptions", "Transcriptions", true, None::<&str>)?;
                 let separator = tauri::menu::PredefinedMenuItem::separator(app)?;
                 let separator2 = tauri::menu::PredefinedMenuItem::separator(app)?;
 
-                let menu =
-                    Menu::with_items(app, &[&about, &separator, &preferences, &separator2, &quit])?;
+                let menu = Menu::with_items(
+                    app,
+                    &[
+                        &about,
+                        &separator,
+                        &transcriptions,
+                        &preferences,
+                        &separator2,
+                        &quit,
+                    ],
+                )?;
 
                 // Try to get the config-created tray icon and add menu
                 if let Some(tray) = app.tray_by_id("main") {
@@ -465,12 +476,30 @@ fn main() {
                                     WebviewUrl::App("preferences.html".into()),
                                 )
                                 .title("Zana Preferences")
-                                .inner_size(500.0, 600.0)
+                                .inner_size(500.0, 680.0)
                                 .center()
                                 .resizable(false)
                                 .build();
                             } else if let Some(window) = app.get_webview_window("preferences") {
                                 let _ = window.set_focus();
+                            }
+                        }
+                        "transcriptions" => {
+                            log::info!("Transcriptions requested from tray menu");
+                            use tauri::{WebviewUrl, WebviewWindowBuilder};
+                            if let Some(window) = app.get_webview_window("transcriptions") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            } else {
+                                let _ = WebviewWindowBuilder::new(
+                                    app,
+                                    "transcriptions",
+                                    WebviewUrl::App("transcriptions.html".into()),
+                                )
+                                .title("Zana Transcriptions")
+                                .inner_size(560.0, 640.0)
+                                .center()
+                                .build();
                             }
                         }
                         _ => {}
@@ -523,6 +552,8 @@ fn main() {
             commands::set_orb_style,
             commands::get_orb_style,
             commands::get_preferences,
+            commands::get_transcript_history,
+            commands::open_transcriptions_window,
             commands::save_preferences,
             commands::test_ai_connection,
             // Updates

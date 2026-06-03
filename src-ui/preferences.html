@@ -115,6 +115,7 @@
     }
     .section[data-section="speech"]::before { background: var(--speech); }
     .section[data-section="polish"]::before { background: var(--workflow); }
+    .section[data-section="history"]::before { background: var(--speech); }
     .section[data-section="recording"]::before { background: var(--primary); }
     .section[data-section="shortcuts"]::before { background: var(--settings); }
     .section[data-section="appearance"]::before { background: var(--ok); }
@@ -303,7 +304,7 @@
     }
     .button-row {
       position: sticky;
-      bottom: -14px;
+      bottom: 0;
       display: flex;
       align-items: center;
       justify-content: flex-end;
@@ -627,26 +628,19 @@
         <div class="writing-profile-field">
           <div class="setting-copy">
             <div class="setting-label">System Prompt</div>
-            <div class="setting-desc">Template for the rewrite model role and boundaries</div>
+            <div class="setting-desc">Exact system message sent to the rewrite model</div>
           </div>
           <textarea id="writing-purpose" spellcheck="false"></textarea>
         </div>
 
         <div class="writing-profile-field">
           <div class="setting-copy">
-            <div class="setting-label">Prompt</div>
-            <div class="setting-desc">Template that receives context and the captured speech</div>
+            <div class="setting-label">User Prompt</div>
+            <div class="setting-desc">Exact user message sent after variable replacement</div>
           </div>
           <textarea id="writing-tone" spellcheck="false"></textarea>
         </div>
-
-        <div class="writing-profile-field">
-          <div class="setting-copy">
-            <div class="setting-label">Response Contract</div>
-            <div class="setting-desc">Rules for exactly what the model should return</div>
-          </div>
-          <textarea id="writing-format" spellcheck="false"></textarea>
-        </div>
+        <textarea id="writing-format" spellcheck="false" style="display: none;"></textarea>
 
         <div class="writing-profile-field">
           <div class="setting-copy">
@@ -664,6 +658,23 @@
             <code>{project_memory}</code>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div class="section" data-section="history">
+      <div class="section-head">
+        <div class="section-title">Transcriptions</div>
+        <div class="section-meta">local history</div>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-copy">
+          <div class="setting-label">Transcript History</div>
+          <div class="setting-desc">Open recent raw Whisper text and final pasted text in its own window</div>
+        </div>
+        <button class="btn-secondary" id="transcript-history-button" onclick="viewTranscriptions()">
+          Open
+        </button>
       </div>
     </div>
 
@@ -1094,6 +1105,12 @@
       } finally {
         button.disabled = false;
       }
+    }
+
+    async function viewTranscriptions() {
+      if (!window.__TAURI__) return;
+      const { invoke } = window.__TAURI__.core;
+      await invoke('open_transcriptions_window');
     }
 
     async function openAccessibilitySettings() {

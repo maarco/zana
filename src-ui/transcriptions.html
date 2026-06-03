@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zana Transcriptions</title>
+  <style>
+    :root {
+      --background: #101012;
+      --foreground: #f4f4f5;
+      --card: #1a1a1d;
+      --muted: #242428;
+      --muted-foreground: #8b8994;
+      --accent: #2b2b30;
+      --primary: #c76612;
+      --primary-foreground: #fff7ed;
+      --border: rgba(255, 255, 255, 0.06);
+      --destructive: #f87171;
+      --speech: #5b9ef5;
+      --radius: 6px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 120px),
+        var(--background);
+      color: var(--foreground);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      -webkit-app-region: drag;
+      overflow: hidden;
+    }
+    .titlebar {
+      height: 44px;
+      flex: 0 0 auto;
+      background: rgba(26, 26, 29, 0.96);
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      box-shadow: inset 0 -1px rgba(255, 255, 255, 0.04);
+      gap: 10px;
+    }
+    .brand-mark {
+      width: 22px;
+      height: 22px;
+      border-radius: 5px;
+      background: linear-gradient(135deg, #f97316, #7c2d12);
+      flex: 0 0 auto;
+    }
+    .title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--foreground);
+    }
+    .title-meta {
+      font-size: 11px;
+      color: var(--muted-foreground);
+    }
+    .titlebar-actions {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      -webkit-app-region: no-drag;
+    }
+    button {
+      padding: 7px 14px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 0;
+      transition: background 0.2s, transform 0.2s;
+    }
+    button:disabled { cursor: not-allowed; opacity: 0.55; }
+    .btn-secondary {
+      background: var(--muted);
+      color: var(--foreground);
+    }
+    .btn-secondary:hover { background: var(--accent); }
+    .content {
+      flex: 1 1 auto;
+      padding: 14px;
+      overflow: auto;
+      -webkit-app-region: no-drag;
+    }
+    .history-list {
+      display: grid;
+      gap: 8px;
+    }
+    .history-item {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      background: var(--muted);
+      border-radius: var(--radius);
+    }
+    .history-item-head,
+    .history-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .history-time {
+      color: var(--muted-foreground);
+      font-size: 11px;
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    }
+    .history-badge {
+      padding: 3px 6px;
+      border-radius: 4px;
+      background: rgba(91, 158, 245, 0.16);
+      color: var(--foreground);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .history-block {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+    .history-label {
+      color: var(--muted-foreground);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .history-text {
+      color: var(--foreground);
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .history-empty,
+    .history-error {
+      color: var(--muted-foreground);
+      font-size: 12px;
+      padding: 4px 0;
+    }
+    .history-error { color: var(--destructive); }
+  </style>
+</head>
+<body>
+  <div class="titlebar">
+    <div class="brand-mark" aria-hidden="true"></div>
+    <div class="title">Transcriptions</div>
+    <div class="title-meta" id="transcript-history-count">loading...</div>
+    <div class="titlebar-actions">
+      <button class="btn-secondary" type="button" onclick="loadTranscriptHistory()">Refresh</button>
+      <button class="btn-secondary" type="button" onclick="closeWindow()">Close</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="history-list" id="transcript-history-list"></div>
+  </div>
+
+  <script>
+    let transcriptHistoryEntries = [];
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function formatTranscriptTime(timestamp) {
+      if (!timestamp) return 'unknown time';
+      const date = new Date(timestamp);
+      if (Number.isNaN(date.getTime())) return timestamp;
+      return date.toLocaleString([], {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+      });
+    }
+
+    async function loadTranscriptHistory() {
+      const count = document.getElementById('transcript-history-count');
+      const list = document.getElementById('transcript-history-list');
+      count.textContent = 'loading...';
+      list.innerHTML = '';
+
+      if (!window.__TAURI__) {
+        count.textContent = 'not running in app';
+        list.innerHTML = '<div class="history-empty">transcriptions are stored locally in the app</div>';
+        return;
+      }
+
+      try {
+        const { invoke } = window.__TAURI__.core;
+        transcriptHistoryEntries = await invoke('get_transcript_history');
+        count.textContent = `${transcriptHistoryEntries.length} saved`;
+
+        if (!transcriptHistoryEntries.length) {
+          list.innerHTML = '<div class="history-empty">no saved transcriptions yet</div>';
+          return;
+        }
+
+        list.innerHTML = transcriptHistoryEntries.map((entry, index) => {
+          const finalText = entry.finalText || '';
+          const rawText = entry.rawText || '';
+          const showFinal = entry.usedRewrite || finalText !== rawText;
+
+          return `<div class="history-item">
+            <div class="history-item-head">
+              <div class="history-time">${escapeHtml(formatTranscriptTime(entry.timestamp))}</div>
+              <div class="history-badge">${entry.usedRewrite ? 'polished' : 'raw'}</div>
+            </div>
+            <div class="history-block">
+              <div class="history-label">raw whisper</div>
+              <div class="history-text">${escapeHtml(rawText)}</div>
+            </div>
+            ${showFinal ? `<div class="history-block">
+              <div class="history-label">final pasted</div>
+              <div class="history-text">${escapeHtml(finalText)}</div>
+            </div>` : ''}
+            <div class="history-actions">
+              <button class="btn-secondary" type="button" onclick="copyTranscriptText(${index}, 'raw')">
+                Copy Raw
+              </button>
+              <button class="btn-secondary" type="button" onclick="copyTranscriptText(${index}, 'final')">
+                Copy Final
+              </button>
+            </div>
+          </div>`;
+        }).join('');
+      } catch (e) {
+        count.textContent = 'failed';
+        list.innerHTML = `<div class="history-error">${escapeHtml(String(e))}</div>`;
+      }
+    }
+
+    async function copyTranscriptText(index, kind) {
+      const entry = transcriptHistoryEntries[index];
+      if (!entry) return;
+      const text = kind === 'raw' ? entry.rawText : entry.finalText;
+      await navigator.clipboard.writeText(text || '');
+    }
+
+    // window.close() is a no-op for Tauri v2 secondary windows. Use the Tauri
+    // window API; fall back to window.close() when running outside Tauri.
+    async function closeWindow() {
+      try {
+        if (window.__TAURI__ && window.__TAURI__.window
+            && typeof window.__TAURI__.window.getCurrentWindow === 'function') {
+          await window.__TAURI__.window.getCurrentWindow().close();
+          return;
+        }
+        if (window.__TAURI__ && window.__TAURI__.webviewWindow
+            && typeof window.__TAURI__.webviewWindow.getCurrent === 'function') {
+          await window.__TAURI__.webviewWindow.getCurrent().close();
+          return;
+        }
+      } catch (e) {
+        console.error('Failed to close via Tauri window API:', e);
+      }
+      window.close();
+    }
+
+    window.addEventListener('DOMContentLoaded', loadTranscriptHistory);
+  </script>
+</body>
+</html>
