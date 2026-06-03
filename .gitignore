@@ -35,3 +35,4 @@ models/
 *.pem
 *.sqlite
 *.db
+docs/ZANA_APP_EXPANSION_REPORT.md

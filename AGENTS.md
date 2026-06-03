@@ -13,9 +13,9 @@ Privacy is core to the product: do not add cloud transcription, telemetry, uploa
 - `src-tauri/`: active Tauri app crate, Rust backend, commands, state, audio, STT, hooks, plugins, and platform integration.
 - `src-ui/`: app UI assets loaded by Tauri windows and panels; currently plain HTML/CSS/JS, not a bundled frontend app.
 - `plugins/`: bundled plugin manifests and plugin examples.
-- `docs/`: architecture, API, plugin, onboarding, migration, and implementation notes.
-- `tests/`: integration-style Rust tests.
-- `src/`: Rust app/library tree that is not currently listed in the root Cargo workspace. Verify whether it is relevant before editing it.
+- `docs/`: architecture, API, plugin, onboarding, migration, and implementation notes. Some docs are plans or roadmaps — treat them as planned direction, not proof that code exists.
+- `src-tauri/tests/`: the active integration and contract tests. `app_contracts.rs` asserts that specific Preferences UI markers and Tauri commands stay wired together, so renaming a UI id or dropping a command will fail these tests.
+- `tests/` (root) and `src/`: legacy trees from the pre-Tauri egui app. Neither is a member of the root Cargo workspace, so default `cargo` commands do not build or test them. Verify relevance before editing; do not assume they are live.
 - `scripts/`: macOS build, signing, and notarization helpers.
 
 The root `Cargo.toml` currently declares only `src-tauri` as a workspace member, so default build and test commands exercise the Tauri crate.
@@ -37,8 +37,11 @@ cargo check
 # Run all tests
 cargo test
 
-# Run a focused test
-cargo test test_plugin_loading
+# Run the contract tests (assert Preferences UI <-> command wiring)
+cargo test --test app_contracts
+
+# Run a single focused test by name
+cargo test legacy_writing_profile_is_migrated_to_exact_prompt_templates
 
 # Format Rust
 cargo fmt
@@ -68,10 +71,11 @@ tmux attach -t Zana
 
 ## Coding Notes
 
-- Prefer existing Rust module boundaries: `audio`, `stt`, `hooks`, `plugins`, `commands`, `state`, and `onboarding`.
-- Register new Tauri commands in the relevant `commands` module and in the `tauri::generate_handler!` list.
+- Prefer existing Rust module boundaries: `audio`, `stt`, `hooks`, `plugins`, `commands`, `state`, `panel` (macOS NSPanel orb window), and `onboarding`.
+- Register new Tauri commands in the relevant `commands` module and in the `tauri::generate_handler!` list in `src-tauri/src/main.rs`.
 - Keep frontend changes compatible with the current vanilla `src-ui/` setup unless the task explicitly introduces a build pipeline.
 - When changing UI-facing command payloads, update Rust types, frontend callers, and docs/tests together.
+- The AI rewrite pipeline sends exactly two messages: a system prompt (`WritingProfile.purpose`) and a user prompt (`WritingProfile.tone`). The user prompt must contain `{captured}`, and the model returns text through a single `submit_result` tool call. Do not append hidden system text or a separate "response contract" outside these visible templates; `src-tauri/tests/app_contracts.rs` fails if you do. The legacy `format` field is deprecated, and `WritingProfile::migrate_legacy_fields` upgrades old saved settings on load. Supported prompt variables: `{time}`, `{captured}`, `{clipboard}`, `{screen_shot}`, `{dictionary}`, `{history}`, `{style_memory}`, `{project_memory}`.
 - Treat macOS-specific code carefully. Accessibility, microphone permission, NSPanel behavior, and Fn-key handling are user-visible and easy to regress.
 - Prefer typed parsing/serialization via `serde`/`toml`/`serde_json` over ad hoc string manipulation.
 - Add or update focused tests for nontrivial behavior changes. The project docs expect agents to validate compilation and tests before handing work back.
@@ -83,6 +87,8 @@ Use manual checks when a change touches:
 - Fn-key monitoring or double-tap recording.
 - Microphone permissions or audio device selection.
 - Whisper model download, cache paths, or transcription flow.
+- AI rewrite prompts, prompt variables, or the System/User prompt fields in Preferences.
+- The local transcript history panel in Preferences (`get_transcript_history`).
 - Auto-paste behavior.
 - Floating orb lifecycle, fullscreen overlay behavior, or `src-ui/orb*` assets.
 - Plugin discovery, plugin state, or hook event propagation.
