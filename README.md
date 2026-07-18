@@ -10,7 +10,10 @@ Zana is a macOS menubar app that provides instant voice transcription using the 
 - **Double-Tap Toggle**: Double-tap Fn to start recording, tap once to stop (hands-free mode)
 - **Floating Orb**: Beautiful animated orb shows recording status
 - **Works Everywhere**: Captures audio in any app, pastes transcription at cursor
-- **Local Processing**: Uses Whisper.cpp - your audio never leaves your Mac
+- **Local Processing**: Uses Whisper.cpp - your audio is transcribed on your Mac and never uploaded
+- **Optional AI Rewrite**: Polish transcripts through any OpenAI-compatible provider using editable System and User prompts. Off by default; only your configured provider is contacted, and only when you enable it
+- **Transcript History**: Every transcription is saved locally and browsable in a dedicated Transcriptions window
+- **Preferences Window**: Choose the Whisper model, edit rewrite prompts, and manage settings
 - **Plugin System**: Extend with custom orb styles and audio processors
 - **Fullscreen Support**: Orb appears over fullscreen apps
 
@@ -73,6 +76,10 @@ The compiled binary will be at:
 
 ## First Run Setup
 
+On first launch, Zana opens a short onboarding window that walks you through the
+permissions and model download below. You can revisit any of these later from the
+**Preferences** window (tray menu → Preferences...).
+
 ### 1. Grant Accessibility Permissions
 
 Zana needs accessibility access to monitor the Fn key globally.
@@ -118,6 +125,26 @@ Models are cached in: `~/Library/Application Support/Zana/models/`
 
 Quick taps (<300ms) are ignored to prevent accidental triggers. This is helpful since macOS uses Fn for system functions (emoji picker, dictation, etc.).
 
+### Optional AI Rewrite
+
+Zana can pass a transcript through an AI model to clean it up before pasting.
+This is **off by default**. To enable it, open **Preferences** and provide an
+API key and endpoint for any OpenAI-compatible chat-completions provider, then
+edit the **System** and **User** prompts to shape the output. The User prompt
+must include the `{captured}` variable; other supported variables include
+`{time}`, `{clipboard}`, `{screen_shot}`, `{dictionary}`, `{history}`,
+`{style_memory}`, and `{project_memory}`.
+
+When rewrite is enabled, your transcript (plus any context you include, such as
+clipboard or a screenshot) is sent to the provider you configured. Transcription
+itself always stays local. See [PRIVACY.md](PRIVACY.md) for details.
+
+### Transcript History
+
+Every transcription is saved locally, whether or not AI rewrite is used. Open
+the **Transcriptions** window from the tray menu (or from Preferences) to review
+past transcripts. History never leaves your Mac.
+
 ## Configuration
 
 ### Orb Appearance
@@ -160,11 +187,17 @@ Zana
 │   │   ├── audio/      Audio capture via cpal
 │   │   ├── stt/        Whisper transcription
 │   │   ├── hooks/      Event system
-│   │   └── plugins/    Plugin loader
+│   │   ├── plugins/    Plugin loader
+│   │   ├── commands/   Tauri commands (UI <-> backend)
+│   │   ├── state/      Settings and writing profile
+│   │   ├── panel/      macOS NSPanel orb window
+│   │   └── onboarding/ First-run flow
 │   └── Cargo.toml
 ├── src-ui/             Frontend (vanilla HTML/CSS/JS)
-│   ├── orb.html        Floating orb interface
-│   └── orb_config.json Orb configuration
+│   ├── orb.html            Floating orb interface
+│   ├── preferences.html    Settings and rewrite prompts
+│   ├── transcriptions.html Local transcript history
+│   └── orb_config.json     Orb configuration
 └── plugins/            Orb style plugins
 ```
 
@@ -196,8 +229,8 @@ Zana
 
 ### Transcription is inaccurate
 
-- Default model is "Small" (~94% accuracy)
-- For better accuracy, use Medium or Large model from settings
+- Default model is "Small" (good balance of speed and accuracy)
+- For better accuracy, use Medium or Large model from Preferences
 - Ensure good audio quality (quiet environment, close to mic)
 
 ### App crashes on hide
@@ -259,7 +292,9 @@ Set these repository secrets before publishing signed builds:
 
 ## Project Status
 
-**Current Version:** 0.1.0 (Alpha)
+**Current Version:** 0.1.2 (Alpha)
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 **Completed:**
 - [x] Local Whisper transcription
@@ -270,6 +305,10 @@ Set these repository secrets before publishing signed builds:
 - [x] Hook event system
 - [x] Auto-paste transcription
 - [x] Fullscreen support
+- [x] Optional AI rewrite (OpenAI-compatible, editable prompts)
+- [x] Local transcript history (Transcriptions window)
+- [x] First-run onboarding flow
+- [x] Single-instance protection
 
 **Roadmap:**
 - [x] Model selection UI
