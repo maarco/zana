@@ -285,10 +285,25 @@ export APPLE_TEAM_ID="TEAMID"
 ./scripts/cut-release.sh v0.1.1
 ```
 
-GitHub releases are created from `v*` tags by `.github/workflows/release.yml`.
-Set these repository secrets before publishing signed builds:
-`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`,
-`APPLE_ID`, `APPLE_APP_PASSWORD`, and `APPLE_TEAM_ID`.
+`cut-release.sh` checks you are on `main` matching `origin/main` and that
+`Cargo.toml` and `tauri.conf.json` carry the tag's version, pushes the
+annotated tag, then dispatches `.github/workflows/release.yml`. That workflow
+only runs from `main`, takes an existing tag as input, and refuses to replace
+an existing GitHub release. To re-run a release for a tag that already exists:
+
+```bash
+gh workflow run release.yml --ref main -f tag=v0.1.2
+```
+
+Signing mode `developer-id` (default) signs, notarizes and staples the DMG and
+fails before the build if a secret is missing. `-f signing=unsigned` ships an
+ad-hoc sealed build with quarantine instructions in the release notes.
+
+Repository secrets for `developer-id`:
+`APPLE_CERTIFICATE` (base64 .p12), `APPLE_CERTIFICATE_PASSWORD`,
+`APPLE_SIGNING_IDENTITY`, `APPLE_TEAM_ID`, plus one notarization login:
+`APPLE_API_KEY_ID`, `APPLE_API_ISSUER`, `APPLE_API_PRIVATE_KEY` (App Store
+Connect API key, preferred) or `APPLE_ID` and `APPLE_APP_PASSWORD`.
 
 ## Project Status
 
