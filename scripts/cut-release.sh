@@ -42,14 +42,22 @@ if [ "$cargo_version" != "$want" ] || [ "$tauri_version" != "$want" ]; then
     exit 1
 fi
 
-if git rev-parse "$TAG" >/dev/null 2>&1; then
-    echo "error: tag already exists: $TAG"
+cargo metadata --locked --format-version 1 >/dev/null || {
+    echo "error: Cargo.lock is out of date; run cargo check and commit Cargo.lock"
     exit 1
-fi
+}
 
-git tag -a "$TAG" -m "Release $TAG"
-git push origin "$TAG"
-echo "release tag pushed: $TAG"
+if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+    echo "tag already on origin: $TAG (re-dispatching the release for it)"
+else
+    if git rev-parse "$TAG" >/dev/null 2>&1; then
+        echo "error: local tag $TAG exists but is not on origin; push or delete it first"
+        exit 1
+    fi
+    git tag -a "$TAG" -m "Release $TAG"
+    git push origin "$TAG"
+    echo "release tag pushed: $TAG"
+fi
 
 # The Release workflow is a dispatch-only controller that runs from main.
 gh workflow run release.yml --ref main -f tag="$TAG" -f signing="${SIGNING:-developer-id}"
