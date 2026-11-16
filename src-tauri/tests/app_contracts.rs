@@ -311,8 +311,15 @@ fn cut_release_is_tag_driven_and_guarded() {
     let script = read_repo_file("scripts/cut-release.sh");
 
     assert!(
-        workflow.contains("tags:") && workflow.contains("\"v*\""),
-        "GitHub release workflow must run from v* tags"
+        workflow.contains("workflow_dispatch:")
+            && workflow.contains("refs/heads/main")
+            && workflow.contains("refs/tags/$TAG")
+            && workflow.contains("missing secrets"),
+        "GitHub release workflow must run from main for an existing tag and fail on missing signing secrets"
+    );
+    assert!(
+        script.contains("gh workflow run release.yml"),
+        "cut-release script must dispatch the release workflow after pushing the tag"
     );
     assert!(
         script.contains("git diff --quiet")
