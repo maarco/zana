@@ -29,10 +29,34 @@ use tauri_nspanel::WebviewWindowExt;
 #[allow(unused_imports)]
 use tauri_nspanel::Panel; // for as_panel()
 
+/// The app handle, so code on any thread can hop to the main thread.
+#[cfg(target_os = "macos")]
+static APP_HANDLE: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
+
 /// Evaluate JavaScript directly in the panel's WKWebView
-/// This bypasses Tauri's IPC which doesn't work with NSPanel
+/// This bypasses Tauri's IPC which doesn't work with NSPanel.
+/// WebKit kills the app when evaluateJavaScript runs off the main thread (it did on
+/// every Preferences save: save_preferences emits orb-style-changed from a tokio
+/// worker), so calls from other threads are handed to the main thread.
 #[cfg(target_os = "macos")]
 fn eval_js_in_panel(panel: &tauri_nspanel::PanelHandle<tauri::Wry>, js: &str) {
+    use objc::{class, msg_send, sel, sel_impl};
+    // SAFETY: +[NSThread isMainThread] has no side effects.
+    let on_main: bool = unsafe { msg_send![class!(NSThread), isMainThread] };
+    if on_main {
+        return eval_js_now(panel, js);
+    }
+    let Some(app) = APP_HANDLE.get() else {
+        return log::warn!("[eval_js] called off the main thread before setup; skipped");
+    };
+    let (panel, js) = (panel.clone(), js.to_string());
+    if let Err(e) = app.run_on_main_thread(move || eval_js_now(&panel, &js)) {
+        log::warn!("[eval_js] could not reach the main thread: {e}");
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn eval_js_now(panel: &tauri_nspanel::PanelHandle<tauri::Wry>, js: &str) {
     use cocoa::base::{id, nil};
     use cocoa::foundation::NSString;
     use objc::{msg_send, sel, sel_impl};
@@ -260,6 +284,8 @@ fn main() {
         .menu(create_app_menu)
         .setup(|app| {
             let is_first_run = Zana_app::onboarding::is_first_run();
+            #[cfg(target_os = "macos")]
+            let _ = APP_HANDLE.set(app.handle().clone());
 
             // ALWAYS create application state (needed for commands)
             log::info!("Initializing application state...");
