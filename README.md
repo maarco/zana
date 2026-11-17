@@ -147,6 +147,14 @@ past transcripts. History never leaves your Mac.
 
 ## Configuration
 
+### Voicebot Mode (experimental, macOS)
+
+Preferences > Voicebot turns Zana into a hands-free voice agent with a floating
+orb: local Parakeet speech-to-text and VibeVoice speech, a chat model of your
+choice, and tools to see your screen, type for you, run commands and use MCP
+servers. Zana installs and supervises everything itself; you need
+`brew install uv livekit`. Details, keys and tests: [voicebot/README.md](voicebot/README.md).
+
 ### Orb Appearance
 
 Edit `src-ui/orb_config.json` to customize the orb:

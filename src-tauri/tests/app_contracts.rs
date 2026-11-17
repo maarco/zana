@@ -549,3 +549,81 @@ fn whisper_full_runs_on_blocking_thread() {
         "the blocking task must own or borrow audio samples inside the blocking closure"
     );
 }
+
+#[test]
+fn voicebot_preferences_commands_and_bundle_stay_wired() {
+    let preferences = read_repo_file("src-ui/preferences.html");
+    let orb = read_repo_file("src-ui/voicebot.html");
+    let main_rs = read_repo_file("src-tauri/src/main.rs");
+    let config = read_repo_file("src-tauri/tauri.conf.json");
+    let supervisor = read_repo_file("src-tauri/src/voicebot.rs");
+
+    for id in [
+        "voicebot-mode-toggle",
+        "voicebot-terminal-toggle",
+        "voicebot-context-command",
+        "voicebot-wake-word",
+        "voicebot-prompt",
+        "voicebot-mcp",
+        "voicebot-save",
+        "voicebot-debug",
+        "voicebot-voiceprint-clear",
+    ] {
+        assert!(
+            preferences.contains(id),
+            "Preferences must keep the Voicebot control {id}"
+        );
+    }
+    for command in [
+        "commands::get_voicebot_config",
+        "commands::set_voicebot_mode",
+        "commands::set_voicebot_terminal",
+        "commands::save_voicebot_prompt",
+        "commands::save_voicebot_mcp",
+        "commands::voicebot_join",
+        "commands::voicebot_screen_context",
+        "commands::set_voicebot_wake_word",
+        "commands::voicebot_debug_tail",
+        "open_voicebot_debug",
+        "commands::voicebot_screenshot",
+        "voicebot_paste",
+    ] {
+        assert!(main_rs.contains(command), "main.rs must register {command}");
+    }
+    for rpc in [
+        "zana.paste",
+        "zana.screen",
+        "voicebot_join",
+        "zanaDictation",
+    ] {
+        assert!(orb.contains(rpc), "the Voicebot orb must handle {rpc}");
+    }
+    // Every file the supervisor needs ships in the bundle.
+    for file in [
+        "agent.py",
+        "voice_server.py",
+        "speech.py",
+        "listening.py",
+        "voiceprint.py",
+        "system_prompt.default.md",
+        "requirements.txt",
+        "requirements-nodeps.txt",
+    ] {
+        assert!(
+            config.contains(&format!("\"../voicebot/{file}\": \"voicebot/{file}\"")),
+            "tauri.conf.json must bundle voicebot/{file}"
+        );
+        assert!(
+            supervisor.contains(&format!("\"{file}\"")),
+            "voicebot.rs CODE_FILES must list {file}"
+        );
+        assert!(
+            repo_file(&format!("voicebot/{file}")).exists(),
+            "voicebot/{file} must exist"
+        );
+    }
+    assert!(
+        main_rs.contains("Zana_app::voicebot::stop()"),
+        "Zana must stop Voicebot's processes when it exits"
+    );
+}

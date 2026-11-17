@@ -794,6 +794,76 @@ var(--background);
       </div>
     </div>
 
+    <div class="section" data-section="voicebot" id="voicebot-section">
+      <div class="section-head">
+        <div class="section-title">Voicebot</div>
+        <div class="section-meta">Experimental</div>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-copy">
+          <div class="setting-label">Voicebot Mode</div>
+          <div class="setting-desc">Runs a voice agent you talk to through a floating orb, in place of Fn dictation (off while this is on). Zana restarts when you flip this. Replies come from the chat model in Voicebot's .env, which may be a cloud service.</div>
+        </div>
+        <div class="toggle" id="voicebot-mode-toggle"></div>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-copy">
+          <div class="setting-label">Terminal Tool</div>
+          <div class="setting-desc">Lets the agent run shell commands on this Mac. Text on screen can try to steer it; every command shows in the orb.</div>
+        </div>
+        <div class="toggle" id="voicebot-terminal-toggle"></div>
+      </div>
+
+      <div class="provider-field">
+        <div>
+          <div class="setting-label">Wake Word</div>
+          <div class="setting-desc">Voicebot only answers after hearing it; everything you say is still written to its transcript. Empty means it always answers.</div>
+        </div>
+        <input type="text" id="voicebot-wake-word" spellcheck="false" placeholder="For example: hey voicebot">
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-copy">
+          <div class="setting-label">Voice Print</div>
+          <div class="setting-desc" id="voicebot-voiceprint-status">Say "set up my voice print" to Voicebot, then talk for about ten seconds; after that it only answers your voice.</div>
+        </div>
+        <button class="btn-secondary" type="button" id="voicebot-voiceprint-clear" hidden>Clear</button>
+      </div>
+
+      <div class="provider-field">
+        <div>
+          <div class="setting-label">Screen History Command</div>
+          <div class="setting-desc">Optional shell command; its output tells the agent what you were recently looking at</div>
+        </div>
+        <input type="text" id="voicebot-context-command" spellcheck="false" placeholder="Leave empty to send only the front app">
+      </div>
+
+      <div class="writing-profile-field">
+        <div>
+          <div class="setting-label">System Prompt</div>
+          <div class="setting-desc">Applies from the next conversation (double-click the orb)</div>
+        </div>
+        <textarea id="voicebot-prompt" spellcheck="false" aria-label="Voicebot system prompt"></textarea>
+      </div>
+
+      <div class="writing-profile-field">
+        <div>
+          <div class="setting-label">MCP Servers</div>
+          <div class="setting-desc">Claude Desktop format: a "command" with "args", or a "url"</div>
+        </div>
+        <textarea id="voicebot-mcp" spellcheck="false" aria-label="Voicebot MCP servers JSON"></textarea>
+      </div>
+
+      <div class="setting-row" style="background: none; padding-top: 0;">
+        <div class="setting-desc" id="voicebot-status" role="status"></div>
+        <button class="btn-secondary" type="button" id="voicebot-debug" title="Live view of what Voicebot hears, says and runs">Debug</button>
+        <button class="btn-secondary" type="button" id="voicebot-open-folder" title="Keys (.env), logs and voices">Open Folder</button>
+        <button class="btn-secondary" type="button" id="voicebot-save">Save Voicebot</button>
+      </div>
+    </div>
+
     <div class="section" data-section="diagnostics">
       <div class="section-head">
         <div class="section-title">Diagnostics</div>
@@ -838,7 +908,7 @@ var(--background);
       new MutationObserver(sync).observe(toggle, { attributes: true, attributeFilter: ['class'] });
       toggle.addEventListener('click', () => {
         toggle.classList.toggle('active');
-        markDirty();
+        if (!toggle.closest('[data-section="voicebot"]')) markDirty();
       });
       toggle.addEventListener('keydown', (event) => {
         if (event.key === ' ' || event.key === 'Enter') {
@@ -848,11 +918,68 @@ var(--background);
       });
     });
 
+    // Voicebot saves on its own: its switches act at once, Save Voicebot writes the rest.
+    const voicebotEl = (id) => document.getElementById(id);
+    function voicebotSay(text) { voicebotEl('voicebot-status').textContent = text; }
+    async function loadVoicebot() {
+      if (!/Mac/i.test(navigator.platform)) { voicebotEl('voicebot-section').hidden = true; return; }
+      if (!window.__TAURI__) return;
+      try {
+        const cfg = await window.__TAURI__.core.invoke('get_voicebot_config');
+        voicebotEl('voicebot-mode-toggle').classList.toggle('active', cfg.enabled);
+        voicebotEl('voicebot-terminal-toggle').classList.toggle('active', cfg.terminal);
+        voicebotEl('voicebot-context-command').value = cfg.context_command;
+        voicebotEl('voicebot-wake-word').value = cfg.wake_word;
+        voicebotEl('voicebot-voiceprint-clear').hidden = !cfg.voiceprint;
+        if (cfg.voiceprint) voicebotEl('voicebot-voiceprint-status').textContent = 'On: Voicebot only answers your voice. Other voices still go to its transcript, marked as someone else.';
+        voicebotEl('voicebot-prompt').value = cfg.prompt;
+        voicebotEl('voicebot-mcp').value = cfg.mcp;
+        voicebotSay(cfg.enabled ? `Status: ${cfg.status.detail}` : '');
+      } catch (e) {
+        voicebotSay(String(e));
+      }
+    }
+    voicebotEl('voicebot-mode-toggle')?.addEventListener('click', async (event) => {
+      const enabled = event.currentTarget.classList.contains('active');
+      voicebotSay(enabled ? 'Turning Voicebot on, restarting Zana…' : 'Turning Voicebot off, restarting Zana…');
+      try { await window.__TAURI__.core.invoke('set_voicebot_mode', { enabled }); } catch (e) { voicebotSay(String(e)); }
+    });
+    voicebotEl('voicebot-terminal-toggle')?.addEventListener('click', async (event) => {
+      const enabled = event.currentTarget.classList.contains('active');
+      try {
+        await window.__TAURI__.core.invoke('set_voicebot_terminal', { enabled });
+        voicebotSay(`Terminal Tool ${enabled ? 'on' : 'off'} from the next conversation`);
+      } catch (e) { voicebotSay(String(e)); }
+    });
+    voicebotEl('voicebot-voiceprint-clear')?.addEventListener('click', async () => {
+      try {
+        await window.__TAURI__.core.invoke('clear_voicebot_voiceprint');
+        voicebotSay('Voice print cleared; Voicebot answers anyone from the next conversation');
+        loadVoicebot();
+      } catch (e) { voicebotSay(String(e)); }
+    });
+    voicebotEl('voicebot-debug')?.addEventListener('click', () => window.__TAURI__.core.invoke('open_voicebot_debug').catch((e) => voicebotSay(String(e))));
+    voicebotEl('voicebot-open-folder')?.addEventListener('click', () => window.__TAURI__.core.invoke('open_voicebot_folder').catch((e) => voicebotSay(String(e))));
+    voicebotEl('voicebot-save')?.addEventListener('click', async () => {
+      const invoke = window.__TAURI__.core.invoke;
+      try {
+        await invoke('save_voicebot_mcp', { json: voicebotEl('voicebot-mcp').value });
+        await invoke('save_voicebot_prompt', { prompt: voicebotEl('voicebot-prompt').value });
+        await invoke('set_voicebot_context_command', { command: voicebotEl('voicebot-context-command').value });
+        await invoke('set_voicebot_wake_word', { wakeWord: voicebotEl('voicebot-wake-word').value });
+        voicebotSay('Saved; applies from the next conversation');
+      } catch (e) {
+        voicebotSay(String(e));
+      }
+    });
+    loadVoicebot();
+
     function markDirty() {
       setSaveStatus('Unsaved changes', 'dirty');
     }
-    document.querySelector('.content')?.addEventListener('input', markDirty);
-    document.querySelector('.content')?.addEventListener('change', markDirty);
+    const markDirtyOutsideVoicebot = (event) => { if (!event.target.closest('[data-section="voicebot"]')) markDirty(); };
+    document.querySelector('.content')?.addEventListener('input', markDirtyOutsideVoicebot);
+    document.querySelector('.content')?.addEventListener('change', markDirtyOutsideVoicebot);
 
     document.addEventListener('keydown', (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {

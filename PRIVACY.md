@@ -58,6 +58,21 @@ services. Network activity can include:
 - Checking for app updates (optional, from GitHub)
 - Sending transcript, clipboard/profile context, or screenshot context to your
   configured rewrite provider when optional rewrite is enabled
+- Voicebot Mode (off by default, macOS): sending what you say after the wake
+  word, the unread transcript, tool results, window titles and, when you ask it
+  to look, a screenshot to the chat and vision models you configure in
+  Voicebot's `.env` (OpenRouter by default; any OpenAI-compatible endpoint,
+  including a local one, works). Speech-to-text and text-to-speech stay on your
+  Mac. Turning it on downloads its Python packages, models and voices.
+
+### Voicebot Mode
+
+Voicebot keeps an always-on transcript of everything it hears, in
+`~/Library/Application Support/Zana/voicebot/transcript.md`, including speech
+it does not answer. Nothing it hears reaches a model until you say the wake
+word (if you set one). Its optional Terminal Tool and the MCP servers you add
+can run programs on your Mac; text on your screen can try to steer the model,
+so turn them on only if you accept that.
 
 ## Data Storage
 

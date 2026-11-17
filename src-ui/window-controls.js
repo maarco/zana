@@ -1,6 +1,7 @@
 // Minimize and close buttons for undecorated windows ([data-window] attribute),
 // plus the shortcuts a native title bar would give: Command-W, Command-M, and
 // Escape on windows that opt in with <body data-escape-closes>.
+(function () {
 function currentWindow() {
   return window.__TAURI__?.window?.getCurrentWindow?.();
 }
@@ -8,6 +9,7 @@ function currentWindow() {
 function windowAction(action) {
   const win = currentWindow();
   if (!win) return action === 'close' ? window.close() : undefined;
+  if (action === 'close' && document.body.hasAttribute('data-close-hides')) return win.hide();
   return action === 'minimize' ? win.minimize() : win.close();
 }
 
@@ -66,3 +68,4 @@ document.addEventListener('mousedown', (event) => {
   }
   win.startDragging();
 });
+}());

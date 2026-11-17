@@ -9,6 +9,16 @@
   "bundle": {
     "active": true,
     "targets": ["dmg", "app", "nsis"],
+    "resources": {
+      "../voicebot/agent.py": "voicebot/agent.py",
+      "../voicebot/voice_server.py": "voicebot/voice_server.py",
+      "../voicebot/speech.py": "voicebot/speech.py",
+      "../voicebot/listening.py": "voicebot/listening.py",
+      "../voicebot/voiceprint.py": "voicebot/voiceprint.py",
+      "../voicebot/system_prompt.default.md": "voicebot/system_prompt.default.md",
+      "../voicebot/requirements.txt": "voicebot/requirements.txt",
+      "../voicebot/requirements-nodeps.txt": "voicebot/requirements-nodeps.txt"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -70,7 +80,7 @@
         {
           "identifier": "main-capability",
           "description": "Main window capabilities",
-          "windows": ["main", "preferences", "about", "transcriptions"],
+          "windows": ["main", "preferences", "about", "transcriptions", "voicebot", "voicebot-debug"],
           "permissions": [
             "core:event:allow-listen",
             "core:event:allow-emit",

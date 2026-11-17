@@ -187,6 +187,14 @@ pub struct Settings {
     pub style_memories: Vec<StyleMemory>,
     /// Learned project terms and context
     pub project_memories: Vec<ProjectMemory>,
+    /// Voicebot mode (experimental, macOS): run the local LiveKit voice agent and its orb
+    pub voicebot_mode: bool,
+    /// Give Voicebot's agent a terminal tool
+    pub voicebot_terminal: bool,
+    /// Optional zsh command whose output Voicebot gets as screen history
+    pub voicebot_context_command: String,
+    /// Wake word; empty means Voicebot always answers
+    pub voicebot_wake_word: String,
 }
 
 impl Settings {
@@ -261,6 +269,10 @@ impl Settings {
             transcript_history: Vec::new(),
             style_memories: Vec::new(),
             project_memories: Vec::new(),
+            voicebot_mode: false,
+            voicebot_terminal: false,
+            voicebot_context_command: String::new(),
+            voicebot_wake_word: String::new(),
         }
     }
 }
@@ -321,9 +333,13 @@ impl AppState {
         let whisper_engine = WhisperEngine::new(event_bus.clone())?;
         let settings = Settings::load();
 
-        // Preload whisper model in background
+        // Preload whisper model in background (not in Voicebot Mode, which has its
+        // own speech-to-text and turns Zana's dictation off)
         let whisper_engine_clone = whisper_engine.clone();
-        let preload_model = settings.whisper_model.clone();
+        let preload_model = settings
+            .whisper_model
+            .clone()
+            .filter(|_| !settings.voicebot_mode);
         std::thread::spawn(move || {
             let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(async move {

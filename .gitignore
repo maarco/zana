@@ -37,3 +37,8 @@ models/
 *.db
 docs/ZANA_APP_EXPANSION_REPORT.md
 .codebase-memory/
+
+# Voicebot local runtime (development)
+voicebot/.home/
+voicebot/.venv/
+voicebot/**/__pycache__/
