@@ -13,7 +13,7 @@ function windowAction(action) {
 
 document.addEventListener('click', (event) => {
   const button = event.target.closest('[data-window]');
-  if (button) windowAction(button.dataset.window);
+  if (button && !button.disabled) windowAction(button.dataset.window);
 });
 
 document.addEventListener('keydown', (event) => {
@@ -25,9 +25,31 @@ document.addEventListener('keydown', (event) => {
     && !event.target.closest('input, textarea, select')) { windowAction('close'); }
 });
 
+// Native-looking buttons per platform: macOS traffic lights on the left
+// (close, minimize, zoom), Windows caption buttons on the right
+// (minimize, maximize, close). Zoom and maximize stay disabled because these
+// windows are fixed-size.
+const isMac = /Mac/i.test(navigator.platform || navigator.userAgent);
+const ICONS = {
+  close: '<path d="M2 2l6 6M8 2l-6 6"/>',
+  minimize: '<path d="M2 5h6"/>',
+  zoom: '<path d="M5 2v6M2 5h6"/>',
+  maximize: '<rect x="2" y="2" width="6" height="6"/>',
+};
+const ORDER = isMac ? ['close', 'minimize', 'zoom'] : ['minimize', 'maximize', 'close'];
+const LABELS = isMac
+  ? { close: 'Close (Command-W)', minimize: 'Minimize (Command-M)', zoom: 'Zoom' }
+  : { close: 'Close (Ctrl+W)', minimize: 'Minimize (Ctrl+M)', maximize: 'Maximize' };
+
 document.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('[data-window="minimize"]').forEach((b) => { b.title = 'Minimize (Command-M)'; });
-  document.querySelectorAll('[data-window="close"]').forEach((b) => { b.title = 'Close (Command-W)'; });
+  document.body.classList.add(isMac ? 'platform-mac' : 'platform-windows');
+  document.querySelectorAll('.window-controls').forEach((group) => {
+    group.classList.add(isMac ? 'mac' : 'windows');
+    group.innerHTML = ORDER.map((action) => {
+      const fixed = action === 'zoom' || action === 'maximize';
+      return `<button type="button" data-window="${action}" aria-label="${LABELS[action].replace(/ \(.*/, '')}" title="${LABELS[action]}"${fixed ? ' disabled' : ''}><svg viewBox="0 0 10 10" aria-hidden="true">${ICONS[action]}</svg></button>`;
+    }).join('');
+  });
 });
 
 // Drag the window from anywhere inside a [data-tauri-drag-region] header,

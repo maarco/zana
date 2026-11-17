@@ -37,6 +37,7 @@
       padding: 18px;
       background: var(--card);
       border: 0;
+      border-radius: var(--window-radius, 12px);
       display: grid;
       grid-template-rows: auto 1fr auto;
       gap: 18px;
@@ -143,7 +144,9 @@
       color: var(--muted-foreground);
       -webkit-app-region: no-drag;
     }
-      .about-controls { position: absolute; top: 10px; right: 10px; }
+      .about-controls { position: absolute; top: 0; right: 0; }
+    body.platform-mac .about-controls { top: 14px; left: 14px; right: auto; }
+    body.platform-mac .about-container { padding-top: 40px; }
   </style>
   <link rel="stylesheet" href="window-chrome.css">
   <script src="window-controls.js"></script>
