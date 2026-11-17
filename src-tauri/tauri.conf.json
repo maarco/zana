@@ -15,6 +15,7 @@
       "../voicebot/speech.py": "voicebot/speech.py",
       "../voicebot/listening.py": "voicebot/listening.py",
       "../voicebot/jobs.py": "voicebot/jobs.py",
+      "../voicebot/fillers.py": "voicebot/fillers.py",
       "../voicebot/voiceprint.py": "voicebot/voiceprint.py",
       "../voicebot/system_prompt.default.md": "voicebot/system_prompt.default.md",
       "../voicebot/requirements.txt": "voicebot/requirements.txt",

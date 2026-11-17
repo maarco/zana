@@ -14,6 +14,9 @@ pub struct VoicebotConfig {
     pub wake_word: String,
     pub voice: String,
     pub voices: Vec<String>,
+    pub fillers: bool,
+    pub filler_phrases: String,
+    pub filler_days: u32,
     pub voiceprint: bool,
     pub prompt: String,
     pub mcp: String,
@@ -39,6 +42,9 @@ pub async fn get_voicebot_config(
         wake_word: settings.voicebot_wake_word.clone(),
         voice: settings.voicebot_voice.clone(),
         voices: voicebot::voices(),
+        fillers: settings.voicebot_fillers,
+        filler_phrases: settings.voicebot_filler_phrases.join("\n"),
+        filler_days: settings.voicebot_filler_days,
         voiceprint: home.join("voiceprint.npy").is_file(),
         prompt,
         mcp: std::fs::read_to_string(home.join("mcp.json")).unwrap_or_else(|_| MCP_EXAMPLE.into()),
@@ -96,6 +102,31 @@ pub async fn set_voicebot_voice(
         let _ = app.emit("voicebot-config-changed", ());
     }
     Ok(())
+}
+
+/// Thinking sounds: on or off, their lines (one per line; empty means the built-in ones) and
+/// how many days before they are made again. Applies from the next conversation.
+#[tauri::command]
+pub async fn set_voicebot_fillers(
+    state: State<'_, AppState>,
+    on: bool,
+    phrases: String,
+    days: u32,
+) -> Result<(), String> {
+    let settings = {
+        let mut settings = state.settings.write().await;
+        settings.voicebot_fillers = on;
+        settings.voicebot_filler_phrases = phrases
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .map(String::from)
+            .collect();
+        settings.voicebot_filler_days = days.max(1);
+        settings.clone()
+    };
+    state.save_settings().await.map_err(|e| e.to_string())?;
+    voicebot::write_agent_config(&settings).map_err(|e| e.to_string())
 }
 
 /// Path of a fresh screenshot for the agent's vision tool.

@@ -26,12 +26,13 @@ const STOCK_VOICES: [&str; 7] = [
     "in-Samuel_man",
 ];
 /// Files the bundle ships (tauri.conf.json bundle.resources maps the same list).
-pub const CODE_FILES: [&str; 9] = [
+pub const CODE_FILES: [&str; 10] = [
     "agent.py",
     "voice_server.py",
     "speech.py",
     "listening.py",
     "jobs.py",
+    "fillers.py",
     "voiceprint.py",
     "system_prompt.default.md",
     "requirements.txt",
@@ -93,6 +94,14 @@ pub fn write_agent_config(settings: &crate::state::Settings) -> std::io::Result<
         }),
     );
     config.insert("voice".into(), settings.voicebot_voice.trim().into());
+    config.insert(
+        "fillers".into(),
+        serde_json::json!({
+            "on": settings.voicebot_fillers,
+            "phrases": settings.voicebot_filler_phrases,
+            "days": settings.voicebot_filler_days,
+        }),
+    );
     std::fs::write(&path, serde_json::Value::Object(config).to_string())?;
     #[cfg(unix)]
     {

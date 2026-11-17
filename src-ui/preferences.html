@@ -551,6 +551,30 @@ var(--background);
 
       <div class="setting-row">
         <div class="setting-copy">
+          <div class="setting-label">Thinking Sounds</div>
+          <div class="setting-desc">Plays a random "hmm" or "uhh" in Voicebot's voice while it works out a reply, then a short pause</div>
+        </div>
+        <div class="toggle" id="voicebot-fillers-toggle"></div>
+      </div>
+
+      <div class="provider-field">
+        <div>
+          <div class="setting-label">Thinking Sound Lines</div>
+          <div class="setting-desc">One per line, made once in Voicebot's voice and cached; empty uses the built-in sixteen</div>
+        </div>
+        <textarea id="voicebot-filler-phrases" spellcheck="false" aria-label="Thinking sound lines" placeholder="Ummmm...&#10;Hmmmm...&#10;Uhhhhh...&#10;Ooooookay..."></textarea>
+      </div>
+
+      <div class="provider-field">
+        <div>
+          <div class="setting-label">Remake Sounds Every</div>
+          <div class="setting-desc">Days before the thinking sounds are made again, so they stay fresh</div>
+        </div>
+        <input type="number" id="voicebot-filler-days" min="1" step="1" value="7">
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-copy">
           <div class="setting-label">Voice Print</div>
           <div class="setting-desc" id="voicebot-voiceprint-status">Say "set up my voice print" to Voicebot, then talk for about ten seconds; after that it only answers your voice.</div>
         </div>
@@ -746,6 +770,9 @@ var(--background);
           voice.append(new Option(name ? (kind ? `${who} (${kind})` : who) : 'Default (Emma)', name));
         }
         voice.value = cfg.voice;
+        voicebotEl('voicebot-fillers-toggle').classList.toggle('active', cfg.fillers);
+        voicebotEl('voicebot-filler-phrases').value = cfg.filler_phrases;
+        voicebotEl('voicebot-filler-days').value = cfg.filler_days;
         voicebotEl('voicebot-voiceprint-clear').hidden = !cfg.voiceprint;
         if (cfg.voiceprint) voicebotEl('voicebot-voiceprint-status').textContent = 'On: Voicebot only answers your voice. Other voices still go to its transcript, marked as someone else.';
         voicebotEl('voicebot-prompt').value = cfg.prompt;
@@ -780,6 +807,11 @@ var(--background);
       await invoke('set_voicebot_context_command', { command: voicebotEl('voicebot-context-command').value });
       await invoke('set_voicebot_wake_word', { wakeWord: voicebotEl('voicebot-wake-word').value });
       await invoke('set_voicebot_voice', { voice: voicebotEl('voicebot-voice').value });
+      await invoke('set_voicebot_fillers', {
+        on: voicebotEl('voicebot-fillers-toggle').classList.contains('active'),
+        phrases: voicebotEl('voicebot-filler-phrases').value,
+        days: Math.max(1, parseInt(voicebotEl('voicebot-filler-days').value, 10) || 7),
+      });
     }
     voicebotEl('voicebot-save')?.addEventListener('click', async () => {
       try {

@@ -24,7 +24,7 @@ import threading
 import time
 
 from dotenv import load_dotenv
-from livekit import agents
+from livekit import agents, rtc
 from livekit.agents import (
     Agent, AgentServer, AgentSession, APIConnectOptions, JobProcess, RunContext, StopResponse,
     function_tool, get_job_context, inference, llm, mcp,
@@ -33,6 +33,7 @@ from livekit.agents.voice import room_io
 from livekit.agents.voice.agent_session import SessionConnectOptions
 from livekit.plugins import openai, silero
 
+from fillers import DEFAULT_PHRASES, Fillers, chunks_with_gap
 from jobs import Jobs
 from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls,
                        split_say, topics, wants_redo, wants_voiceprint)
@@ -47,6 +48,7 @@ VOICE = os.getenv("VOICE_SERVER_URL", "http://127.0.0.1:8800/v1")
 FAST = float(os.getenv("VOICEBOT_FAST_SECONDS", "3"))  # slower terminal commands answer "on it" now and report later
 TERMINAL_TIMEOUT = float(os.getenv("VOICEBOT_TERMINAL_TIMEOUT", "900"))  # jobs are stopped after 15 minutes
 TRANSCRIPT = Transcript(HOME)  # always-on: every line heard and said
+FILLERS = Fillers(HOME)  # thinking sounds, made in Voicebot's voice and cached
 DEBUG_LOG = os.path.join(HOME, "logs", "debug.jsonl")  # what Voicebot does, for Zana's Debug window
 SAY = "\n(Now say one short sentence with the answer.)"
 MIN_VOICE_CHECK = int(0.5 * RATE)  # shorter turns are not checked against the voice print
@@ -174,12 +176,22 @@ def make_llm(vision: bool = False):
                       **({"extra_body": extra_body} if extra_body else {}))
 
 
+def tts_voice() -> str:
+    """Preferences > Voicebot > Voice, else TTS_VOICE in .env, else Emma."""
+    return read_json("config.json").get("voice") or os.getenv("TTS_VOICE", "en-Emma_woman")
+
+
 def make_tts():
     """Local VibeVoice by default; TTS_BASE_URL points at any OpenAI-compatible speech endpoint instead."""
     return openai.TTS(base_url=os.getenv("TTS_BASE_URL", VOICE), api_key=os.getenv("TTS_API_KEY", "local"),
-                      model=os.getenv("TTS_MODEL", "tts-1"),
-                      voice=read_json("config.json").get("voice") or os.getenv("TTS_VOICE", "en-Emma_woman"),
-                      response_format="pcm")
+                      model=os.getenv("TTS_MODEL", "tts-1"), voice=tts_voice(), response_format="pcm")
+
+
+async def filler_audio(path: str):
+    """A cached thinking sound as 20 ms audio frames, then the pause that keeps the reply apart."""
+    pcm, rate, channels = Fillers.read(path)
+    for chunk in chunks_with_gap(pcm, rate, channels):
+        yield rtc.AudioFrame(chunk, rate, channels, len(chunk) // (2 * channels))
 
 
 # Named keys for press_keys, as macOS key codes.
@@ -247,6 +259,10 @@ class Voicebot(Agent):
         self.voiceprint = VoicePrint(HOME)
         self.threshold = float(config.get("voiceprint_threshold") or 0.4)
         self.short_threshold = float(config.get("voiceprint_short_threshold") or 0.28)
+        fillers = config.get("fillers") or {}
+        self.fillers_on = fillers.get("on", True)
+        self.filler_phrases = [p.strip() for p in fillers.get("phrases") or [] if p.strip()] or DEFAULT_PHRASES
+        self.filler_days = float(fillers.get("days") or 7)
         self.compact_chars = int(config.get("compact_chars") or COMPACT_CHARS)
         self.compact_at = self.compact_chars
         self.compacting = False
@@ -401,7 +417,7 @@ class Voicebot(Agent):
                     say, call.arguments = split_say(call.arguments)
                     said.append(say)
                 if any(said):  # marked so the one-sentence cap never drops it; spaced from any text before
-                    yield " " + TOOL_SAY + " ".join(s for s in said if s) + " "
+                    yield " " + TOOL_SAY + ". ".join(s.rstrip(".") for s in said if s) + ". "
             yield chunk
         if rest := split.finish():
             yield rest
@@ -415,7 +431,7 @@ class Voicebot(Agent):
         if calls:
             split_calls = [(name, *split_say(args)) for name, args in calls]
             if any(say for _, say, _ in split_calls):
-                yield " " + TOOL_SAY + " ".join(say for _, say, _ in split_calls if say) + " "
+                yield " " + TOOL_SAY + ". ".join(say.rstrip(".") for _, say, _ in split_calls if say) + ". "
             yield llm.ChatChunk(id="text-tool-calls", delta=llm.ChoiceDelta(role="assistant", tool_calls=[
                 llm.FunctionToolCall(name=name, arguments=args, call_id=f"text_{i}_{int(time.time() * 1000)}")
                 for i, (name, _, args) in enumerate(split_calls)]))
@@ -450,8 +466,48 @@ class Voicebot(Agent):
             turn_ctx.add_message(role="system", content="Context for this turn (live state and how-to):\n" + notes)
         if extra is None:
             raise StopResponse()
+        self.play_filler()
         if extra:
             new_message.content.append(extra)
+
+    # ---------- thinking sounds ----------
+
+    async def refresh_fillers(self) -> None:
+        """Make the thinking sounds in the current voice when they are missing, older than the
+        configured days, or the voice or lines changed; cached in between. Made one at a time and
+        only while Voicebot is not talking or thinking, so live replies come first."""
+        voice = tts_voice()
+        if not self.fillers_on or not FILLERS.stale(voice, self.filler_phrases, self.filler_days):
+            return
+        started, clips = time.time(), []
+        for phrase in self.filler_phrases:
+            while self.session.agent_state in ("thinking", "speaking"):
+                await asyncio.sleep(0.5)
+            try:
+                frames = []
+                async with self.session.tts.synthesize(phrase) as stream:
+                    async for audio in stream:
+                        frames.append(audio.frame)
+                if frames:
+                    clips.append((phrase, b"".join(bytes(f.data) for f in frames),
+                                  frames[0].sample_rate, frames[0].num_channels))
+            except Exception as exc:  # noqa: BLE001 - one bad line should not stop the rest
+                debug("error", source="thinking sounds", error=f"{phrase}: {exc}"[:300])
+        if clips:
+            await asyncio.get_running_loop().run_in_executor(None, FILLERS.save, voice, self.filler_phrases, clips)
+            debug("fillers", count=len(clips), voice=voice, seconds=round(time.time() - started))
+
+    def play_filler(self) -> None:
+        """A random thinking sound while the reply is worked out; a short pause follows it."""
+        picked = FILLERS.pick() if self.fillers_on else None
+        if not picked:
+            return
+        path, phrase = picked
+        try:
+            self.session.say(phrase, audio=filler_audio(path), allow_interruptions=True, add_to_chat_ctx=False)
+            debug("filler", text=phrase)
+        except RuntimeError:
+            pass  # the conversation is closing
 
     # ---------- conversation memory: compaction and transcript search ----------
 
@@ -973,6 +1029,7 @@ async def entrypoint(ctx: agents.JobContext):
         notes = agent.feature_notes(ev.text)
         async with sess._claim_user_turn():
             await sess.interrupt()
+            agent.play_filler()
             if notes:
                 sess.generate_reply(user_input=ev.text + extra,
                                     instructions="Context for this turn (live state and how-to):\n" + notes)
@@ -988,6 +1045,7 @@ async def entrypoint(ctx: agents.JobContext):
         text_input=room_io.TextInputOptions(text_input_cb=on_text)))
     if agent.asleep:
         publish("sleep", asleep=True, wake_word=agent.wake_word)
+    asyncio.create_task(agent.refresh_fillers())
 
 
 if __name__ == "__main__":

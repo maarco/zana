@@ -534,6 +534,9 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
     let supervisor = read_repo_file("src-tauri/src/voicebot.rs");
 
     for id in [
+        "voicebot-fillers-toggle",
+        "voicebot-filler-phrases",
+        "voicebot-filler-days",
         "voicebot-voice",
         "model-reasoning",
         "vision-model",
@@ -554,6 +557,7 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
     for command in [
         "commands::get_voicebot_config",
         "commands::set_voicebot_voice",
+        "commands::set_voicebot_fillers",
         "commands::set_voicebot_terminal",
         "commands::save_voicebot_prompt",
         "commands::save_voicebot_mcp",
@@ -591,6 +595,7 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
         "speech.py",
         "listening.py",
         "jobs.py",
+        "fillers.py",
         "voiceprint.py",
         "system_prompt.default.md",
         "requirements.txt",

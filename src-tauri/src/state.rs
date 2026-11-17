@@ -203,6 +203,12 @@ pub struct Settings {
     pub voicebot_wake_word: String,
     /// Voicebot's voice (a VibeVoice voice name); empty means the default voice
     pub voicebot_voice: String,
+    /// Thinking sounds ("hmm...") while Voicebot works out a reply
+    pub voicebot_fillers: bool,
+    /// The thinking sound lines; empty means the agent's built-in sixteen
+    pub voicebot_filler_phrases: Vec<String>,
+    /// Days before the thinking sounds are made again
+    pub voicebot_filler_days: u32,
 }
 
 impl Settings {
@@ -284,6 +290,9 @@ impl Settings {
             voicebot_context_command: String::new(),
             voicebot_wake_word: String::new(),
             voicebot_voice: String::new(),
+            voicebot_fillers: true,
+            voicebot_filler_phrases: Vec::new(),
+            voicebot_filler_days: 7,
         }
     }
 }
