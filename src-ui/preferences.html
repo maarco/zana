@@ -276,18 +276,17 @@ var(--background);
       font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
       font-size: 11px;
     }
+    @media (max-width: 420px) {
+      .setting-row { flex-direction: column; align-items: stretch; }
+      .setting-row > select,
+      .setting-row > input { width: 100%; flex-basis: auto; }
+    }
     @media (max-width: 560px) {
-      .setting-row,
       .provider-field,
       .writing-profile-field {
         grid-template-columns: 1fr;
         flex-direction: column;
         align-items: stretch;
-      }
-      .setting-row > select,
-      .setting-row > input {
-        width: 100%;
-        flex-basis: auto;
       }
     }
     .button-row {
@@ -485,6 +484,16 @@ var(--background);
       font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
       font-size: 12px;
     }
+      .setting-row, .provider-field, .writing-profile-field { transition: background-color .12s; }
+    .setting-row:hover, .provider-field:hover, .writing-profile-field:hover { background: oklch(0.205 0 0); }
+    .setting-label { font-size: 13px; font-weight: 600; }
+    .setting-desc { font-size: 11.5px; line-height: 1.4; }
+    .toggle { flex: 0 0 auto; }
+    .secret-field { position: relative; display: flex; align-items: center; min-width: 0; }
+    .secret-field input { width: 100%; padding-right: 54px; }
+    .secret-field button { position: absolute; right: 4px; height: 24px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: var(--muted-foreground); font-size: 11px; cursor: pointer; }
+    .secret-field button:hover { color: var(--foreground); background: oklch(0.32 0 0); }
+    .save-status.dirty { color: var(--foreground); }
   </style>
   <link rel="stylesheet" href="window-chrome.css">
   <script src="window-controls.js"></script>
@@ -513,7 +522,7 @@ var(--background);
     <div class="section" data-section="speech">
       <div class="section-head">
         <div class="section-title">Speech Recognition</div>
-        <div class="section-meta">local</div>
+        <div class="section-meta">Local</div>
       </div>
 
       <div class="setting-row">
@@ -550,7 +559,7 @@ var(--background);
     <div class="section" data-section="polish">
       <div class="section-head">
         <div class="section-title">Writing Polish</div>
-        <div class="section-meta">optional</div>
+        <div class="section-meta">Optional</div>
       </div>
 
       <div class="setting-row">
@@ -579,7 +588,10 @@ var(--background);
             <div class="setting-label">API Key</div>
             <div class="setting-desc">Stored locally in Zana settings</div>
           </div>
-          <input type="password" id="rewrite-api-key" placeholder="sk-...">
+          <div class="secret-field">
+            <input type="password" id="rewrite-api-key" placeholder="sk-...">
+            <button type="button" id="rewrite-api-key-reveal" aria-controls="rewrite-api-key" title="Show or hide the key">Show</button>
+          </div>
         </div>
 
         <div class="provider-field">
@@ -660,7 +672,7 @@ var(--background);
     <div class="section" data-section="history">
       <div class="section-head">
         <div class="section-title">Transcriptions</div>
-        <div class="section-meta">local history</div>
+        <div class="section-meta">Local History</div>
       </div>
 
       <div class="setting-row">
@@ -677,7 +689,7 @@ var(--background);
     <div class="section" data-section="recording">
       <div class="section-head">
         <div class="section-title">Recording</div>
-        <div class="section-meta">input</div>
+        <div class="section-meta">Input</div>
       </div>
 
       <div class="setting-row">
@@ -715,7 +727,7 @@ var(--background);
     <div class="section" data-section="shortcuts">
       <div class="section-head">
         <div class="section-title">Keyboard Shortcuts</div>
-        <div class="section-meta">system</div>
+        <div class="section-meta">System</div>
       </div>
 
       <div class="setting-row">
@@ -743,7 +755,7 @@ var(--background);
     <div class="section" data-section="appearance">
       <div class="section-head">
         <div class="section-title">Appearance</div>
-        <div class="section-meta">orb</div>
+        <div class="section-meta">Orb</div>
       </div>
 
       <div class="orb-picker" id="orb-picker">
@@ -785,7 +797,7 @@ var(--background);
     <div class="section" data-section="diagnostics">
       <div class="section-head">
         <div class="section-title">Diagnostics</div>
-        <div class="section-meta">health</div>
+        <div class="section-meta">Health</div>
       </div>
 
       <div class="setting-row">
@@ -805,7 +817,7 @@ var(--background);
     <div class="button-row">
       <div class="save-status" id="save-status" role="status"></div>
       <button class="btn-secondary" onclick="closeWindow()">Cancel</button>
-      <button class="btn-primary" id="save-button" onclick="savePreferences()">Save</button>
+      <button class="btn-primary" id="save-button" onclick="savePreferences()" title="Save (Command-S)">Save</button>
     </div>
   </div>
 
@@ -817,9 +829,43 @@ var(--background);
 
     // Toggle switches
     document.querySelectorAll('.toggle').forEach(toggle => {
+      const label = toggle.closest('.setting-row')?.querySelector('.setting-label')?.textContent.trim();
+      toggle.setAttribute('role', 'switch');
+      toggle.tabIndex = 0;
+      if (label) toggle.setAttribute('aria-label', label);
+      const sync = () => toggle.setAttribute('aria-checked', String(toggle.classList.contains('active')));
+      sync();
+      new MutationObserver(sync).observe(toggle, { attributes: true, attributeFilter: ['class'] });
       toggle.addEventListener('click', () => {
         toggle.classList.toggle('active');
+        markDirty();
       });
+      toggle.addEventListener('keydown', (event) => {
+        if (event.key === ' ' || event.key === 'Enter') {
+          event.preventDefault();
+          toggle.click();
+        }
+      });
+    });
+
+    function markDirty() {
+      setSaveStatus('Unsaved changes', 'dirty');
+    }
+    document.querySelector('.content')?.addEventListener('input', markDirty);
+    document.querySelector('.content')?.addEventListener('change', markDirty);
+
+    document.addEventListener('keydown', (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        document.getElementById('save-button')?.click();
+      }
+    });
+
+    document.getElementById('rewrite-api-key-reveal')?.addEventListener('click', (event) => {
+      const input = document.getElementById('rewrite-api-key');
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      event.currentTarget.textContent = show ? 'Hide' : 'Show';
     });
 
     function setSaveStatus(message, type = '') {
