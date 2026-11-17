@@ -9,6 +9,10 @@ body::before {
   background: var(--background, oklch(0.145 0 0)); border-radius: var(--window-radius);
 }
 
+/* Headers paint their own fill; round their top corners so they do not square
+   off the window (WebKit does not clip them through the body's radius). */
+.titlebar { border-top-left-radius: var(--window-radius); border-top-right-radius: var(--window-radius); }
+
 .window-controls { display: flex; align-items: center; margin-left: auto; -webkit-app-region: no-drag; }
 .window-controls button { border: 0; padding: 0; cursor: default; display: grid; place-items: center; }
 .window-controls button:disabled { cursor: default; }
