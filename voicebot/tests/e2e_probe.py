@@ -256,4 +256,21 @@ async def mode_selfedit():
         await room.disconnect()
 
 
-asyncio.run({"zana": mode_zana, "voiceprint": mode_voiceprint, "selfedit": mode_selfedit}.get(MODE, mode_agent)())
+async def mode_preview():
+    """Ask the real orb to show a state for five seconds (argv[2], e.g. listening or speaking)."""
+    lk = api.LiveKitAPI(HTTP, KEY, SECRET)
+    target = None
+    for r in (await lk.room.list_rooms(api.ListRoomsRequest())).rooms:
+        ps = (await lk.room.list_participants(api.ListParticipantsRequest(room=r.name))).participants
+        if any(p.identity == "zana-user" for p in ps):
+            target = r.name
+    await lk.aclose()
+    room = rtc.Room()
+    await room.connect(URL, token(target, "probe-preview"))
+    print(await room.local_participant.perform_rpc(destination_identity="zana-user", method="zana.preview_state",
+                                                   payload=sys.argv[2], response_timeout=10))
+    await room.disconnect()
+
+
+asyncio.run({"zana": mode_zana, "voiceprint": mode_voiceprint, "selfedit": mode_selfedit,
+             "preview": mode_preview}.get(MODE, mode_agent)())

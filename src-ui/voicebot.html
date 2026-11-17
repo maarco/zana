@@ -42,6 +42,7 @@
     let leaving = false;
     let asleep = false;
     let voicePrint = null; // { seconds, needed } while voice print mode records
+    let preview = null;    // a state shown for a few seconds by zana.preview_state (tests)
     const AURA_COLOR = '#1FD5F9';      // thinking, sleeping, idle
     const LISTENING_COLOR = '#30D158'; // green while it listens
     const SPEAKING_COLOR = '#0A84FF';  // blue while it talks
@@ -107,6 +108,12 @@
       room.registerRpcMethod('zana.screen', async () => invoke('voicebot_screen_context'));
       room.registerRpcMethod('zana.screenshot', async () => invoke('voicebot_screenshot'));
       room.registerRpcMethod('zana.mute', async () => { muted = true; await applyMic(); return 'microphone off'; });
+      // Test hook (local room only): show a state for five seconds, e.g. "listening" or "speaking".
+      room.registerRpcMethod('zana.preview_state', async ({ payload }) => {
+        preview = payload || null;
+        setTimeout(() => { preview = null; }, 5000);
+        return `previewing ${payload}`;
+      });
       room.registerRpcMethod('zana.set_wake_word', async ({ payload }) => {
         await invoke('set_voicebot_wake_word', { wakeWord: payload });
         return payload ? `wake word set to ${payload}` : 'wake word removed';
@@ -190,11 +197,11 @@
     function auraTick() {
       if (aura) {
         const quiet = !room || muted || dictating || asleep;
-        aura.setState(quiet ? 'idle' : agentState);
-        aura.setColor(voicePrint ? VOICEPRINT_COLOR
-          : quiet ? AURA_COLOR
-          : agentState === 'listening' ? LISTENING_COLOR
-          : agentState === 'speaking' ? SPEAKING_COLOR
+        const shown = preview || (quiet ? 'idle' : agentState);
+        aura.setState(shown === 'voiceprint' ? 'listening' : shown);
+        aura.setColor(voicePrint || shown === 'voiceprint' ? VOICEPRINT_COLOR
+          : shown === 'listening' ? LISTENING_COLOR
+          : shown === 'speaking' ? SPEAKING_COLOR
           : AURA_COLOR);
         let voice = 0;
         if (room) room.remoteParticipants.forEach((p) => { voice = Math.max(voice, p.audioLevel || 0); });
