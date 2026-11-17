@@ -461,7 +461,7 @@ fn main() {
                                 .decorations(false)
                                 .transparent(true)
                                 .shadow(true)
-                                .inner_size(400.0, 500.0)
+                                .inner_size(400.0, 440.0)
                                 .center()
                                 .resizable(false)
                                 .build();

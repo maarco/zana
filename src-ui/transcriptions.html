@@ -146,16 +146,15 @@
     .brand-mark svg { width: 20px; height: 20px; display: block; }
     .history-search { width: 100%; margin-bottom: 10px; padding: 7px 10px; border: 0; border-radius: var(--radius); background: var(--card); color: var(--foreground); font-size: 12px; outline: none; }
     .history-search:focus { background: var(--muted); }
-    .history-search::placeholder { color: oklch(0.55 0 0); }
-    .history-day { margin: 14px 0 6px; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: oklch(0.55 0 0); }
+    .history-search::placeholder { color: oklch(0.65 0 0); }
+    .history-day { margin: 14px 0 6px; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted-foreground); }
     .history-day:first-child { margin-top: 0; }
     .history-item { background: var(--card); }
     .history-item:hover { background: oklch(0.205 0 0); }
-    .history-item:hover .history-actions { opacity: 1; }
-    .history-actions { opacity: .55; transition: opacity .12s; justify-content: flex-end; }
-    .history-badge { background: var(--muted); color: var(--muted-foreground); font-weight: 600; text-transform: none; }
+    .history-actions { justify-content: flex-end; }
+    .history-badge { background: var(--muted); color: oklch(0.8 0 0); font-weight: 600; text-transform: none; }
     .history-label { font-weight: 600; letter-spacing: .08em; }
-    .btn-ghost { border: 0; border-radius: 5px; padding: 4px 8px; background: transparent; color: var(--muted-foreground); font-size: 11px; cursor: pointer; }
+    .btn-ghost { border: 0; border-radius: 5px; padding: 4px 8px; background: transparent; color: oklch(0.72 0 0); font-size: 11px; cursor: pointer; }
     .btn-ghost:hover { background: var(--muted); color: var(--foreground); }
     .history-empty { padding: 48px 12px; text-align: center; line-height: 1.5; }
     .history-empty-title { color: var(--foreground); font-size: 13px; font-weight: 600; margin-bottom: 2px; }
@@ -275,7 +274,7 @@
         return `${header}<div class="history-item">
             <div class="history-item-head">
               <div class="history-time">${escapeHtml(formatTranscriptTime(entry.timestamp))}</div>
-              <div class="history-badge">${entry.usedRewrite ? 'Polished' : 'Raw'}</div>
+              ${entry.usedRewrite ? '<div class="history-badge">Polished</div>' : ''}
             </div>
             <div class="history-block">
               ${showFinal ? '<div class="history-label">Raw Whisper</div>' : ''}

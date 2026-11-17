@@ -113,7 +113,7 @@ var(--background);
       font-weight: 500;
       text-transform: uppercase;
       letter-spacing: .14em;
-      color: oklch(0.44 0 0);
+      color: var(--muted-foreground);
       margin-bottom: 0;
     }
     .section-meta {
@@ -165,8 +165,8 @@ var(--background);
     }
     .setting-row > select,
     .setting-row > input {
-      width: min(280px, 45%);
-      flex: 0 1 280px;
+      width: 230px;
+      flex: 0 0 230px;
     }
     select:focus, input:focus {
       outline: none;
@@ -491,7 +491,7 @@ var(--background);
     .toggle { flex: 0 0 auto; }
     .secret-field { position: relative; display: flex; align-items: center; min-width: 0; }
     .secret-field input { width: 100%; padding-right: 54px; }
-    .secret-field button { position: absolute; right: 4px; height: 24px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: var(--muted-foreground); font-size: 11px; cursor: pointer; }
+    .secret-field button { position: absolute; right: 4px; height: 24px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: oklch(0.72 0 0); font-size: 11px; cursor: pointer; }
     .secret-field button:hover { color: var(--foreground); background: oklch(0.32 0 0); }
     .save-status.dirty { color: var(--foreground); }
   </style>
