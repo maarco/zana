@@ -97,23 +97,13 @@ jobs:
       - name: Run clippy
         run: cargo clippy -p Zana-app --all-targets --all-features --locked -- -D warnings
 
-  build-macos:
-    name: Build macOS universal app
-    needs: [validate, verify]
-    runs-on: macos-15-intel
-    env:
-      SIGNING: ${{ inputs.signing }}
-      TAG: ${{ needs.validate.outputs.tag }}
-      APP_PATH: target/universal-apple-darwin/release/bundle/macos/Zana.app
+  preflight:
+    name: Check signing secrets and notary login
+    needs: validate
+    if: inputs.signing == 'developer-id'
+    runs-on: macos-15
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.validate.outputs.sha }}
-          persist-credentials: false
-
       - name: Check signing secrets before the long build
-        if: inputs.signing == 'developer-id'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -138,6 +128,38 @@ jobs:
             echo "::error::developer-id release is missing secrets: ${missing[*]}"
             exit 1
           fi
+
+          # Prove Apple accepts the notarization login now, not 40 minutes in.
+          if [ -n "$APPLE_API_KEY_ID" ]; then
+            KEY_PATH="$RUNNER_TEMP/AuthKey_$APPLE_API_KEY_ID.p8"
+            printf '%s\n' "$APPLE_API_PRIVATE_KEY" > "$KEY_PATH"
+            auth=(--key "$KEY_PATH" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER")
+          else
+            auth=(--apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID")
+          fi
+          if ! xcrun notarytool history "${auth[@]}" >/dev/null; then
+            echo "::error::Apple rejected the notarization login; replace APPLE_APP_PASSWORD or set the APPLE_API_* secrets"
+            exit 1
+          fi
+          rm -f "${KEY_PATH:-/nonexistent}"
+          echo "Notarization login accepted"
+
+
+  build-macos:
+    name: Build macOS universal app
+    needs: [validate, verify, preflight]
+    if: ${{ !failure() && !cancelled() }}
+    runs-on: macos-15-intel
+    env:
+      SIGNING: ${{ inputs.signing }}
+      TAG: ${{ needs.validate.outputs.tag }}
+      APP_PATH: target/universal-apple-darwin/release/bundle/macos/Zana.app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.sha }}
+          persist-credentials: false
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
