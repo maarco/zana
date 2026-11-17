@@ -21,26 +21,90 @@ def clean(text: str, limit: int = 2500) -> str:
 
 
 _TOOL_NAME = re.compile(r"(?:tool_name:\s*|functions\.)([A-Za-z_][\w-]*)")
+TOOL_CALL_MARKERS = ("<|tool_call", "<tool_call", "<function=")
+
+
+def _arg_value(text: str):
+    text = text.strip()
+    try:
+        return json.loads(text)
+    except ValueError:
+        return text
+
+
+def _json_after(block: str, start: int) -> str:
+    start = block.find("{", start)
+    if start == -1:
+        return "{}"
+    try:
+        return json.dumps(json.JSONDecoder().raw_decode(block, start)[0])
+    except ValueError:
+        return "{}"
 
 
 def parse_text_tool_calls(text: str) -> list[tuple[str, str]]:
-    """Tool calls a model wrote out as text instead of making them, as (name, JSON arguments):
-    <|tool_call_begin|>tool_name: list_jobs, arguments: {}, ...<|tool_call_end|>, or
-    <|tool_call_begin|>functions.list_jobs:0<|tool_call_argument_begin|>{}<|tool_call_end|>."""
+    """Tool calls a model wrote out as text instead of making them, as (name, JSON arguments).
+    Formats: <|tool_call_begin|>tool_name: X, arguments: {...}<|tool_call_end|>;
+    <|tool_call_begin|>functions.X:0<|tool_call_argument_begin|>{...}<|tool_call_end|> (Kimi);
+    <tool_call>X<arg_key>k</arg_key><arg_value>v</arg_value></tool_call> (GLM);
+    <tool_call>{"name": X, "arguments": {...}}</tool_call> (Hermes, Qwen);
+    <function=X>{...} or <parameter=k>v</parameter></function> (Qwen coder)."""
     calls = []
-    for block in text.split("<|tool_call_begin|>")[1:]:
-        block = block.split("<|tool_call_end|>")[0]
+    for block in re.findall(r"<\|tool_call_begin\|>(.*?)(?:<\|tool_call_end\|>|$)", text, re.S):
         name = _TOOL_NAME.search(block)
-        if not name:
-            continue
-        args, start = "{}", block.find("{", name.end())
-        if start != -1:
+        if name:
+            calls.append((name.group(1), _json_after(block, name.end())))
+    for block in re.findall(r"<tool_call>(.*?)(?:</tool_call>|$)", text, re.S):
+        block = block.strip()
+        if block.startswith("{"):
             try:
-                args = json.dumps(json.JSONDecoder().raw_decode(block, start)[0])
+                obj = json.JSONDecoder().raw_decode(block)[0]
             except ValueError:
-                pass
-        calls.append((name.group(1), args))
+                continue
+            args = obj.get("arguments", obj.get("parameters", {}))
+            if obj.get("name"):
+                calls.append((obj["name"], json.dumps(_arg_value(args) if isinstance(args, str) else args)))
+            continue
+        name = re.match(r"[A-Za-z_][\w.-]*", block)
+        if name:
+            pairs = re.findall(r"<arg_key>(.*?)</arg_key>\s*<arg_value>(.*?)</arg_value>", block, re.S)
+            calls.append((name.group(0), json.dumps({k.strip(): _arg_value(v) for k, v in pairs})))
+    for name, body in re.findall(r"<function=([\w.-]+)>(.*?)(?:</function>|$)", text, re.S):
+        params = re.findall(r"<parameter=([\w.-]+)>(.*?)</parameter>", body, re.S)
+        calls.append((name, json.dumps({k: _arg_value(v) for k, v in params}) if params else _json_after(body, 0)))
     return calls
+
+
+class ToolCallText:
+    """Splits a streamed reply into what may be spoken and the tool-call text a model wrote out,
+    which is held back from its first marker to the end of the reply. A "<" that may begin a
+    marker cut off at a chunk boundary waits for the next chunk."""
+
+    def __init__(self):
+        self.held = ""
+        self._pending = ""
+
+    def feed(self, text: str) -> str:
+        if self.held:
+            self.held += text
+            return ""
+        text, self._pending = self._pending + text, ""
+        start = 0
+        while (i := text.find("<", start)) != -1:
+            rest = text[i:]
+            if rest.startswith(TOOL_CALL_MARKERS):
+                self.held = rest
+                return text[:i]
+            if any(marker.startswith(rest) for marker in TOOL_CALL_MARKERS):
+                self._pending = rest
+                return text[:i]
+            start = i + 1
+        return text
+
+    def finish(self) -> str:
+        """Text held only because it might have begun a marker."""
+        out, self._pending = self._pending, ""
+        return out
 
 
 def normalize(text: str) -> str:

@@ -34,8 +34,8 @@ from livekit.agents.voice.agent_session import SessionConnectOptions
 from livekit.plugins import openai, silero
 
 from jobs import Jobs
-from listening import (Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls, topics, wants_redo,
-                       wants_voiceprint)
+from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls, topics,
+                       wants_redo, wants_voiceprint)
 from voiceprint import RATE, VoicePrint, VoiceTap, to_mono_16k
 from speech import one_sentence, speakable_stream
 
@@ -360,16 +360,17 @@ class Voicebot(Agent):
         """Some models now and then write a tool call out as text (<|tool_call_begin|>...): that text is
         held back, never spoken, and run as a real tool call. (No spoken filler while tools run; the orb
         shows the working state.)"""
-        held = ""
+        split = ToolCallText()
         async for chunk in Agent.default.llm_node(self, chat_ctx, tools, model_settings):
             delta = getattr(chunk, "delta", None)
-            if delta is not None and delta.content and (held or "<|" in delta.content):
-                cut = 0 if held else delta.content.index("<|")
-                held += delta.content[cut:]
-                delta.content = delta.content[:cut] or None
+            if delta is not None and delta.content:
+                delta.content = split.feed(delta.content) or None
                 if not delta.content and not delta.tool_calls:
                     continue
             yield chunk
+        if rest := split.finish():
+            yield rest
+        held = split.held
         if not held:
             return
         calls = parse_text_tool_calls(held)

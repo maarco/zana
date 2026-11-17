@@ -5,7 +5,8 @@ import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from listening import (Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls, topics, wants_redo,  # noqa: E402
+from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls, topics,
+                       wants_redo,  # noqa: E402
                        wants_voiceprint)
 
 
@@ -138,6 +139,31 @@ class TextToolCallTest(unittest.TestCase):
                          [("search_conversations", '{"words": "a, {b}"}'), ("list_jobs", "{}")])
         self.assertEqual(parse_text_tool_calls("<|tool_call_begin|>nonsense<|tool_call_end|>"), [])
         self.assertEqual(parse_text_tool_calls("plain words"), [])
+
+
+class MoreTextToolCallTest(unittest.TestCase):
+    def test_reads_glm_hermes_and_function_formats(self):
+        glm = ('<tool_call>run_terminal<arg_key>command</arg_key><arg_value>grep -l kollab ~/x | head -5'
+               '</arg_value></tool_call>')
+        self.assertEqual(parse_text_tool_calls(glm), [("run_terminal", '{"command": "grep -l kollab ~/x | head -5"}')])
+        self.assertEqual(parse_text_tool_calls('<tool_call><arg_key>x</arg_key></tool_call>'), [])
+        hermes = '<tool_call>\n{"name": "check_job", "arguments": {"job": 1}}\n</tool_call>'
+        self.assertEqual(parse_text_tool_calls(hermes), [("check_job", '{"job": 1}')])
+        qwen = '<function=check_job><parameter=job>2</parameter></function>'
+        self.assertEqual(parse_text_tool_calls(qwen), [("check_job", '{"job": 2}')])
+
+    def test_holds_back_tool_call_text_even_when_a_marker_is_cut_off(self):
+        split = ToolCallText()
+        spoken = split.feed("Sure, let me look. <tool") + split.feed("_call>run_terminal<arg_key>c</arg_key>")
+        spoken += split.feed("<arg_value>ls</arg_value></tool_call>") + split.finish()
+        self.assertEqual(spoken, "Sure, let me look. ")
+        self.assertEqual(parse_text_tool_calls(split.held), [("run_terminal", '{"c": "ls"}')])
+
+    def test_plain_angle_brackets_are_still_spoken(self):
+        split = ToolCallText()
+        spoken = split.feed("Two < three, and <") + split.feed("b> is bold.") + split.finish()
+        self.assertEqual(spoken, "Two < three, and <b> is bold.")
+        self.assertEqual(split.held, "")
 
 if __name__ == "__main__":
     unittest.main()
