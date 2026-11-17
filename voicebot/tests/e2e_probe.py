@@ -256,6 +256,31 @@ async def mode_selfedit():
         await room.disconnect()
 
 
+async def mode_jobs():
+    """A slow terminal command becomes a job: the agent gets its number, process id and output file,
+    then is told when it finishes; check_job reads it back."""
+    wake = json.load(open(os.path.join(HOME, "config.json"))).get("wake_word") or ""
+    room = rtc.Room()
+    await room.connect(URL, token("probe-jobs-" + str(int(time.time())), "probe-user", {"client": "zana"}))
+    for _ in range(60):
+        if room.remote_participants:
+            break
+        await asyncio.sleep(0.5)
+    await asyncio.sleep(2)
+    debug_log = os.path.join(HOME, "logs", "debug.jsonl")
+    start = os.path.getsize(debug_log)
+    await room.local_participant.send_text(f"{wake}, run the terminal command: sleep 8; echo job-done-xyz", topic="lk.chat")
+    await asyncio.sleep(22)
+    await room.local_participant.send_text("check job one", topic="lk.chat")
+    await asyncio.sleep(10)
+    with open(debug_log) as f:
+        f.seek(start)
+        for ev in (json.loads(l) for l in f if l.strip()):
+            if ev["kind"] in ("tool", "job", "said"):
+                print(ev["kind"], {k: str(v)[:220] for k, v in ev.items() if k not in ("t", "kind")})
+    await room.disconnect()
+
+
 async def mode_preview():
     """Ask the real orb to show a state for five seconds (argv[2], e.g. listening or speaking)."""
     lk = api.LiveKitAPI(HTTP, KEY, SECRET)
@@ -273,4 +298,4 @@ async def mode_preview():
 
 
 asyncio.run({"zana": mode_zana, "voiceprint": mode_voiceprint, "selfedit": mode_selfedit,
-             "preview": mode_preview}.get(MODE, mode_agent)())
+             "preview": mode_preview, "jobs": mode_jobs}.get(MODE, mode_agent)())

@@ -33,6 +33,7 @@ from livekit.agents.voice import room_io
 from livekit.agents.voice.agent_session import SessionConnectOptions
 from livekit.plugins import openai, silero
 
+from jobs import Jobs
 from listening import Transcript, clean, heard_wake_word, is_goodbye, topics, wants_redo, wants_voiceprint
 from voiceprint import RATE, VoicePrint, VoiceTap, to_mono_16k
 from speech import one_sentence, speakable_stream
@@ -43,7 +44,7 @@ load_dotenv(os.path.join(HOME, ".env"))
 
 VOICE = os.getenv("VOICE_SERVER_URL", "http://127.0.0.1:8800/v1")
 FAST = float(os.getenv("VOICEBOT_FAST_SECONDS", "3"))  # slower terminal commands answer "on it" now and report later
-TERMINAL_TIMEOUT = float(os.getenv("VOICEBOT_TERMINAL_TIMEOUT", "120"))
+TERMINAL_TIMEOUT = float(os.getenv("VOICEBOT_TERMINAL_TIMEOUT", "900"))  # jobs are stopped after 15 minutes
 TRANSCRIPT = Transcript(HOME)  # always-on: every line heard and said
 DEBUG_LOG = os.path.join(HOME, "logs", "debug.jsonl")  # what Voicebot does, for Zana's Debug window
 SAY = "\n(Now say one short sentence with the answer.)"
@@ -641,38 +642,66 @@ class Voicebot(Agent):
 
     @function_tool()
     async def run_terminal(self, context: RunContext, command: str) -> str:
-        """Run a zsh command on the user's computer and return its output and exit code.
+        """Run a zsh command on the user's computer. Commands that finish within a few seconds return their
+        output; longer ones keep running as a job whose output streams to a file, and you get the job number,
+        process id and output file right away, then check_job and stop_job. You are told when a job finishes.
+        Use fast, targeted commands: to find a file or folder by name use Spotlight (mdfind -name NAME | head;
+        it skips hidden folders like ~/.claude) or list the likely folder (ls ~/.claude/skills); never crawl
+        the whole home folder with find or grep -r.
 
         Args:
             command: The zsh command to run.
         """
         if not self.terminal:
             return "The terminal is off; the user can turn on Terminal Tool in Zana's Preferences." + SAY
-
-        async def work():
-            try:
-                proc = await asyncio.create_subprocess_exec(
-                    "/bin/zsh", "-lc", command, cwd=os.path.expanduser(os.getenv("VOICEBOT_TERMINAL_DIR", "~")),
-                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
-            except OSError as exc:
-                return f"Could not start the terminal: {exc}"
-            try:
-                out, _ = await asyncio.wait_for(proc.communicate(), TERMINAL_TIMEOUT)
-            except asyncio.TimeoutError:
-                proc.kill()
-                return f"The command was stopped after {TERMINAL_TIMEOUT:.0f} seconds."
-            return f"exit code {proc.returncode}\n{clean(out.decode(errors='replace'))}"
-
-        task = asyncio.ensure_future(work())
-        done, _ = await asyncio.wait({task}, timeout=FAST)
+        job = await JOBS.start(command)
+        if isinstance(job, str):
+            return job + SAY
+        done, _ = await asyncio.wait({job.task}, timeout=FAST)
         if done:
-            return task.result() + SAY
+            return f"exit code {job.exit_code}\n{job.output()}" + SAY
 
-        def follow_up(t: asyncio.Task):
-            result = t.result() if not t.exception() else f"failed: {t.exception()}"
-            context.session.generate_reply(instructions=f"The terminal command finished. Result:\n{result}{SAY}")
-        task.add_done_callback(follow_up)
-        return "The command is still running; its result will come to you." + SAY
+        def finished(_t: asyncio.Task):
+            summary = job.summary(lines=60)
+            debug("tool", name=f"run_terminal job {job.id} (finished)", args={"command": command}, output=summary[:2000])
+            context.session.generate_reply(instructions=f"Terminal job {job.id} finished.\n{summary}{SAY}")
+        job.task.add_done_callback(finished)
+        debug("job", id=job.id, pid=job.pid, command=command, log=job.log)
+        return (f"Still running as job {job.id} (process {job.pid}), output streaming to {job.log}. "
+                "Tell the user in a few words that it's running; check_job shows progress and stop_job stops it. "
+                "You'll be told when it finishes.")
+
+    @function_tool()
+    async def check_job(self, context: RunContext, job: int) -> str:
+        """Show a terminal job's status (running or finished, exit code, how long) and its latest output.
+
+        Args:
+            job: The job number run_terminal gave you.
+        """
+        found = JOBS.get(job)
+        return (found.summary(lines=40) if found else f"There is no job {job}.") + SAY
+
+    @function_tool()
+    async def stop_job(self, context: RunContext, job: int) -> str:
+        """Stop a running terminal job and everything it started.
+
+        Args:
+            job: The job number.
+        """
+        found = JOBS.get(job)
+        if not found:
+            return f"There is no job {job}." + SAY
+        found.stop()
+        debug("job", id=found.id, action="stopped")
+        return f"Stopped job {job}." + SAY
+
+    @function_tool()
+    async def list_jobs(self, context: RunContext) -> str:
+        """List terminal jobs from this conversation with their status."""
+        return ("\n".join(j.summary(lines=0) for j in JOBS.jobs.values()) or "No terminal jobs.") + SAY
+
+
+JOBS = Jobs(HOME, TERMINAL_TIMEOUT)
 
 
 server = AgentServer(port=0, num_idle_processes=1, load_threshold=float("inf"))

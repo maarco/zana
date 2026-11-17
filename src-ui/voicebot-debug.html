@@ -67,7 +67,7 @@
     let first = true;
     const LABELS = {
       session: 'Session', heard: 'Heard', wake: 'Woke', sleep: 'Sleep', said: 'Said',
-      tool: 'Tool', error: 'Error', mcp: 'MCP', state: 'State', voiceprint: 'Voice', goodbye: 'Bye', context: 'Context', prompt: 'Prompt', settings: 'Settings',
+      tool: 'Tool', error: 'Error', mcp: 'MCP', state: 'State', voiceprint: 'Voice', goodbye: 'Bye', context: 'Context', prompt: 'Prompt', settings: 'Settings', job: 'Job',
     };
 
     function el(tag, cls, text) {
@@ -89,6 +89,7 @@
         case 'mcp': return [`MCP servers: ${(ev.servers || []).join('; ') || 'none configured'}`];
         case 'state': return [`Agent is ${ev.state}`];
         case 'voiceprint': return [{ started: 'Setting up your voice print: keep talking', recording: `Voice print: ${ev.seconds} s recorded`, enrolled: `Voice print saved (${ev.seconds} s of speech)` }[ev.action] || ev.action];
+        case 'job': return ev.action === 'stopped' ? [`Stopped job ${ev.id}`] : [`Job ${ev.id} running in the background (process ${ev.pid})`, `${ev.command}\noutput: ${ev.log}`];
         case 'prompt': return ev.action === 'edited' ? ['Edited the system prompt and reloaded it', `${ev.diff || ''}\nbackup: ${ev.backup || ''}`] : [`Reloaded the system prompt (name ${ev.name})`];
         case 'settings': return [ev.name !== undefined ? `Name is now ${ev.name}` : `Wake word is now ${ev.wake_word ? `"${ev.wake_word}"` : 'off'}`];
         case 'context': return [`Gave the agent how-to notes: ${(ev.topics || []).join(', ')}`];

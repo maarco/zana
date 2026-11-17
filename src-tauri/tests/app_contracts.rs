@@ -604,6 +604,7 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
         "voice_server.py",
         "speech.py",
         "listening.py",
+        "jobs.py",
         "voiceprint.py",
         "system_prompt.default.md",
         "requirements.txt",
