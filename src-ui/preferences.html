@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Zana Preferences</title>
   <style>
+    * { scrollbar-width: none; }
+    *::-webkit-scrollbar { display: none; }
     :root {
       --background: oklch(0.145 0 0);
       --foreground: oklch(0.985 0 0);
@@ -153,6 +155,15 @@ var(--background);
       font-size: 13px;
       min-width: 180px;
     }
+    select {
+      -webkit-appearance: none;
+      appearance: none;
+      padding-right: 30px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%239e9e9e' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 11px center;
+      cursor: pointer;
+    }
     .setting-row > select,
     .setting-row > input {
       width: min(280px, 45%);
@@ -160,7 +171,7 @@ var(--background);
     }
     select:focus, input:focus {
       outline: none;
-      background: var(--accent);
+      background-color: var(--accent);
     }
     .toggle {
       position: relative;
