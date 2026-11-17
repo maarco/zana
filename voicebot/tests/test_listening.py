@@ -5,7 +5,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from listening import (Transcript, clean, heard_wake_word, is_goodbye, topics, wants_redo,  # noqa: E402
+from listening import (Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls, topics, wants_redo,  # noqa: E402
                        wants_voiceprint)
 
 
@@ -104,6 +104,40 @@ class CleanTest(unittest.TestCase):
         long = clean("a" * 10 + " " + "b " * 3000, limit=100)
         self.assertLessEqual(len(long), 110)
 
+
+
+class TranscriptSearchTest(unittest.TestCase):
+    def test_finds_lines_with_every_word_and_the_reply_after(self):
+        with tempfile.TemporaryDirectory() as home:
+            t = Transcript(home)
+            for who, text in [("User", "find the PTY manager skill"), ("Voicebot", "It lives in your skills folder."),
+                              ("User", "what time is it"), ("Voicebot", "Ten past eleven."),
+                              ("User", "open the manager again")]:
+                t.record(who, text)
+            found = t.search("pty managers")  # word starts match, so plurals still find it
+            self.assertEqual(len(found), 2)
+            self.assertIn("PTY manager", found[0])
+            self.assertIn("skills folder", found[1])
+
+    def test_falls_back_to_the_lines_with_the_most_words(self):
+        with tempfile.TemporaryDirectory() as home:
+            t = Transcript(home)
+            t.record("User", "open the manager again")
+            t.record("User", "nothing here")
+            self.assertIn("manager", t.search("pty manager")[0])
+            self.assertEqual(t.search("zebra"), [])
+            self.assertEqual(t.search(""), [])
+
+
+class TextToolCallTest(unittest.TestCase):
+    def test_reads_both_written_out_formats(self):
+        said = ('Let me check. <|tool_call_begin|>tool_name: search_conversations, arguments: {"words": "a, {b}"}, '
+                'reasoning: None, call_id: None, type: tool_call<|tool_call_end|>'
+                '<|tool_call_begin|>functions.list_jobs:0<|tool_call_argument_begin|>{}<|tool_call_end|>')
+        self.assertEqual(parse_text_tool_calls(said),
+                         [("search_conversations", '{"words": "a, {b}"}'), ("list_jobs", "{}")])
+        self.assertEqual(parse_text_tool_calls("<|tool_call_begin|>nonsense<|tool_call_end|>"), [])
+        self.assertEqual(parse_text_tool_calls("plain words"), [])
 
 if __name__ == "__main__":
     unittest.main()

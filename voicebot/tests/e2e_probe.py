@@ -281,6 +281,84 @@ async def mode_jobs():
     await room.disconnect()
 
 
+async def mode_memory():
+    """Compaction (with a 1,500 character budget for the test), conversation search, and quiet job stops.
+    config.json is restored afterwards."""
+    cfg_path = os.path.join(HOME, "config.json")
+    original = open(cfg_path).read()
+    cfg = json.loads(original)
+    wake = cfg.get("wake_word") or ""
+    debug_log = os.path.join(HOME, "logs", "debug.jsonl")
+    start = os.path.getsize(debug_log)
+    try:
+        with open(cfg_path, "w") as f:
+            json.dump({**cfg, "compact_chars": 1500}, f)
+        room = rtc.Room()
+        await room.connect(URL, token("probe-memory-" + str(int(time.time())), "probe-user", {"client": "zana"}))
+        for _ in range(60):
+            if room.remote_participants:
+                break
+            await asyncio.sleep(0.5)
+        await asyncio.sleep(2)
+
+        def events(since):
+            with open(debug_log) as f:
+                f.seek(since)
+                return [json.loads(l) for l in f if l.strip()]
+
+        async def turn(text, wait=45):
+            mark = os.path.getsize(debug_log)
+            await room.local_participant.send_text(text, topic="lk.chat")
+            for _ in range(wait * 2):
+                await asyncio.sleep(0.5)
+                said = [e for e in events(mark) if e["kind"] == "said" and not e["text"].startswith("On it")]
+                if said:
+                    await asyncio.sleep(1.5)
+                    return said[-1]["text"]
+            return "(no answer)"
+
+        print("1", await turn(f"{wake}, run the terminal command: seq 1 150"))
+        print("2", await turn("run the terminal command: echo compaction-marker-abc"))
+        print("3", await turn("run the terminal command: seq 151 300"))
+        print("4", await turn("run the terminal command: seq 301 420"))
+        print("5", await turn("say ok"))
+        for _ in range(60):
+            if any(e["kind"] == "compact" for e in events(start)):
+                break
+            await asyncio.sleep(0.5)
+        print("6", await turn("what was the very first terminal command I asked you to run in this conversation?"))
+        print("7", await turn("search your conversation logs for compaction marker and tell me what it was"))
+        print("8", await turn("run the terminal command: sleep 40"))
+        print("9", await turn("stop that job"))
+        mark = os.path.getsize(debug_log)
+        await asyncio.sleep(8)
+        late = [e["text"] for e in events(mark) if e["kind"] == "said"]
+        print("after stop, extra replies:", late or "none")
+        await turn("run the terminal command: sleep 120")
+        await room.disconnect()
+        gone = False
+        for _ in range(40):
+            await asyncio.sleep(1)
+            ps = subprocess.run(["/bin/ps", "-ax", "-o", "command"], capture_output=True, text=True).stdout
+            if "sleep 120" not in ps:
+                gone = True
+                break
+        print("job stopped when the conversation closed:", gone)
+    finally:
+        with open(cfg_path, "w") as f:
+            f.write(original)
+        print("config.json restored:", open(cfg_path).read() == original)
+    for e in events(start):
+        if e["kind"] == "compact":
+            print("COMPACT", {k: (str(v)[:400]) for k, v in e.items() if k not in ("t", "kind")})
+        elif e["kind"] == "said" and "context_chars" in e:
+            print("said", e["context_chars"], "|", e["text"][:90])
+        elif e["kind"] == "tool":
+            print("tool", e.get("name"), str(e.get("args"))[:80])
+        elif e["kind"] == "error":
+            print("ERROR", e)
+
+
 async def mode_preview():
     """Ask the real orb to show a state for five seconds (argv[2], e.g. listening or speaking)."""
     lk = api.LiveKitAPI(HTTP, KEY, SECRET)
@@ -298,4 +376,4 @@ async def mode_preview():
 
 
 asyncio.run({"zana": mode_zana, "voiceprint": mode_voiceprint, "selfedit": mode_selfedit,
-             "preview": mode_preview, "jobs": mode_jobs}.get(MODE, mode_agent)())
+             "preview": mode_preview, "jobs": mode_jobs, "memory": mode_memory}.get(MODE, mode_agent)())

@@ -12,6 +12,17 @@ from math import gcd
 import numpy as np
 
 RATE = 16000
+FRAME = RATE // 50  # 20 ms
+
+
+def speech_seconds(audio: np.ndarray, floor_db: float = 35.0) -> float:
+    """Seconds of actual speech in a turn: 20 ms frames within `floor_db` of the loudest one. The preroll
+    and the silence before a turn ends don't count, so "go ahead" measures short."""
+    n = len(audio) // FRAME
+    if n == 0:
+        return 0.0
+    level = 10 * np.log10(np.mean(audio[: n * FRAME].reshape(n, FRAME) ** 2, axis=1) + 1e-12)
+    return float(np.sum(level > level.max() - floor_db)) * FRAME / RATE
 
 
 def to_mono_16k(data, sample_rate: int, channels: int) -> np.ndarray:
@@ -108,9 +119,10 @@ class VoicePrint:
         """Cosine similarity to the enrolled voice (same speaker is usually above 0.5)."""
         return self.score_and_embedding(audio)[0]
 
-    def score_and_embedding(self, audio: np.ndarray) -> tuple[float, np.ndarray]:
+    def score_and_embedding(self, audio: np.ndarray) -> tuple[float, np.ndarray, float]:
+        """Similarity to the enrolled voice, the turn's embedding, and its seconds of actual speech."""
         embedding = self._embed(audio)
-        return float(embedding @ self.reference), embedding
+        return float(embedding @ self.reference), embedding, speech_seconds(audio)
 
     def adapt(self, embedding: np.ndarray, weight: float = 0.1) -> None:
         """Nudge the saved print toward a confidently matched turn, so it keeps learning the voice."""

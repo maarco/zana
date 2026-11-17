@@ -27,13 +27,26 @@ class JobsTest(unittest.TestCase):
             with tempfile.TemporaryDirectory() as home:
                 jobs = Jobs(home)
                 job = await jobs.start("echo started; sleep 30 | cat")
-                await asyncio.sleep(0.5)
+                for _ in range(100):  # a login shell can take a moment to start
+                    if "started" in job.output():
+                        break
+                    await asyncio.sleep(0.1)
                 self.assertIn("still running", job.summary())
                 self.assertIn("started", job.output())
                 self.assertIs(jobs.get("1"), job)
                 job.stop()
                 await asyncio.wait_for(job.task, 5)  # the whole pipeline is gone
                 self.assertNotEqual(job.exit_code, 0)
+        asyncio.run(run())
+
+    def test_stop_all_stops_running_jobs_quietly(self):
+        async def run():
+            with tempfile.TemporaryDirectory() as home:
+                jobs = Jobs(home)
+                job = await jobs.start("sleep 30")
+                jobs.stop_all()
+                await asyncio.wait_for(job.task, 5)
+                self.assertTrue(job.quiet)
         asyncio.run(run())
 
     def test_timeout_stops_the_job(self):

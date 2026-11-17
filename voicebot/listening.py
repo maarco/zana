@@ -3,6 +3,7 @@ unread mark, and output scrubbing. Standard library only, so CI tests them witho
 the speech stack."""
 import datetime
 import difflib
+import json
 import os
 import re
 
@@ -17,6 +18,29 @@ def clean(text: str, limit: int = 2500) -> str:
     for pat in _SECRETS:
         text = pat.sub("[hidden]", text)
     return text if len(text) <= limit else text[: limit // 2] + "\n...\n" + text[-limit // 2:]
+
+
+_TOOL_NAME = re.compile(r"(?:tool_name:\s*|functions\.)([A-Za-z_][\w-]*)")
+
+
+def parse_text_tool_calls(text: str) -> list[tuple[str, str]]:
+    """Tool calls a model wrote out as text instead of making them, as (name, JSON arguments):
+    <|tool_call_begin|>tool_name: list_jobs, arguments: {}, ...<|tool_call_end|>, or
+    <|tool_call_begin|>functions.list_jobs:0<|tool_call_argument_begin|>{}<|tool_call_end|>."""
+    calls = []
+    for block in text.split("<|tool_call_begin|>")[1:]:
+        block = block.split("<|tool_call_end|>")[0]
+        name = _TOOL_NAME.search(block)
+        if not name:
+            continue
+        args, start = "{}", block.find("{", name.end())
+        if start != -1:
+            try:
+                args = json.dumps(json.JSONDecoder().raw_decode(block, start)[0])
+            except ValueError:
+                pass
+        calls.append((name.group(1), args))
+    return calls
 
 
 def normalize(text: str) -> str:
@@ -80,7 +104,8 @@ TOPICS = {
     "terminal": ("terminal", "command", "shell", "run a"),
     "screen": ("screen", "screenshot", "what am i looking at", "window", "app am i"),
     "debug": ("debug", "what are you doing", "logs", "why didn t you", "why did you"),
-    "transcript": ("transcript", "what did i say", "what was i saying", "earlier"),
+    "transcript": ("transcript", "what did i say", "what was i saying", "earlier", "conversation", "conversations",
+                   "last time", "yesterday", "compact", "logs"),
     "prompt": ("system prompt", "your prompt", "the prompt", "your instructions", "instructions", "prompt file"),
     "name": ("your name", "call you", "rename", "who are you", "wake word"),
 }
@@ -124,6 +149,29 @@ class Transcript:
         if self._size() > max_chars and "\n" in text:
             text = text.split("\n", 1)[1]  # drop the partial first line
         return text.strip()
+
+    def search(self, words: str, limit: int = 12) -> list[str]:
+        """Transcript lines with every word (word starts match, case and punctuation ignored), each with the
+        line after it (usually the reply); when no line has them all, the lines with the most. Newest last."""
+        wanted = normalize(words).split()
+        try:
+            with open(self.path, errors="replace") as f:
+                lines = f.read().splitlines()
+        except OSError:
+            return []
+        if not wanted:
+            return []
+        scored = []
+        for i, line in enumerate(lines):
+            said = normalize(line.split("] ", 1)[-1]).split()
+            hits = sum(any(w.startswith(want) for w in said) for want in wanted)
+            if hits:
+                scored.append((hits, i))
+        if not scored:
+            return []
+        best = max(h for h, _ in scored)
+        picked = sorted({j for h, i in scored if h == best for j in (i, i + 1) if j < len(lines)})
+        return [lines[j] for j in picked][-2 * limit:]
 
     def mark_read(self) -> None:
         with open(self.mark, "w") as f:

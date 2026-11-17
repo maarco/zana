@@ -19,6 +19,16 @@ class ToMono16kTest(unittest.TestCase):
         self.assertLessEqual(float(np.abs(out).max()), 1.0)
 
 
+class SpeechSecondsTest(unittest.TestCase):
+    def test_counts_speech_not_the_silence_around_it(self):
+        from voiceprint import RATE, speech_seconds
+        quiet = lambda s: np.full(int(s * RATE), 1e-5, dtype=np.float32)
+        tone = 0.3 * np.sin(np.arange(int(0.6 * RATE)) * 2 * np.pi * 220 / RATE).astype(np.float32)
+        audio = np.concatenate([quiet(0.3), tone, quiet(0.9)])  # preroll, "go ahead", end-of-turn wait
+        self.assertAlmostEqual(speech_seconds(audio), 0.6, delta=0.05)
+        self.assertEqual(speech_seconds(np.zeros(0, dtype=np.float32)), 0.0)
+
+
 class AdaptTest(unittest.TestCase):
     def test_adapt_moves_the_print_toward_the_voice_and_saves_it(self):
         import tempfile

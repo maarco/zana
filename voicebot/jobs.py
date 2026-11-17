@@ -19,6 +19,7 @@ class Job:
         self.id, self.command, self.proc, self.log, self._log_file = job_id, command, proc, log_path, log_file
         self.timeout = timeout
         self.pid = proc.pid
+        self.quiet = False  # stopped on purpose: nobody needs to hear that it ended
         self.started = time.time()
         self.ended: float | None = None
         self.exit_code: int | None = None
@@ -36,7 +37,9 @@ class Job:
             self.ended = time.time()
             self._log_file.close()
 
-    def stop(self) -> None:
+    def stop(self, quiet: bool = False) -> None:
+        """Kill the job's whole process group."""
+        self.quiet = self.quiet or quiet
         try:
             os.killpg(self.pid, signal.SIGKILL)
         except (ProcessLookupError, PermissionError):
@@ -84,6 +87,12 @@ class Jobs:
         job = Job(job_id, command, proc, log_path, log_file, self.timeout)
         self.jobs[job_id] = job
         return job
+
+    def stop_all(self) -> None:
+        """Stop every running job (the conversation is closing)."""
+        for job in self.jobs.values():
+            if job.ended is None:
+                job.stop(quiet=True)
 
     def get(self, job_id) -> "Job | None":
         try:

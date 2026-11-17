@@ -1,8 +1,8 @@
 # Voicebot
 
-Zana's optional voice agent (macOS, Apple Silicon). Turn it on in Preferences >
-Voicebot > Voicebot Mode; Zana restarts, installs what it needs, starts the
-processes below and shows a floating orb.
+Zana's voice agent (macOS, Apple Silicon). Zana starts it on launch: it installs
+what it needs, starts the processes below and shows a floating orb. Fn dictation
+and Whisper are retired.
 
 ## How it runs
 
@@ -31,20 +31,22 @@ Everything per-user lives in the Voicebot folder,
 |---|---|
 | `.env` | Keys and models (never committed; see below) |
 | `system_prompt.md` | The system prompt (edit it in Preferences) |
-| `config.json` | Terminal switch and wake word, written by Zana |
+| `config.json` | Terminal switch, wake word and chat model, written by Zana |
 | `mcp.json` | MCP servers, Claude Desktop format |
 | `transcript.md` | Always-on transcript of everything heard and said |
 | `logs/` | `debug.jsonl` (the Debug window), plus each process's log |
 | `venv/`, `voices/` | The Python environment and VibeVoice voices |
 
-`.env` settings (all optional except a key for the default provider):
+The chat model is set in Preferences > Model (API key, model, OpenAI-compatible
+API URL); Zana writes it into `config.json`, readable only by you, and a change
+starts a fresh conversation so the new model answers at once.
+
+`.env` settings (all optional):
 
 ```
-OPENROUTER_API_KEY=...            # chat model provider key
-OPENROUTER_MODEL=nvidia/nemotron-3.5-super-vl:free
-LLM_BASE_URL=... LLM_MODEL=... LLM_API_KEY=...        # any OpenAI-compatible endpoint instead
 VISION_MODEL=...                  # model that reads screenshots (default: the chat model)
 TTS_BASE_URL=... TTS_MODEL=... TTS_VOICE=en-Emma_woman   # TTS override (default: local VibeVoice)
+OPENROUTER_API_KEY=... OPENROUTER_MODEL=...   # only used when Preferences > Model has no model
 ```
 
 ## What it does
@@ -62,10 +64,20 @@ TTS_BASE_URL=... TTS_MODEL=... TTS_VOICE=en-Emma_woman   # TTS override (default
   like "I'm listening." is skipped). Numbers are spoken as words; paths, links,
   code and JSON are never read out.
 - **Tools**: `see_screen`, `look_at_screen` (vision model), `type_up` (pastes at
-  your cursor), `stop_listening` (also said with "goodbye"), `run_terminal` (only with the Terminal Tool
-  switch), and `list/add/remove/reload_mcp_servers` (adding and removing need
+  your cursor), `press_keys`, `stop_listening` (also said with "goodbye"),
+  `search_conversations` (the transcript of every conversation), `run_terminal`,
+  `run_applescript` and `check_job`/`stop_job`/`list_jobs` (only with the Terminal
+  Tool switch), and `list/add/remove/reload_mcp_servers` (adding and removing need
   the Terminal Tool switch). When the model goes straight to a tool, Voicebot
   says "On it." while the tool runs, then answers.
+- **Terminal jobs**: a command still running after three seconds keeps going as
+  a job; its output streams to `jobs/<n>.log`, Voicebot gets the job number and
+  process id, and it is told when the job ends. Jobs stop after 15 minutes or
+  when the conversation closes.
+- **Compaction**: past 12,000 characters (besides the instructions), the older
+  part of the conversation is folded into a summary and the last three turns stay
+  word for word; the Debug window shows each compaction and every reply shows the
+  conversation size. The transcript file keeps everything.
 - **Orb**: drag to move, click to mute, double-click for a new conversation
   (applies prompt, MCP and switch changes), right-click for the Debug window.
 - **Debug window**: every step live: what it heard (and whether it ignored it),

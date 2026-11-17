@@ -34,7 +34,8 @@ from livekit.agents.voice.agent_session import SessionConnectOptions
 from livekit.plugins import openai, silero
 
 from jobs import Jobs
-from listening import Transcript, clean, heard_wake_word, is_goodbye, topics, wants_redo, wants_voiceprint
+from listening import (Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls, topics, wants_redo,
+                       wants_voiceprint)
 from voiceprint import RATE, VoicePrint, VoiceTap, to_mono_16k
 from speech import one_sentence, speakable_stream
 
@@ -49,8 +50,10 @@ TRANSCRIPT = Transcript(HOME)  # always-on: every line heard and said
 DEBUG_LOG = os.path.join(HOME, "logs", "debug.jsonl")  # what Voicebot does, for Zana's Debug window
 SAY = "\n(Now say one short sentence with the answer.)"
 MIN_VOICE_CHECK = int(0.5 * RATE)  # shorter turns are not checked against the voice print
-SHORT_TURN = 2.0  # seconds; short phrases give noisier voice prints, so they get a lower cutoff
+SHORT_TURN = 2.0  # seconds of actual speech; short phrases give noisier voice prints, so they get a lower cutoff
 ADAPT_SCORE = 0.55  # confident matches this long or longer refine the saved print
+COMPACT_CHARS = 12000  # conversation size (besides the instructions) that triggers compaction
+KEEP_TURNS = 3  # recent turns kept word for word when compacting
 ENROLL_SECONDS = 8
 
 log = logging.getLogger("voicebot")
@@ -87,6 +90,19 @@ def load_prompt() -> str:
     return "You are an AI voicebot. Answer in one short spoken sentence."
 
 
+def context_chars(ctx) -> int:
+    """Characters the model reads each turn besides its instructions: messages, tool calls, tool results."""
+    total = 0
+    for item in ctx.items:
+        if item.type == "message" and item.role not in ("system", "developer"):
+            total += len(item.text_content or "")
+        elif item.type == "function_call":
+            total += len(item.arguments or "")
+        elif item.type == "function_call_output":
+            total += len(item.output or "")
+    return total
+
+
 def build_instructions(name: str) -> str:
     """Name, system prompt, then the recent conversation from the transcript file (continuity across
     conversations and prompt reloads)."""
@@ -108,16 +124,25 @@ def write_config(**changes) -> dict:
 
 
 def make_llm(vision: bool = False):
-    """Any OpenAI-compatible chat endpoint; OpenRouter unless LLM_BASE_URL says otherwise.
-    VISION_MODEL / VISION_BASE_URL / VISION_API_KEY pick the model that reads screenshots."""
-    model = os.getenv("LLM_MODEL") or os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3.5-super-vl:free")
-    base_url = os.getenv("LLM_BASE_URL", "https://openrouter.ai/api/v1")
-    api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENROUTER_API_KEY") or os.getenv("openrouter") or "none"
+    """The chat model from Zana's Preferences > Model (config.json "llm"); without one, LLM_* or
+    OPENROUTER_* in .env. VISION_MODEL / VISION_BASE_URL / VISION_API_KEY pick the model that reads
+    screenshots. A model from Preferences never gets a key from .env (it may be another provider's)."""
+    chosen = read_json("config.json").get("llm") or {}
+    if chosen.get("model"):
+        model = chosen["model"]
+        base_url = chosen.get("base_url") or "https://api.openai.com/v1"
+        api_key = chosen.get("api_key") or "none"
+    else:
+        model = os.getenv("LLM_MODEL") or os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3.5-super-vl:free")
+        base_url = os.getenv("LLM_BASE_URL", "https://openrouter.ai/api/v1")
+        api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENROUTER_API_KEY") or os.getenv("openrouter") or "none"
     if vision:
         model = os.getenv("VISION_MODEL", model)
         base_url = os.getenv("VISION_BASE_URL", base_url)
         api_key = os.getenv("VISION_API_KEY", api_key)
-    return openai.LLM(model=model, base_url=base_url, api_key=api_key, extra_body={"reasoning": {"enabled": False}})
+    # OpenRouter's switch for thinking out loud; other providers reject unknown fields
+    extra = {"extra_body": {"reasoning": {"enabled": False}}} if "openrouter.ai" in base_url else {}
+    return openai.LLM(model=model, base_url=base_url, api_key=api_key, **extra)
 
 
 def make_tts():
@@ -179,7 +204,9 @@ async def zana(method: str, payload: str = "") -> str:
 class Voicebot(Agent):
     def __init__(self, config: dict, publish) -> None:
         self.name = str(config.get("name") or "Voicebot").strip()
-        super().__init__(instructions=build_instructions(self.name))
+        self.base_instructions = build_instructions(self.name)
+        self.summary = ""  # the compacted part of this conversation, kept at the end of the instructions
+        super().__init__(instructions=self.base_instructions)
         self.terminal = bool(config.get("terminal"))
         self.wake_word = str(config.get("wake_word") or "").strip()
         self.wake_timeout = float(config.get("wake_timeout_seconds") or 120)
@@ -190,6 +217,9 @@ class Voicebot(Agent):
         self.voiceprint = VoicePrint(HOME)
         self.threshold = float(config.get("voiceprint_threshold") or 0.4)
         self.short_threshold = float(config.get("voiceprint_short_threshold") or 0.28)
+        self.compact_chars = int(config.get("compact_chars") or COMPACT_CHARS)
+        self.compact_at = self.compact_chars
+        self.compacting = False
         self.enrolling = False
         self.enroll_audio: list = []
         threading.Thread(target=self._warm_voiceprint, daemon=True).start()
@@ -244,8 +274,10 @@ class Voicebot(Agent):
                        "vision model answer a question about it."),
             "debug": ("Right-clicking the orb (or Preferences, Voicebot, Debug) opens the Debug window: everything you "
                       "heard, said and ran, with errors."),
-            "transcript": ("Everything heard is written to the always-on transcript; on the wake word you get the part "
-                           "said while you were asleep."),
+            "transcript": ("Everything heard and said is written to the always-on transcript file, across every "
+                           "conversation; on the wake word you get the part said while you were asleep. "
+                           "search_conversations finds words in it, with dates. Long conversations are compacted: "
+                           "older turns are folded into a summary to keep you fast, and the transcript keeps everything."),
             "prompt": (f"Your system prompt is the user's own file, system_prompt.md in your Voicebot folder ({HOME}). "
                        "You may read it out or summarize it when asked (read_system_prompt). edit_system_prompt changes "
                        "it (exact find and replace, or append) and reloads it at once, keeping a backup; "
@@ -322,10 +354,19 @@ class Voicebot(Agent):
 
     async def llm_node(self, chat_ctx, tools, model_settings):
         """When the model goes straight to a tool call, say "On it." so the user hears
-        something while the tool runs; the answer follows when the results are in."""
+        something while the tool runs; the answer follows when the results are in.
+        Some models now and then write a tool call out as text (<|tool_call_begin|>...): that text is
+        held back, never spoken, and run as a real tool call."""
         said_text = announced = False
+        held = ""
         async for chunk in Agent.default.llm_node(self, chat_ctx, tools, model_settings):
             delta = getattr(chunk, "delta", None)
+            if delta is not None and delta.content and (held or "<|" in delta.content):
+                cut = 0 if held else delta.content.index("<|")
+                held += delta.content[cut:]
+                delta.content = delta.content[:cut] or None
+                if not delta.content and not delta.tool_calls:
+                    continue
             if delta is not None:
                 if delta.content and delta.content.strip():
                     said_text = True
@@ -333,6 +374,18 @@ class Voicebot(Agent):
                     announced = True
                     yield "On it. "
             yield chunk
+        if not held:
+            return
+        calls = parse_text_tool_calls(held)
+        debug("model", note=(f"The model wrote {len(calls)} tool call(s) as text; Voicebot ran them" if calls
+                             else "The model wrote tool-call text Voicebot could not read; it was not spoken"),
+              text=held[:400])
+        if calls:
+            if not said_text and not announced:
+                yield "On it. "
+            yield llm.ChatChunk(id="text-tool-calls", delta=llm.ChoiceDelta(role="assistant", tool_calls=[
+                llm.FunctionToolCall(name=name, arguments=args, call_id=f"text_{i}_{int(time.time() * 1000)}")
+                for i, (name, args) in enumerate(calls)]))
 
     async def on_user_turn_completed(self, turn_ctx, new_message) -> None:
         heard = new_message.text_content or ""
@@ -343,14 +396,13 @@ class Voicebot(Agent):
             raise StopResponse()
         score = None
         if self.voiceprint.enrolled and len(audio) >= MIN_VOICE_CHECK:
-            seconds = len(audio) / RATE
-            score, embedding = await asyncio.get_running_loop().run_in_executor(
+            score, embedding, seconds = await asyncio.get_running_loop().run_in_executor(
                 None, self.voiceprint.score_and_embedding, audio)
             cutoff = self.short_threshold if seconds < SHORT_TURN else self.threshold
             if score < cutoff:
                 TRANSCRIPT.record("Other", heard)
                 debug("heard", text=heard, action=f"ignored (not your voice, match {score:.2f} < {cutoff:.2f}, "
-                                                   f"{seconds:.1f} s)")
+                                                   f"{seconds:.1f} s of speech)")
                 raise StopResponse()
             if score >= ADAPT_SCORE and seconds >= SHORT_TURN:
                 await asyncio.get_running_loop().run_in_executor(None, self.voiceprint.adapt, embedding)
@@ -367,6 +419,67 @@ class Voicebot(Agent):
             raise StopResponse()
         if extra:
             new_message.content.append(extra)
+
+    # ---------- conversation memory: compaction and transcript search ----------
+
+    def maybe_compact(self) -> None:
+        """Fold older turns into a summary once the conversation passes its size budget."""
+        if not self.compacting and context_chars(self.chat_ctx) > self.compact_at:
+            self.compacting = True
+            asyncio.create_task(self.compact())
+
+    def full_instructions(self) -> str:
+        if not self.summary:
+            return self.base_instructions
+        return (self.base_instructions + "\n\nSummary of the earlier part of this conversation (older turns were "
+                "compacted into it; search_conversations finds the exact words):\n" + self.summary)
+
+    async def compact(self) -> None:
+        """Summarize all but the last few turns with the chat model and move the summary into the instructions
+        (one system message; a made-up assistant turn holding it led the model to write tool calls as text).
+        The previous summary is folded into the new one, so the context stays bounded; the transcript file
+        keeps everything."""
+        try:
+            snapshot = self.chat_ctx.copy()
+            seen = {item.id for item in snapshot.items}
+            before_items, before_chars = len(snapshot.items), context_chars(snapshot)
+            if self.summary:
+                snapshot.items.insert(0, llm.ChatMessage(role="assistant", content=[
+                    "Summary of the conversation before this point: " + self.summary]))
+            compacted = await snapshot._summarize(self.session.llm, keep_last_turns=KEEP_TURNS)
+            made = [i for i in compacted.items if i.type == "message" and i.extra.get("is_summary")]
+            if not made:
+                debug("compact", action="skipped", before_items=before_items, before_chars=before_chars)
+                self.compact_at = before_chars + self.compact_chars // 2
+                return
+            self.summary = re.sub(r"</?chat_history_summary>", "", made[-1].text_content or "").strip()
+            compacted.items = [i for i in compacted.items if i not in made]
+            compacted.items.extend(item for item in self.chat_ctx.items if item.id not in seen)  # said meanwhile
+            await self.update_instructions(self.full_instructions())
+            await self.update_chat_ctx(compacted)
+            after = context_chars(compacted)
+            debug("compact", before_items=before_items, before_chars=before_chars,
+                  after_items=len(compacted.items), after_chars=after, summary=self.summary)
+            self.compact_at = max(self.compact_chars, after + len(self.summary) + self.compact_chars // 2)
+        except Exception as exc:  # noqa: BLE001 - logged; the conversation goes on uncompacted
+            debug("error", source="compaction", error=str(exc)[:500])
+            self.compact_at = context_chars(self.chat_ctx) + self.compact_chars // 2
+        finally:
+            self.compacting = False
+
+    @function_tool()
+    async def search_conversations(self, context: RunContext, words: str) -> str:
+        """Search the transcript of every conversation (everything heard and said, with dates) for words.
+        Use it when the user asks what was said or done before, or for anything from earlier that is no
+        longer in front of you (older turns of this conversation are compacted into a summary).
+
+        Args:
+            words: The words to look for, like "pty manager" or "wake word".
+        """
+        found = TRANSCRIPT.search(words)
+        if not found:
+            return f'Nothing in the transcript has "{words}".' + SAY
+        return "Transcript lines, oldest first:\n" + clean("\n".join(found), 4000) + SAY
 
     # ---------- MCP servers ----------
 
@@ -529,7 +642,8 @@ class Voicebot(Agent):
         return answer.strip() + SAY
 
     async def reload_instructions(self) -> None:
-        await self.update_instructions(build_instructions(self.name))
+        self.base_instructions = build_instructions(self.name)
+        await self.update_instructions(self.full_instructions())
         debug("prompt", action="reloaded", name=self.name)
 
     @function_tool()
@@ -662,6 +776,8 @@ class Voicebot(Agent):
             return f"exit code {job.exit_code}\n{job.output()}" + SAY
 
         def finished(_t: asyncio.Task):
+            if job.quiet:  # stopped on purpose; stop_job already answered
+                return
             summary = job.summary(lines=60)
             debug("tool", name=f"run_terminal job {job.id} (finished)", args={"command": command}, output=summary[:2000])
             context.session.generate_reply(instructions=f"Terminal job {job.id} finished.\n{summary}{SAY}")
@@ -691,7 +807,7 @@ class Voicebot(Agent):
         found = JOBS.get(job)
         if not found:
             return f"There is no job {job}." + SAY
-        found.stop()
+        found.stop(quiet=True)
         debug("job", id=found.id, action="stopped")
         return f"Stopped job {job}." + SAY
 
@@ -761,7 +877,8 @@ async def entrypoint(ctx: agents.JobContext):
             said = getattr(ev.item, "text_content", "") or ""
             TRANSCRIPT.record("Voicebot", said)
             if said.strip():
-                debug("said", text=said, interrupted=bool(getattr(ev.item, "interrupted", False)))
+                debug("said", text=said, interrupted=bool(getattr(ev.item, "interrupted", False)),
+                      context_chars=context_chars(agent.chat_ctx))
 
     @session.on("error")
     def _on_error(ev):
@@ -777,7 +894,14 @@ async def entrypoint(ctx: agents.JobContext):
 
     @session.on("agent_state_changed")
     def _on_state(ev):
-        debug("state", state=str(getattr(ev, "new_state", "")))
+        state = str(getattr(ev, "new_state", ""))
+        debug("state", state=state)
+        if state == "listening":
+            agent.maybe_compact()
+
+    @session.on("close")
+    def _on_close(_ev):
+        JOBS.stop_all()
 
     async def on_text(sess: AgentSession, ev) -> None:
         """Typed messages pass the same wake-word gate and transcript as speech."""

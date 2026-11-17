@@ -67,7 +67,7 @@
     let first = true;
     const LABELS = {
       session: 'Session', heard: 'Heard', wake: 'Woke', sleep: 'Sleep', said: 'Said',
-      tool: 'Tool', error: 'Error', mcp: 'MCP', state: 'State', voiceprint: 'Voice', goodbye: 'Bye', context: 'Context', prompt: 'Prompt', settings: 'Settings', job: 'Job',
+      tool: 'Tool', error: 'Error', mcp: 'MCP', state: 'State', voiceprint: 'Voice', goodbye: 'Bye', context: 'Context', prompt: 'Prompt', settings: 'Settings', job: 'Job', compact: 'Compact', model: 'Model',
     };
 
     function el(tag, cls, text) {
@@ -83,7 +83,11 @@
         case 'heard': return [ev.text, ev.action + (ev.voice_match != null ? ` · voice match ${ev.voice_match}` : '') + (ev.unread_chars ? ` · with ${ev.unread_chars} characters of unread transcript` : '')];
         case 'wake': return [`Heard the wake word "${ev.wake_word}"`];
         case 'sleep': return [`Asleep until "${ev.wake_word}"`];
-        case 'said': return [ev.text, ev.interrupted ? 'interrupted' : ''];
+        case 'said': return [ev.text, [ev.interrupted ? 'interrupted' : '', ev.context_chars != null ? `conversation ${ev.context_chars.toLocaleString()} characters` : ''].filter(Boolean).join(' · ')];
+        case 'model': return [ev.note, ev.text];
+        case 'compact': return ev.action === 'skipped'
+          ? [`Compaction skipped: nothing old enough to fold (${ev.before_chars.toLocaleString()} characters)`]
+          : [`Compacted the conversation: ${ev.before_items} items, ${ev.before_chars.toLocaleString()} characters → ${ev.after_items} items, ${ev.after_chars.toLocaleString()} characters`, ev.summary || ''];
         case 'tool': return [`${ev.name}(${ev.args && Object.keys(ev.args).length ? JSON.stringify(ev.args) : ''})`, ev.output || '(no output)'];
         case 'error': return [ev.error, ev.source];
         case 'mcp': return [`MCP servers: ${(ev.servers || []).join('; ') || 'none configured'}`];
