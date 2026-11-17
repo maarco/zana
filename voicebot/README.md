@@ -70,8 +70,8 @@ OPENROUTER_API_KEY=... OPENROUTER_MODEL=...   # only used when Preferences > Mod
   `search_conversations` (the transcript of every conversation), `run_terminal`,
   `run_applescript` and `check_job`/`stop_job`/`list_jobs` (only with the Terminal
   Tool switch), and `list/add/remove/reload_mcp_servers` (adding and removing need
-  the Terminal Tool switch). When the model goes straight to a tool, Voicebot
-  says "On it." while the tool runs, then answers.
+  the Terminal Tool switch). While a tool runs the orb shows Voicebot working;
+  nothing is said until the answer.
 - **Terminal jobs**: a command still running after three seconds keeps going as
   a job; its output streams to `jobs/<n>.log`, Voicebot gets the job number and
   process id, and it is told when the job ends. Jobs stop after 15 minutes or

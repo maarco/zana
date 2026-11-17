@@ -357,11 +357,9 @@ class Voicebot(Agent):
         return extra
 
     async def llm_node(self, chat_ctx, tools, model_settings):
-        """When the model goes straight to a tool call, say "On it." so the user hears
-        something while the tool runs; the answer follows when the results are in.
-        Some models now and then write a tool call out as text (<|tool_call_begin|>...): that text is
-        held back, never spoken, and run as a real tool call."""
-        said_text = announced = False
+        """Some models now and then write a tool call out as text (<|tool_call_begin|>...): that text is
+        held back, never spoken, and run as a real tool call. (No spoken filler while tools run; the orb
+        shows the working state.)"""
         held = ""
         async for chunk in Agent.default.llm_node(self, chat_ctx, tools, model_settings):
             delta = getattr(chunk, "delta", None)
@@ -371,12 +369,6 @@ class Voicebot(Agent):
                 delta.content = delta.content[:cut] or None
                 if not delta.content and not delta.tool_calls:
                     continue
-            if delta is not None:
-                if delta.content and delta.content.strip():
-                    said_text = True
-                if delta.tool_calls and not said_text and not announced:
-                    announced = True
-                    yield "On it. "
             yield chunk
         if not held:
             return
@@ -385,8 +377,6 @@ class Voicebot(Agent):
                              else "The model wrote tool-call text Voicebot could not read; it was not spoken"),
               text=held[:400])
         if calls:
-            if not said_text and not announced:
-                yield "On it. "
             yield llm.ChatChunk(id="text-tool-calls", delta=llm.ChoiceDelta(role="assistant", tool_calls=[
                 llm.FunctionToolCall(name=name, arguments=args, call_id=f"text_{i}_{int(time.time() * 1000)}")
                 for i, (name, args) in enumerate(calls)]))
