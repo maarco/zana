@@ -12,14 +12,14 @@
       --foreground: oklch(0.985 0 0);
       --card: oklch(0.185 0 0);
       --card-foreground: oklch(0.985 0 0);
-      --primary: #c76612;
-      --primary-foreground: #fff7ed;
+      --primary: oklch(0.985 0 0);
+      --primary-foreground: oklch(0.145 0 0);
       --muted: oklch(0.269 0 0);
       --muted-foreground: oklch(0.62 0 0);
       --accent: oklch(0.269 0 0);
       --border: transparent;
       --input: oklch(0.269 0 0);
-      --ring: #f97316;
+      --ring: oklch(0.985 0 0);
       --destructive: #f87171;
       --ok: #5cb88a;
       --settings: #a0927b;
@@ -183,8 +183,7 @@ var(--background);
       transition: background 0.2s, border-color 0.2s;
     }
     .toggle.active {
-      background: rgba(249, 115, 22, 0.56);
-      border-color: rgba(249, 115, 22, 0.7);
+      background: var(--primary);
     }
     .toggle::after {
       content: '';
@@ -199,6 +198,7 @@ var(--background);
     }
     .toggle.active::after {
       transform: translateX(16px);
+      background: var(--background);
     }
     textarea {
       width: 100%;
@@ -292,14 +292,14 @@ var(--background);
     }
     .button-row {
       position: sticky;
-      bottom: 0;
+      bottom: -14px;
       display: flex;
       align-items: center;
       justify-content: flex-end;
       gap: 8px;
       margin-top: 14px;
-      padding: 10px 0 0;
-      background: linear-gradient(180deg, transparent, var(--background) 16%);
+      padding: 10px 0 14px;
+      background: var(--background);
     }
     .save-status {
       margin-right: auto;
