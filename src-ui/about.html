@@ -143,32 +143,19 @@
       color: var(--muted-foreground);
       -webkit-app-region: no-drag;
     }
-    .close-btn {
-      -webkit-app-region: no-drag;
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      width: 28px;
-      height: 28px;
-      border: 0;
-      background: var(--muted);
-      border-radius: var(--radius);
-      color: var(--muted-foreground);
-      font-size: 16px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .close-btn:hover {
-      background: #2b2b30;
-      color: var(--foreground);
-    }
+      .about-controls { position: absolute; top: 10px; right: 10px; }
   </style>
+  <link rel="stylesheet" href="window-chrome.css">
+  <script src="window-controls.js"></script>
 </head>
 <body>
-  <button class="close-btn" onclick="closeWindow()">&times;</button>
+  <div class="about-controls"><div class="window-controls">
+    <button type="button" data-window="minimize" aria-label="Minimize"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 5h6"/></svg></button>
+    <button type="button" data-window="close" aria-label="Close"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 2.5l5 5M7.5 2.5l-5 5"/></svg></button>
+    </div></div>
 
   <div class="about-container">
-    <div class="banner">
+    <div class="banner" data-tauri-drag-region>
       <div class="logo" aria-hidden="true">
         <svg viewBox="150 170 724 724" role="img">
           <defs>
@@ -178,9 +165,9 @@
               <stop offset="100%" stop-color="#07070b"/>
             </radialGradient>
             <linearGradient id="logo-mark" x1="18%" y1="10%" x2="88%" y2="92%">
-              <stop offset="0%" stop-color="#ffb86b"/>
-              <stop offset="46%" stop-color="#f97316"/>
-              <stop offset="100%" stop-color="#ef4444"/>
+              <stop offset="0%" stop-color="#f5f5f5"/>
+              <stop offset="46%" stop-color="#b8b8b8"/>
+              <stop offset="100%" stop-color="#7a7a7a"/>
             </linearGradient>
           </defs>
           

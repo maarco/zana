@@ -270,6 +270,9 @@ pub async fn open_transcriptions_window(app: AppHandle) -> Result<(), String> {
         WebviewUrl::App("transcriptions.html".into()),
     )
     .title("Zana Transcriptions")
+    .decorations(false)
+    .transparent(true)
+    .shadow(true)
     .inner_size(560.0, 640.0)
     .center()
     .build()

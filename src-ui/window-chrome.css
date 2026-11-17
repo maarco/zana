@@ -1,0 +1,11 @@
+/* Undecorated windows: rounded transparent frame and custom window buttons. */
+html { background: transparent; }
+body { border-radius: 12px; overflow: hidden; }
+.window-controls { display: flex; gap: 2px; margin-left: auto; -webkit-app-region: no-drag; }
+.window-controls button {
+  width: 28px; height: 28px; display: grid; place-items: center;
+  border: 0; border-radius: 6px; background: transparent; color: oklch(0.62 0 0); cursor: pointer;
+}
+.window-controls button:hover { background: oklch(0.269 0 0); color: oklch(0.985 0 0); }
+.window-controls svg { width: 10px; height: 10px; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; fill: none; }
+.update-banner.visible + .window-controls { margin-left: 4px; }

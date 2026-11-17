@@ -458,6 +458,9 @@ fn main() {
                                     WebviewUrl::App("about.html".into()),
                                 )
                                 .title("About Zana")
+                                .decorations(false)
+                                .transparent(true)
+                                .shadow(true)
                                 .inner_size(400.0, 500.0)
                                 .center()
                                 .resizable(false)
@@ -476,6 +479,9 @@ fn main() {
                                     WebviewUrl::App("preferences.html".into()),
                                 )
                                 .title("Zana Preferences")
+                                .decorations(false)
+                                .transparent(true)
+                                .shadow(true)
                                 .inner_size(500.0, 680.0)
                                 .center()
                                 .resizable(false)
@@ -497,6 +503,9 @@ fn main() {
                                     WebviewUrl::App("transcriptions.html".into()),
                                 )
                                 .title("Zana Transcriptions")
+                                .decorations(false)
+                                .transparent(true)
+                                .shadow(true)
                                 .inner_size(560.0, 640.0)
                                 .center()
                                 .build();
