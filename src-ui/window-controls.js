@@ -29,3 +29,18 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[data-window="minimize"]').forEach((b) => { b.title = 'Minimize (Command-M)'; });
   document.querySelectorAll('[data-window="close"]').forEach((b) => { b.title = 'Close (Command-W)'; });
 });
+
+// Drag the window from anywhere inside a [data-tauri-drag-region] header,
+// including its text and logo, but not from buttons or fields inside it.
+document.addEventListener('mousedown', (event) => {
+  if (event.button !== 0) return;
+  if (!event.target.closest('[data-tauri-drag-region]')) return;
+  if (event.target.closest('button, a, input, select, textarea, [data-window]')) return;
+  const win = currentWindow();
+  if (!win) return;
+  event.preventDefault();
+  if (event.detail === 2) {
+    return;
+  }
+  win.startDragging();
+});
