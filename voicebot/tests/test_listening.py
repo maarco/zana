@@ -5,7 +5,8 @@ import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls, split_say,
+from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls, repeats,
+                       split_say,
                        topics,
                        wants_redo,  # noqa: E402
                        wants_voiceprint)
@@ -173,6 +174,15 @@ class SplitSayTest(unittest.TestCase):
                          ("Let me check your kollab folder", '{"command": "ls ~/dev/kollab"}'))
         self.assertEqual(split_say('{"job": 1}'), ("", '{"job": 1}'))
         self.assertEqual(split_say("not json"), ("", "not json"))
+
+
+class RepeatsTest(unittest.TestCase):
+    def test_spots_a_description_already_said_in_the_step(self):
+        self.assertTrue(repeats("Hm, first one printed one, on to the next",
+                                'Hm, first one printed "one", on to the next.'))
+        self.assertFalse(repeats("Running the third and final echo",
+                                 "Alright, that printed two, last one coming up."))
+        self.assertFalse(repeats("Checking the logs", ""))
 
 if __name__ == "__main__":
     unittest.main()

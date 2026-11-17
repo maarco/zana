@@ -424,6 +424,33 @@ async def mode_sayline():
                     print("transcript", line.strip()[:150])
 
 
+async def mode_chain():
+    """Three tool calls in a row: the first step gets the cached thinking sound, later steps open with
+    a thinking word and are spaced out. Prints the timeline."""
+    wake = json.load(open(os.path.join(HOME, "config.json"))).get("wake_word") or ""
+    debug_log = os.path.join(HOME, "logs", "debug.jsonl")
+    start = os.path.getsize(debug_log)
+    room = rtc.Room()
+    await room.connect(URL, token("probe-chain-" + str(int(time.time())), "probe-user", {"client": "zana"}))
+    for _ in range(60):
+        if room.remote_participants:
+            break
+        await asyncio.sleep(0.5)
+    await asyncio.sleep(2)
+    await room.local_participant.send_text(
+        f"{wake}, run the terminal command echo one, then once you see its output run echo two, then once you "
+        "see that run echo three, one call at a time, then tell me what they printed", topic="lk.chat")
+    await asyncio.sleep(40)
+    await room.disconnect()
+    with open(debug_log) as f:
+        f.seek(start)
+        events = [json.loads(l) for l in f if l.strip()]
+    t0 = events[0]["t"] if events else 0
+    for ev in events:
+        if ev["kind"] in ("filler", "said", "tool"):
+            print(f"{ev['t'] - t0:6.1f}s", ev["kind"], str(ev.get("text") or ev.get("args"))[:110])
+
+
 async def mode_preview():
     """Ask the real orb to show a state for five seconds (argv[2], e.g. listening or speaking)."""
     lk = api.LiveKitAPI(HTTP, KEY, SECRET)
@@ -442,4 +469,5 @@ async def mode_preview():
 
 asyncio.run({"zana": mode_zana, "voiceprint": mode_voiceprint, "selfedit": mode_selfedit,
              "preview": mode_preview, "jobs": mode_jobs, "memory": mode_memory,
-             "modelerror": mode_modelerror, "sayline": mode_sayline}.get(MODE, mode_agent)())
+             "modelerror": mode_modelerror, "sayline": mode_sayline,
+             "chain": mode_chain}.get(MODE, mode_agent)())

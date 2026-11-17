@@ -87,6 +87,13 @@ def split_say(arguments: str) -> tuple[str, str]:
     return say, json.dumps(args)
 
 
+def repeats(say: str, text: str, share: float = 0.6) -> bool:
+    """True when what a tool call would say is mostly already in the text spoken in the same step."""
+    words = normalize(say).split()
+    have = set(normalize(text).split())
+    return bool(words) and sum(w in have for w in words) / len(words) >= share
+
+
 class ToolCallText:
     """Splits a streamed reply into what may be spoken and the tool-call text a model wrote out,
     which is held back from its first marker to the end of the reply. A "<" that may begin a

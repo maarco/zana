@@ -19,6 +19,7 @@ import difflib
 import json
 import logging
 import os
+import random
 import re
 import threading
 import time
@@ -36,7 +37,7 @@ from livekit.plugins import openai, silero
 from fillers import DEFAULT_PHRASES, Fillers, chunks_with_gap
 from jobs import Jobs
 from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls,
-                       split_say, topics, wants_redo, wants_voiceprint)
+                       repeats, split_say, topics, wants_redo, wants_voiceprint)
 from voiceprint import RATE, VoicePrint, VoiceTap, to_mono_16k
 from speech import TOOL_SAY, one_sentence, speakable_stream
 
@@ -78,6 +79,7 @@ def with_say(tool):
     return llm.function_tool(shown_only, raw_schema=schema)
 
 
+STEP_GAP = 1.0  # seconds of quiet before a follow-up tool step speaks, so steps don't fire back to back
 SHORT_TURN = 2.0  # seconds of actual speech; short phrases give noisier voice prints, so they get a lower cutoff
 ADAPT_SCORE = 0.55  # confident matches this long or longer refine the saved print
 COMPACT_CHARS = 12000  # conversation size (besides the instructions) that triggers compaction
@@ -263,6 +265,7 @@ class Voicebot(Agent):
         self.fillers_on = fillers.get("on", True)
         self.filler_phrases = [p.strip() for p in fillers.get("phrases") or [] if p.strip()] or DEFAULT_PHRASES
         self.filler_days = float(fillers.get("days") or 7)
+        self.last_opener = ""
         self.compact_chars = int(config.get("compact_chars") or COMPACT_CHARS)
         self.compact_at = self.compact_chars
         self.compacting = False
@@ -405,20 +408,24 @@ class Voicebot(Agent):
         and run as a real tool call."""
         split = ToolCallText()
         shown = [with_say(tool) for tool in tools]  # a new list: execution keeps the real tools
+        # a step right after tool results is research going on: it sounds like it ("Hmm... checking the logs")
+        after_tools = bool(chat_ctx.items) and chat_ctx.items[-1].type == "function_call_output"
+        step_text = ""  # what the model itself wrote in this step, to keep the description from repeating it
         async for chunk in Agent.default.llm_node(self, chat_ctx, shown, model_settings):
             delta = getattr(chunk, "delta", None)
             if delta is not None and delta.content:
                 delta.content = split.feed(delta.content) or None
+                step_text += delta.content or ""
                 if not delta.content and not delta.tool_calls:
                     continue
+            said = []
             if delta is not None and delta.tool_calls:
-                said = []
                 for call in delta.tool_calls:
                     say, call.arguments = split_say(call.arguments)
                     said.append(say)
-                if any(said):  # marked so the one-sentence cap never drops it; spaced from any text before
-                    yield " " + TOOL_SAY + ". ".join(s.rstrip(".") for s in said if s) + ". "
-            yield chunk
+            yield chunk  # the tool starts now; what it is doing is said next
+            if any(said) and (text := await self.describe([s for s in said if s], after_tools, step_text)):
+                yield text
         if rest := split.finish():
             yield rest
         held = split.held
@@ -430,11 +437,12 @@ class Voicebot(Agent):
               text=held[:400])
         if calls:
             split_calls = [(name, *split_say(args)) for name, args in calls]
-            if any(say for _, say, _ in split_calls):
-                yield " " + TOOL_SAY + ". ".join(say.rstrip(".") for _, say, _ in split_calls if say) + ". "
             yield llm.ChatChunk(id="text-tool-calls", delta=llm.ChoiceDelta(role="assistant", tool_calls=[
                 llm.FunctionToolCall(name=name, arguments=args, call_id=f"text_{i}_{int(time.time() * 1000)}")
                 for i, (name, _, args) in enumerate(split_calls)]))
+            said = [say for _, say, _ in split_calls if say]
+            if said and (text := await self.describe(said, after_tools, step_text)):
+                yield text
 
     async def on_user_turn_completed(self, turn_ctx, new_message) -> None:
         heard = new_message.text_content or ""
@@ -496,6 +504,23 @@ class Voicebot(Agent):
         if clips:
             await asyncio.get_running_loop().run_in_executor(None, FILLERS.save, voice, self.filler_phrases, clips)
             debug("fillers", count=len(clips), voice=voice, seconds=round(time.time() - started))
+
+    async def describe(self, said: list[str], after_tools: bool, step_text: str = "") -> str:
+        """The spoken description of a tool step, marked so the one-sentence cap keeps it. Skipped
+        when the model already said the same in this step. A step after tool results waits a moment
+        and, when the model said nothing else, opens with a thinking word ("Hmm..."), never the same
+        twice in a row, so a chain of tool calls sounds like research rather than a list."""
+        said = [s for s in said if not repeats(s, step_text)]
+        if not said:
+            return ""
+        opener = ""
+        if after_tools and self.fillers_on:
+            await asyncio.sleep(STEP_GAP)
+            if len(step_text.split()) <= 3:
+                choices = [p for p in self.filler_phrases if p != self.last_opener] or self.filler_phrases
+                self.last_opener = opener = random.choice(choices)
+                opener = (opener if opener.rstrip().endswith((".", ",", "!", "?")) else opener + "...") + " "
+        return " " + TOOL_SAY + opener + ". ".join(s.rstrip(".") for s in said) + ". "
 
     def play_filler(self) -> None:
         """A random thinking sound while the reply is worked out; a short pause follows it."""
