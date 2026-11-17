@@ -391,6 +391,39 @@ async def mode_modelerror():
     print("config.json restored:", open(cfg_path).read() == original)
 
 
+async def mode_sayline():
+    """An answer sentence plus a tool call in one reply: both must be spoken, spaced, with the
+    tool call's own description. Prints what was said, what went to speech, and the transcript."""
+    wake = json.load(open(os.path.join(HOME, "config.json"))).get("wake_word") or ""
+    marks = {p: os.path.getsize(p) for p in (os.path.join(HOME, "logs", "debug.jsonl"),
+                                             os.path.join(HOME, "logs", "agent.log"),
+                                             os.path.join(HOME, "transcript.md"))}
+    room = rtc.Room()
+    await room.connect(URL, token("probe-sayline-" + str(int(time.time())), "probe-user", {"client": "zana"}))
+    for _ in range(60):
+        if room.remote_participants:
+            break
+        await asyncio.sleep(0.5)
+    await asyncio.sleep(2)
+    await room.local_participant.send_text(
+        f"{wake}, in the same reply write one full sentence telling me you will look up the date, and call "
+        "run_terminal with the command date", topic="lk.chat")
+    await asyncio.sleep(20)
+    await room.disconnect()
+    for path, start in marks.items():
+        with open(path, errors="replace") as f:
+            f.seek(start)
+            for line in f:
+                if path.endswith("debug.jsonl"):
+                    ev = json.loads(line)
+                    if ev["kind"] in ("said", "tool"):
+                        print("debug", ev["kind"], repr(str(ev.get("text") or ev.get("args")))[:150])
+                elif "spoken:" in line:
+                    print("agent.log", line.split("spoken:", 1)[1].strip()[:150].rstrip('"}'))
+                elif path.endswith("transcript.md"):
+                    print("transcript", line.strip()[:150])
+
+
 async def mode_preview():
     """Ask the real orb to show a state for five seconds (argv[2], e.g. listening or speaking)."""
     lk = api.LiveKitAPI(HTTP, KEY, SECRET)
@@ -409,4 +442,4 @@ async def mode_preview():
 
 asyncio.run({"zana": mode_zana, "voiceprint": mode_voiceprint, "selfedit": mode_selfedit,
              "preview": mode_preview, "jobs": mode_jobs, "memory": mode_memory,
-             "modelerror": mode_modelerror}.get(MODE, mode_agent)())
+             "modelerror": mode_modelerror, "sayline": mode_sayline}.get(MODE, mode_agent)())

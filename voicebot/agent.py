@@ -37,7 +37,7 @@ from jobs import Jobs
 from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls,
                        split_say, topics, wants_redo, wants_voiceprint)
 from voiceprint import RATE, VoicePrint, VoiceTap, to_mono_16k
-from speech import one_sentence, speakable_stream
+from speech import TOOL_SAY, one_sentence, speakable_stream
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HOME = os.path.expanduser(os.getenv("VOICEBOT_HOME", os.path.join(HERE, ".home")))
@@ -400,8 +400,8 @@ class Voicebot(Agent):
                 for call in delta.tool_calls:
                     say, call.arguments = split_say(call.arguments)
                     said.append(say)
-                if any(said):  # leading space: the model may have written text right before
-                    yield " " + " ".join(s for s in said if s) + " "
+                if any(said):  # marked so the one-sentence cap never drops it; spaced from any text before
+                    yield " " + TOOL_SAY + " ".join(s for s in said if s) + " "
             yield chunk
         if rest := split.finish():
             yield rest
@@ -415,7 +415,7 @@ class Voicebot(Agent):
         if calls:
             split_calls = [(name, *split_say(args)) for name, args in calls]
             if any(say for _, say, _ in split_calls):
-                yield " " + " ".join(say for _, say, _ in split_calls if say) + " "
+                yield " " + TOOL_SAY + " ".join(say for _, say, _ in split_calls if say) + " "
             yield llm.ChatChunk(id="text-tool-calls", delta=llm.ChoiceDelta(role="assistant", tool_calls=[
                 llm.FunctionToolCall(name=name, arguments=args, call_id=f"text_{i}_{int(time.time() * 1000)}")
                 for i, (name, _, args) in enumerate(split_calls)]))
@@ -874,6 +874,15 @@ async def entrypoint(ctx: agents.JobContext):
     transforms = ["filter_markdown", "filter_emoji", speakable_stream]
     if os.getenv("VOICEBOT_ONE_SENTENCE", "1") != "0":
         transforms.append(one_sentence)
+
+    async def log_spoken(text):
+        """Last transform: logs exactly what goes to speech, one line per reply (logs/agent.log)."""
+        spoken = []
+        async for chunk in text:
+            spoken.append(chunk)
+            yield chunk
+        log.info("spoken: %s", "".join(spoken).strip())
+    transforms.append(log_spoken)
     session = AgentSession(
         vad=ctx.proc.userdata["vad"],
         stt=openai.STT(base_url=VOICE, api_key="local", model="parakeet", language="en"),
@@ -907,7 +916,7 @@ async def entrypoint(ctx: agents.JobContext):
     @session.on("conversation_item_added")
     def _on_item(ev):
         if getattr(ev.item, "role", None) == "assistant":
-            said = getattr(ev.item, "text_content", "") or ""
+            said = " ".join((getattr(ev.item, "text_content", "") or "").replace(TOOL_SAY, " ").split())
             TRANSCRIPT.record("Voicebot", said)
             if said.strip():
                 debug("said", text=said, interrupted=bool(getattr(ev.item, "interrupted", False)),

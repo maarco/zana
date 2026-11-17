@@ -5,7 +5,7 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from speech import number_words, one_sentence, speakable, speakable_stream  # noqa: E402
+from speech import TOOL_SAY, number_words, one_sentence, speakable, speakable_stream  # noqa: E402
 
 
 async def collect(transform, chunks):
@@ -45,6 +45,16 @@ class SpeakableTest(unittest.TestCase):
         self.assertNotIn("print", out)
         self.assertIn("ok!", out)
         self.assertIn("a link", out)
+
+    def test_a_tool_calls_description_is_always_spoken(self):
+        said = asyncio.run(collect(one_sentence, ["It's running as job one, wrapping up soon.",
+                                                  " " + TOOL_SAY + "Checking if that job finished "]))
+        self.assertEqual(" ".join(said.split()), "It's running as job one, wrapping up soon. Checking if that job finished")
+        said = asyncio.run(collect(one_sentence, ["First real sentence right here. A second one gets cut. ",
+                                                  " " + TOOL_SAY + "Peeking at job one "]))
+        self.assertEqual(" ".join(said.split()), "First real sentence right here. Peeking at job one")
+        said = asyncio.run(collect(one_sentence, [" " + TOOL_SAY + "Checking the skills ", "folder real quick "]))
+        self.assertEqual(" ".join(said.split()), "Checking the skills folder real quick")
 
     def test_one_sentence_per_reply(self):
         out = asyncio.run(collect(one_sentence, ["Checking your pull ", "requests now. Then I will ", "read the logs."]))

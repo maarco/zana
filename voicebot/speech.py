@@ -59,27 +59,40 @@ def speakable(text: str) -> str:
     return text
 
 
+TOOL_SAY = "\x1f"  # starts a tool call's spoken description; the one-sentence cap never cuts it
+
+
 async def one_sentence(text: AsyncIterable[str]) -> AsyncIterable[str]:
     """TTS text transform: speak one sentence per reply. A short opener like "I'm listening."
-    or "Sure." is skipped when a real sentence follows, so the answer is what gets said."""
-    buf, done, pos = "", False, 0
+    or "Sure." is skipped when a real sentence follows, so the answer is what gets said.
+    A tool call's description (after TOOL_SAY) is always spoken, in full, after the answer."""
+    buf, done, pos, describing = "", False, 0, False
     async for chunk in text:
-        if done:
-            continue  # keep draining so the reply finishes cleanly
-        buf += chunk
-        while True:
-            m = re.compile(r"[.!?](?=\s)").search(buf, pos)
-            if not m:
-                break
-            sentence = buf[pos:m.end()].strip()
-            pos = m.end()
-            if len(sentence.split()) > 3:
-                yield sentence
+        if describing:
+            yield chunk.replace(TOOL_SAY, "")
+            continue
+        answer, mark, description = chunk.partition(TOOL_SAY)
+        if not done:  # past the answer's sentence, keep draining so the reply finishes cleanly
+            buf += answer
+            while True:
+                m = re.compile(r"[.!?](?=\s)").search(buf, pos)
+                if not m:
+                    break
+                sentence = buf[pos:m.end()].strip()
+                pos = m.end()
+                if len(sentence.split()) > 3:
+                    yield sentence
+                    done = True
+                    break
+            if not done and len(buf) - pos > 400:  # no sentence end in sight: stop at a word boundary
+                yield buf[pos: buf.rfind(" ", pos, pos + 400)].strip() + "."
                 done = True
-                break
-        if not done and len(buf) - pos > 400:  # no sentence end in sight: stop at a word boundary
-            yield buf[pos: buf.rfind(" ", pos, pos + 400)].strip() + "."
-            done = True
+        if mark:
+            if not done and buf.strip():
+                rest = buf[pos:].strip()
+                yield rest if rest else buf.strip()
+            done = describing = True
+            yield " " + description.replace(TOOL_SAY, "")
     if not done:
         rest = buf[pos:].strip()
         yield rest if rest else buf.strip()
