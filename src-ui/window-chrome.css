@@ -1,0 +1,52 @@
+/* Undecorated windows: rounded transparent frame and platform window buttons.
+   The page background is painted by body::before because a body background
+   propagates to the whole (square) canvas and hides the rounded corners. */
+html, body { background: transparent !important; }
+body { --window-radius: 12px; border-radius: var(--window-radius); overflow: hidden; }
+body.platform-windows { --window-radius: 8px; }
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1;
+  background: var(--background, oklch(0.145 0 0)); border-radius: var(--window-radius);
+}
+
+/* Headers paint their own fill; round their top corners so they do not square
+   off the window (WebKit does not clip them through the body's radius). */
+.titlebar { border-top-left-radius: var(--window-radius); border-top-right-radius: var(--window-radius); }
+
+.window-controls { display: flex; align-items: center; margin-left: auto; -webkit-app-region: no-drag; }
+.window-controls button { border: 0; padding: 0; cursor: default; display: grid; place-items: center; }
+.window-controls button:disabled { cursor: default; }
+.window-controls svg { fill: none; stroke: currentColor; stroke-linecap: round; }
+.update-banner.visible + .window-controls,
+.titlebar-actions + .window-controls { margin-left: 4px; }
+
+/* macOS: red, yellow, green on the left; symbols show when the group is hovered. */
+.window-controls.mac { order: -1; margin-left: 0; margin-right: 8px; gap: 8px; }
+.window-controls.mac button { width: 12px; height: 12px; border-radius: 50%; color: transparent; }
+.window-controls.mac svg { width: 6px; height: 6px; stroke-width: 1.3; }
+.window-controls.mac [data-window="close"] { background: #ff5f57; }
+.window-controls.mac [data-window="minimize"] { background: #febc2e; }
+.window-controls.mac [data-window="zoom"] { background: #28c840; }
+.window-controls.mac button:disabled { background: oklch(0.38 0 0); }
+.window-controls.mac:hover button:not(:disabled) { color: rgba(0, 0, 0, 0.55); }
+.window-controls.mac button:active:not(:disabled) { filter: brightness(0.85); transform: none; }
+
+/* Windows: minimize, maximize, close flush in the top-right corner. */
+.window-controls.windows { align-self: flex-start; margin-top: var(--controls-inset-top, 0); margin-right: var(--controls-inset-right, 0); }
+.window-controls.windows button { width: 46px; height: 32px; background: transparent; color: oklch(0.85 0 0); border-radius: 0; }
+.window-controls.windows svg { width: 10px; height: 10px; stroke-width: 1; }
+.window-controls.windows button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); }
+.window-controls.windows [data-window="close"] { border-top-right-radius: var(--window-radius); }
+.window-controls.windows [data-window="close"]:hover { background: #c42b1c; color: #fff; }
+.window-controls.windows button:disabled { color: oklch(0.45 0 0); }
+.window-controls.windows button:active { transform: none; }
+.titlebar { --controls-inset-top: 0; }
+.titlebar .window-controls.windows { --controls-inset-right: -14px; }
+
+:focus-visible { outline: 2px solid oklch(0.85 0 0); outline-offset: 2px; border-radius: 6px; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offset: 0; }
+::selection { background: oklch(0.45 0 0); color: oklch(0.985 0 0); }
+button:active { transform: scale(0.97); }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
