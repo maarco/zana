@@ -8,22 +8,14 @@
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
       color: oklch(0.985 0 0); user-select: none; -webkit-user-select: none;
-      display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
-      padding-bottom: 12px; box-sizing: border-box;
+      display: flex; align-items: center; justify-content: center;
     }
-    #orb { width: 200px; height: 200px; cursor: pointer; }
-    .status { margin-top: 2px; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: oklch(0.78 0 0); text-align: center; }
-    .detail { margin-top: 3px; max-width: 224px; font-size: 10px; color: oklch(0.65 0 0); text-align: center; min-height: 12px; }
-    .log { margin-top: 6px; width: 224px; font: 10px/1.45 ui-monospace, 'SF Mono', Menlo, monospace; color: oklch(0.65 0 0); }
-    .log div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
-    .log div:not(:last-child) { opacity: .55; }
+    #orb { width: 200px; height: 200px; cursor: pointer; transition: transform .45s ease; }
+    body.asleep #orb { transform: scale(.5); }
   </style>
 </head>
 <body>
   <canvas id="orb" title="Drag to move. Click to mute or unmute. Double-click for a new conversation. Right-click for the Debug window." aria-label="Voicebot orb"></canvas>
-  <div class="status" id="status">Starting</div>
-  <div class="detail" id="detail"></div>
-  <div class="log" id="log" aria-live="polite"></div>
 
   <script src="vendor/livekit-client.umd.min.js"></script>
   <script src="vendor/aura.js"></script>
@@ -32,9 +24,6 @@
     // user's mic and speaker, and answers the agent's RPCs (zana.paste, zana.screen).
     const LK = window.LivekitClient;
     const invoke = (cmd, args) => window.__TAURI__.core.invoke(cmd, args);
-    const statusEl = document.getElementById('status');
-    const detailEl = document.getElementById('detail');
-    const logEl = document.getElementById('log');
     let room = null;
     let agentState = 'starting';
     let muted = false;
@@ -43,19 +32,20 @@
     let asleep = false;
     let voicePrint = null; // { seconds, needed } while voice print mode records
     let preview = null;    // a state shown for a few seconds by zana.preview_state (tests)
-    const AURA_COLOR = '#1FD5F9';      // thinking, sleeping, idle
+    const AURA_COLOR = '#1FD5F9';      // thinking, muted, paused
+    const ASLEEP_COLOR = '#636366';    // muted grey while asleep
     const LISTENING_COLOR = '#30D158'; // green while it listens
     const SPEAKING_COLOR = '#0A84FF';  // blue while it talks
     const VOICEPRINT_COLOR = '#FF3B30'; // red while voice print mode records
     let wakeWord = '';
     let agentTimer = null;
 
-    function setStatus(text, detail = '') { statusEl.textContent = text; detailEl.textContent = detail; }
-    function addLog(line) {
-      const row = document.createElement('div');
-      row.textContent = line;
-      logEl.appendChild(row);
-      while (logEl.children.length > 4) logEl.firstChild.remove();
+    // No text under the orb: the state shows on hover (and every step is in the Debug window).
+    const HELP = 'Drag to move. Click to mute or unmute. Double-click for a new conversation. Right-click for the Debug window.';
+    function setStatus(text, detail = '') {
+      const line = detail ? `${text}: ${detail}` : text;
+      orb.title = `${line}\n${HELP}`;
+      orb.setAttribute('aria-label', `Voicebot: ${line}`);
     }
 
     async function waitUntilReady() {
@@ -85,13 +75,9 @@
           if (ev.kind === 'sleep') { asleep = ev.asleep; wakeWord = ev.wake_word || ''; showState(); return; }
           if (ev.kind === 'voiceprint') {
             voicePrint = ev.action === 'enrolled' ? null : { seconds: ev.seconds || 0, needed: ev.needed || 8 };
-            if (ev.action === 'enrolled') addLog('voice print saved');
             showState();
             return;
           }
-          if (ev.kind !== 'tool') return;
-          const arg = ev.args && (ev.args.command || ev.args.text || '');
-          addLog(`${ev.name}${arg ? ` · ${String(arg).slice(0, 60)}` : ''}`);
         } catch (_) { /* not an event */ }
       });
       room.on(LK.RoomEvent.Disconnected, () => {
@@ -156,7 +142,6 @@
       leaving = true;
       if (room) await room.disconnect();
       leaving = false;
-      logEl.textContent = '';
       connect().catch(fail);
     }
 
@@ -197,11 +182,14 @@
     function auraTick() {
       if (aura) {
         const quiet = !room || muted || dictating || asleep;
+        const sleeping = asleep && !preview;
+        document.body.classList.toggle('asleep', sleeping);
         const shown = preview || (quiet ? 'idle' : agentState);
         aura.setState(shown === 'voiceprint' ? 'listening' : shown);
         aura.setColor(voicePrint || shown === 'voiceprint' ? VOICEPRINT_COLOR
           : shown === 'listening' ? LISTENING_COLOR
           : shown === 'speaking' ? SPEAKING_COLOR
+          : sleeping ? ASLEEP_COLOR
           : AURA_COLOR);
         let voice = 0;
         if (room) room.remoteParticipants.forEach((p) => { voice = Math.max(voice, p.audioLevel || 0); });

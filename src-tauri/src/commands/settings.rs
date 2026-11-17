@@ -295,16 +295,30 @@ pub async fn save_preferences(
         });
     }
 
-    {
+    let (settings, model_changed) = {
         let mut settings = state.settings.write().await;
+        let before = settings.cloud_rewrite.clone();
         preferences.apply_to_settings(&mut settings);
-    }
+        let after = &settings.cloud_rewrite;
+        let changed = before.api_url != after.api_url
+            || before.model != after.model
+            || before.api_key != after.api_key;
+        (settings.clone(), changed)
+    };
 
     if let Err(error) = state.save_settings().await {
         return Ok(SettingsResponse {
             success: false,
             error: Some(error.to_string()),
         });
+    }
+
+    // Preferences > Model is Voicebot's chat model: hand it over, and start a fresh
+    // conversation when it changed so the new model answers right away.
+    if let Err(e) = crate::voicebot::write_agent_config(&settings) {
+        log::warn!("Could not update Voicebot's config: {e}");
+    } else if model_changed {
+        let _ = app.emit("voicebot-model-changed", ());
     }
 
     let _ = app.emit("orb-style-changed", &preferences.orb_style);

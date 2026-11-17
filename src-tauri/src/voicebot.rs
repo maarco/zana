@@ -65,8 +65,9 @@ pub fn ensure_prompt(code: &Path) -> std::io::Result<PathBuf> {
     Ok(prompt)
 }
 
-/// Settings the agent reads at the start of every conversation.
-pub fn write_agent_config(terminal: bool, wake_word: &str) -> std::io::Result<()> {
+/// Settings the agent reads at the start of every conversation: its switches and the chat
+/// model from Preferences > Model. The file holds the API key, so only the user can read it.
+pub fn write_agent_config(settings: &crate::state::Settings) -> std::io::Result<()> {
     let home = home_dir();
     std::fs::create_dir_all(&home)?;
     let path = home.join("config.json");
@@ -75,9 +76,38 @@ pub fn write_agent_config(terminal: bool, wake_word: &str) -> std::io::Result<()
         .ok()
         .and_then(|t| serde_json::from_str(&t).ok())
         .unwrap_or_default();
-    config.insert("terminal".into(), terminal.into());
-    config.insert("wake_word".into(), wake_word.trim().into());
-    std::fs::write(path, serde_json::Value::Object(config).to_string())
+    config.insert("terminal".into(), settings.voicebot_terminal.into());
+    config.insert(
+        "wake_word".into(),
+        settings.voicebot_wake_word.trim().into(),
+    );
+    let model = &settings.cloud_rewrite;
+    config.insert(
+        "llm".into(),
+        serde_json::json!({
+            "base_url": llm_base_url(&model.api_url),
+            "model": model.model.trim(),
+            "api_key": model.api_key.trim(),
+        }),
+    );
+    std::fs::write(&path, serde_json::Value::Object(config).to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+    }
+    Ok(())
+}
+
+/// The OpenAI-compatible base URL for a chat-completions endpoint: ".../v1/chat/completions"
+/// becomes ".../v1", and a bare server root (a local server) gets "/v1".
+pub fn llm_base_url(api_url: &str) -> String {
+    let url = api_url.trim().trim_end_matches('/');
+    let url = url.strip_suffix("/chat/completions").unwrap_or(url);
+    match url.split_once("://") {
+        Some((_, rest)) if !rest.contains('/') => format!("{url}/v1"),
+        _ => url.to_string(),
+    }
 }
 
 /// A fresh screenshot for the agent's vision tool, scaled down to keep it cheap.
@@ -646,6 +676,26 @@ fn dead_child() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn chat_completions_urls_become_base_urls() {
+        assert_eq!(
+            llm_base_url("https://openrouter.ai/api/v1/chat/completions"),
+            "https://openrouter.ai/api/v1"
+        );
+        assert_eq!(
+            llm_base_url(" https://api.openai.com/v1/chat/completions/ "),
+            "https://api.openai.com/v1"
+        );
+        assert_eq!(
+            llm_base_url("http://localhost:1234"),
+            "http://localhost:1234/v1"
+        );
+        assert_eq!(
+            llm_base_url("http://localhost:1234/v1"),
+            "http://localhost:1234/v1"
+        );
+    }
 
     fn hex(bytes: &[u8]) -> String {
         bytes.iter().map(|b| format!("{b:02x}")).collect()

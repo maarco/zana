@@ -300,11 +300,7 @@ fn main() {
             // Voicebot mode: Zana supervises the voice agent and shows its orb.
             let settings = Zana_app::state::Settings::load();
             if settings.voicebot_mode {
-                start_voicebot(
-                    app.handle(),
-                    settings.voicebot_terminal,
-                    &settings.voicebot_wake_word,
-                );
+                start_voicebot(app.handle(), &settings);
             }
 
             // Check if first run - show onboarding window
@@ -417,6 +413,17 @@ fn main() {
                 setup_config_watcher(app.handle().clone());
             }
 
+            // A new chat model in Preferences: start a fresh Voicebot conversation so it answers now.
+            {
+                let app_handle = app.handle().clone();
+                app.listen("voicebot-model-changed", move |_| {
+                    if let Some(window) = app_handle.get_webview_window("voicebot") {
+                        let _ = window
+                            .eval("typeof newConversation === 'function' && newConversation()");
+                    }
+                });
+            }
+
             // Listen for orb style changes and relay to the orb panel/window
             {
                 #[cfg(not(target_os = "macos"))]
@@ -459,22 +466,11 @@ fn main() {
                     true,
                     Some("CmdOrCtrl+,"),
                 )?;
-                let transcriptions =
-                    MenuItem::with_id(app, "transcriptions", "Transcriptions", true, None::<&str>)?;
                 let separator = tauri::menu::PredefinedMenuItem::separator(app)?;
                 let separator2 = tauri::menu::PredefinedMenuItem::separator(app)?;
 
-                let menu = Menu::with_items(
-                    app,
-                    &[
-                        &about,
-                        &separator,
-                        &transcriptions,
-                        &preferences,
-                        &separator2,
-                        &quit,
-                    ],
-                )?;
+                let menu =
+                    Menu::with_items(app, &[&about, &separator, &preferences, &separator2, &quit])?;
 
                 // Try to get the config-created tray icon and add menu
                 if let Some(tray) = app.tray_by_id("main") {
@@ -604,7 +600,6 @@ fn main() {
             commands::open_transcriptions_window,
             commands::save_preferences,
             commands::get_voicebot_config,
-            commands::set_voicebot_mode,
             commands::set_voicebot_terminal,
             commands::set_voicebot_context_command,
             commands::set_voicebot_wake_word,
@@ -1381,11 +1376,11 @@ fn stop_recording(app: &tauri::AppHandle) {
 
 /// Start Voicebot's processes (in the background) and open its orb: an
 /// always-on-top window in the bottom-right corner.
-fn start_voicebot(app: &tauri::AppHandle, terminal: bool, wake_word: &str) {
+fn start_voicebot(app: &tauri::AppHandle, settings: &Zana_app::state::Settings) {
     use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
     let code = Zana_app::voicebot::code_dir(app.path().resource_dir().ok());
-    if let Err(e) = Zana_app::voicebot::write_agent_config(terminal, wake_word) {
+    if let Err(e) = Zana_app::voicebot::write_agent_config(settings) {
         log::error!("Voicebot config could not be written: {e}");
     }
     log::info!("Voicebot mode on; code in {}", code.display());
@@ -1395,7 +1390,7 @@ fn start_voicebot(app: &tauri::AppHandle, terminal: bool, wake_word: &str) {
         log::error!("The Voicebot Debug panel could not be created: {e}");
     }
 
-    let (w, h) = (240.0, 300.0);
+    let (w, h) = (220.0, 220.0); // the orb alone; its state shows on hover
     let mut builder =
         WebviewWindowBuilder::new(app, "voicebot", WebviewUrl::App("voicebot.html".into()))
             .title("Voicebot")
@@ -1535,7 +1530,7 @@ fn voicebot_paste(text: String) -> Result<(), String> {
 fn voicebot_dictation(app: &tauri::AppHandle, active: bool) {
     use tauri::Manager;
     if let Some(window) = app.get_webview_window("voicebot") {
-        let _ = window.eval(&format!(
+        let _ = window.eval(format!(
             "window.zanaDictation && window.zanaDictation({active})"
         ));
     }

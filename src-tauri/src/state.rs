@@ -223,6 +223,8 @@ impl Settings {
             self.dictionary_replacements = default_dictionary_replacements();
         }
         self.writing_profile.migrate_legacy_fields();
+        // Zana is the Voicebot app now: Fn dictation and Whisper no longer run.
+        self.voicebot_mode = true;
     }
 
     /// Save to disk
@@ -269,7 +271,7 @@ impl Settings {
             transcript_history: Vec::new(),
             style_memories: Vec::new(),
             project_memories: Vec::new(),
-            voicebot_mode: false,
+            voicebot_mode: true,
             voicebot_terminal: false,
             voicebot_context_command: String::new(),
             voicebot_wake_word: String::new(),

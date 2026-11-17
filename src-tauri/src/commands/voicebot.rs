@@ -9,7 +9,6 @@ use tauri::{AppHandle, Manager, State};
 
 #[derive(Debug, Serialize)]
 pub struct VoicebotConfig {
-    pub enabled: bool,
     pub terminal: bool,
     pub context_command: String,
     pub wake_word: String,
@@ -33,7 +32,6 @@ pub async fn get_voicebot_config(
         .and_then(std::fs::read_to_string)
         .unwrap_or_default();
     Ok(VoicebotConfig {
-        enabled: settings.voicebot_mode,
         terminal: settings.voicebot_terminal,
         context_command: settings.voicebot_context_command.clone(),
         wake_word: settings.voicebot_wake_word.clone(),
@@ -45,33 +43,19 @@ pub async fn get_voicebot_config(
     })
 }
 
-/// Turning Voicebot on or off restarts Zana (stopping Voicebot's processes first).
-#[tauri::command]
-pub async fn set_voicebot_mode(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    enabled: bool,
-) -> Result<(), String> {
-    state.settings.write().await.voicebot_mode = enabled;
-    state.save_settings().await.map_err(|e| e.to_string())?;
-    log::info!("Voicebot mode set to {enabled}; restarting");
-    voicebot::stop();
-    app.restart();
-}
-
 /// Applies from the next conversation (the agent reads config.json per conversation).
 #[tauri::command]
 pub async fn set_voicebot_terminal(
     state: State<'_, AppState>,
     enabled: bool,
 ) -> Result<(), String> {
-    let wake_word = {
+    let settings = {
         let mut settings = state.settings.write().await;
         settings.voicebot_terminal = enabled;
-        settings.voicebot_wake_word.clone()
+        settings.clone()
     };
     state.save_settings().await.map_err(|e| e.to_string())?;
-    voicebot::write_agent_config(enabled, &wake_word).map_err(|e| e.to_string())
+    voicebot::write_agent_config(&settings).map_err(|e| e.to_string())
 }
 
 /// Empty means Voicebot always answers; applies from the next conversation.
@@ -80,13 +64,13 @@ pub async fn set_voicebot_wake_word(
     state: State<'_, AppState>,
     wake_word: String,
 ) -> Result<(), String> {
-    let terminal = {
+    let settings = {
         let mut settings = state.settings.write().await;
         settings.voicebot_wake_word = wake_word.trim().to_string();
-        settings.voicebot_terminal
+        settings.clone()
     };
     state.save_settings().await.map_err(|e| e.to_string())?;
-    voicebot::write_agent_config(terminal, wake_word.trim()).map_err(|e| e.to_string())
+    voicebot::write_agent_config(&settings).map_err(|e| e.to_string())
 }
 
 /// Path of a fresh screenshot for the agent's vision tool.

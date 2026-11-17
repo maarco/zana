@@ -96,15 +96,11 @@ fn preferences_exposes_rewrite_provider_fields() {
     let state = read_repo_file("src-tauri/src/state.rs");
     let transcription = read_repo_file("src-tauri/src/commands/transcription.rs");
 
-    for field in [
-        "rewrite-api-key",
-        "rewrite-model",
-        "rewrite-api-url",
-        "rewrite-timeout-ms",
-    ] {
+    // Preferences > Model: the provider fields are Voicebot's chat model now.
+    for field in ["rewrite-api-key", "rewrite-model", "rewrite-api-url"] {
         assert!(
             html.contains(field),
-            "preferences UI must expose persisted rewrite provider field {field}"
+            "preferences UI must expose persisted model provider field {field}"
         );
     }
 
@@ -137,15 +133,7 @@ fn transcriptions_live_in_their_own_window() {
     let settings = read_repo_file("src-tauri/src/commands/settings.rs");
     let main = read_repo_file("src-tauri/src/main.rs");
 
-    // Preferences keeps only a launcher; the history list no longer lives inline.
-    assert!(
-        prefs.contains("viewTranscriptions"),
-        "preferences must keep a launcher for the standalone transcriptions window"
-    );
-    assert!(
-        prefs.contains("open_transcriptions_window"),
-        "preferences launcher must open the standalone transcriptions window"
-    );
+    // Zana is the Voicebot app: Preferences no longer shows dictation history.
     assert!(
         !prefs.contains("transcript-history-list"),
         "the transcript history list must not be rendered inline in preferences"
@@ -203,23 +191,10 @@ fn transcripts_persist_in_local_only_mode() {
 }
 
 #[test]
-fn preferences_exposes_exact_ai_messages() {
-    let html = read_repo_file("src-ui/preferences.html");
+fn rewrite_pipeline_sends_only_its_visible_messages() {
     let transcription = read_repo_file("src-tauri/src/commands/transcription.rs");
     let state = read_repo_file("src-tauri/src/state.rs");
 
-    assert!(
-        html.contains("Exact system message sent to the rewrite model"),
-        "preferences must explain that System Prompt controls the exact system message"
-    );
-    assert!(
-        html.contains("Exact user message sent after variable replacement"),
-        "preferences must explain that User Prompt controls the exact user message"
-    );
-    assert!(
-        !html.contains("<div class=\"setting-label\">Response Contract</div>"),
-        "preferences must not expose a third visible prompt layer when only two AI messages are sent"
-    );
     assert!(
         !transcription.contains("Technical contract:"),
         "rewrite pipeline must not append hidden system instructions outside the visible template"
@@ -559,7 +534,6 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
     let supervisor = read_repo_file("src-tauri/src/voicebot.rs");
 
     for id in [
-        "voicebot-mode-toggle",
         "voicebot-terminal-toggle",
         "voicebot-context-command",
         "voicebot-wake-word",
@@ -576,7 +550,6 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
     }
     for command in [
         "commands::get_voicebot_config",
-        "commands::set_voicebot_mode",
         "commands::set_voicebot_terminal",
         "commands::save_voicebot_prompt",
         "commands::save_voicebot_mcp",
@@ -598,6 +571,15 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
     ] {
         assert!(orb.contains(rpc), "the Voicebot orb must handle {rpc}");
     }
+    // Zana is the Voicebot app: no on/off switch, and Preferences > Model reaches the agent.
+    assert!(
+        !preferences.contains("voicebot-mode-toggle") && !main_rs.contains("set_voicebot_mode"),
+        "Voicebot is always on; there is no Voicebot Mode switch"
+    );
+    assert!(
+        preferences.contains("data-section=\"model\"") && supervisor.contains("\"llm\""),
+        "Preferences > Model must be written into the agent's config"
+    );
     // Every file the supervisor needs ships in the bundle.
     for file in [
         "agent.py",
