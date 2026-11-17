@@ -294,7 +294,13 @@ jobs:
           fi
           rm -f "${KEY_PATH:-/nonexistent}"
 
-          xcrun stapler staple "$DMG_PATH"
+          # Stapling downloads the ticket from Apple's CDN; retry transient network drops.
+          for attempt in 1 2 3 4 5; do
+            xcrun stapler staple "$DMG_PATH" && break
+            [ "$attempt" = 5 ] && exit 1
+            echo "stapler attempt $attempt failed; retrying in 20s"
+            sleep 20
+          done
           xcrun stapler validate "$DMG_PATH"
           spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG_PATH"
 
