@@ -34,8 +34,8 @@ from livekit.agents.voice.agent_session import SessionConnectOptions
 from livekit.plugins import openai, silero
 
 from jobs import Jobs
-from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls, topics,
-                       wants_redo, wants_voiceprint)
+from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls,
+                       split_say, topics, wants_redo, wants_voiceprint)
 from voiceprint import RATE, VoicePrint, VoiceTap, to_mono_16k
 from speech import one_sentence, speakable_stream
 
@@ -50,6 +50,32 @@ TRANSCRIPT = Transcript(HOME)  # always-on: every line heard and said
 DEBUG_LOG = os.path.join(HOME, "logs", "debug.jsonl")  # what Voicebot does, for Zana's Debug window
 SAY = "\n(Now say one short sentence with the answer.)"
 MIN_VOICE_CHECK = int(0.5 * RATE)  # shorter turns are not checked against the voice print
+# Every tool, as the model sees it, gets this required field; its text is spoken while the tool runs.
+SAY_FIELD = {"type": "string",
+             "description": "What you tell the user while this runs: a few words in your own words, specific to "
+                            "this call, like \"Let me check your kollab folder\". Vary it from call to call."}
+
+
+def with_say(tool):
+    """The tool as the model sees it, with the required "say" field first. Calls still run the real
+    tool (by name); llm_node speaks "say" and removes it from the arguments."""
+    if isinstance(tool, llm.RawFunctionTool):
+        schema = {k: v for k, v in tool.info.raw_schema.items()}
+    elif isinstance(tool, llm.FunctionTool):
+        schema = llm.utils.build_legacy_openai_schema(tool, internally_tagged=True)
+        schema.pop("type", None)
+    else:
+        return tool  # provider tools run on the provider's side
+    params = dict(schema.get("parameters") or {"type": "object"})
+    params["properties"] = {"say": SAY_FIELD, **(params.get("properties") or {})}
+    params["required"] = ["say", *[r for r in params.get("required") or [] if r != "say"]]
+    schema["parameters"] = params
+
+    async def shown_only(raw_arguments: dict, context: RunContext):
+        raise RuntimeError("shown to the model only; the real tool runs")
+    return llm.function_tool(shown_only, raw_schema=schema)
+
+
 SHORT_TURN = 2.0  # seconds of actual speech; short phrases give noisier voice prints, so they get a lower cutoff
 ADAPT_SCORE = 0.55  # confident matches this long or longer refine the saved print
 COMPACT_CHARS = 12000  # conversation size (besides the instructions) that triggers compaction
@@ -357,16 +383,25 @@ class Voicebot(Agent):
         return extra
 
     async def llm_node(self, chat_ctx, tools, model_settings):
-        """Some models now and then write a tool call out as text (<|tool_call_begin|>...): that text is
-        held back, never spoken, and run as a real tool call. (No spoken filler while tools run; the orb
-        shows the working state.)"""
+        """Every tool call carries a "say" field the model writes for this call; it is spoken while the
+        tool runs and removed before the tool sees its arguments. Some models now and then write a tool
+        call out as text (<|tool_call_begin|>..., <tool_call>...): that text is held back, never spoken,
+        and run as a real tool call."""
         split = ToolCallText()
-        async for chunk in Agent.default.llm_node(self, chat_ctx, tools, model_settings):
+        shown = [with_say(tool) for tool in tools]  # a new list: execution keeps the real tools
+        async for chunk in Agent.default.llm_node(self, chat_ctx, shown, model_settings):
             delta = getattr(chunk, "delta", None)
             if delta is not None and delta.content:
                 delta.content = split.feed(delta.content) or None
                 if not delta.content and not delta.tool_calls:
                     continue
+            if delta is not None and delta.tool_calls:
+                said = []
+                for call in delta.tool_calls:
+                    say, call.arguments = split_say(call.arguments)
+                    said.append(say)
+                if any(said):  # leading space: the model may have written text right before
+                    yield " " + " ".join(s for s in said if s) + " "
             yield chunk
         if rest := split.finish():
             yield rest
@@ -378,9 +413,12 @@ class Voicebot(Agent):
                              else "The model wrote tool-call text Voicebot could not read; it was not spoken"),
               text=held[:400])
         if calls:
+            split_calls = [(name, *split_say(args)) for name, args in calls]
+            if any(say for _, say, _ in split_calls):
+                yield " " + " ".join(say for _, say, _ in split_calls if say) + " "
             yield llm.ChatChunk(id="text-tool-calls", delta=llm.ChoiceDelta(role="assistant", tool_calls=[
                 llm.FunctionToolCall(name=name, arguments=args, call_id=f"text_{i}_{int(time.time() * 1000)}")
-                for i, (name, args) in enumerate(calls)]))
+                for i, (name, _, args) in enumerate(split_calls)]))
 
     async def on_user_turn_completed(self, turn_ctx, new_message) -> None:
         heard = new_message.text_content or ""

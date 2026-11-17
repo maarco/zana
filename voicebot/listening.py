@@ -75,6 +75,18 @@ def parse_text_tool_calls(text: str) -> list[tuple[str, str]]:
     return calls
 
 
+def split_say(arguments: str) -> tuple[str, str]:
+    """The spoken "say" field of a tool call, and the arguments without it (the tool never sees it)."""
+    try:
+        args = json.loads(arguments or "{}")
+    except ValueError:
+        return "", arguments
+    if not isinstance(args, dict) or "say" not in args:
+        return "", arguments
+    say = str(args.pop("say") or "").strip()
+    return say, json.dumps(args)
+
+
 class ToolCallText:
     """Splits a streamed reply into what may be spoken and the tool-call text a model wrote out,
     which is held back from its first marker to the end of the reply. A "<" that may begin a

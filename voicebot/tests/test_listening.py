@@ -5,7 +5,8 @@ import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls, topics,
+from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls, split_say,
+                       topics,
                        wants_redo,  # noqa: E402
                        wants_voiceprint)
 
@@ -164,6 +165,14 @@ class MoreTextToolCallTest(unittest.TestCase):
         spoken = split.feed("Two < three, and <") + split.feed("b> is bold.") + split.finish()
         self.assertEqual(spoken, "Two < three, and <b> is bold.")
         self.assertEqual(split.held, "")
+
+
+class SplitSayTest(unittest.TestCase):
+    def test_takes_the_spoken_field_out_of_the_arguments(self):
+        self.assertEqual(split_say('{"say": "Let me check your kollab folder", "command": "ls ~/dev/kollab"}'),
+                         ("Let me check your kollab folder", '{"command": "ls ~/dev/kollab"}'))
+        self.assertEqual(split_say('{"job": 1}'), ("", '{"job": 1}'))
+        self.assertEqual(split_say("not json"), ("", "not json"))
 
 if __name__ == "__main__":
     unittest.main()
