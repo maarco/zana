@@ -1326,6 +1326,7 @@ mod tests {
             api_url: "https://example.com/v1/chat/completions".to_string(),
             timeout_ms: 12_000,
             include_screenshot: false,
+            ..Default::default()
         };
 
         let config = cloud_rewrite_config(&settings).expect("saved provider config should load");
@@ -1370,6 +1371,7 @@ mod tests {
             api_url: "http://localhost:1234/v1/chat/completions".to_string(),
             timeout_ms: 15_000,
             include_screenshot: false,
+            ..Default::default()
         };
 
         let config = cloud_rewrite_config(&settings).expect("local rewrite config should load");
@@ -1387,6 +1389,7 @@ mod tests {
             api_url: "http://localhost:1234/".to_string(),
             timeout_ms: 15_000,
             include_screenshot: false,
+            ..Default::default()
         };
 
         let config = cloud_rewrite_config(&settings).expect("local rewrite config should load");

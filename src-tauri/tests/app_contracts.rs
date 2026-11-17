@@ -534,6 +534,9 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
     let supervisor = read_repo_file("src-tauri/src/voicebot.rs");
 
     for id in [
+        "voicebot-voice",
+        "model-reasoning",
+        "vision-model",
         "voicebot-terminal-toggle",
         "voicebot-context-command",
         "voicebot-wake-word",
@@ -550,6 +553,7 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
     }
     for command in [
         "commands::get_voicebot_config",
+        "commands::set_voicebot_voice",
         "commands::set_voicebot_terminal",
         "commands::save_voicebot_prompt",
         "commands::save_voicebot_mcp",

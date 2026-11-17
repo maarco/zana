@@ -541,6 +541,14 @@ var(--background);
         <input type="text" id="voicebot-wake-word" spellcheck="false" placeholder="For example: hey voicebot">
       </div>
 
+      <div class="provider-field">
+        <div>
+          <div class="setting-label">Voice</div>
+          <div class="setting-desc">How Voicebot sounds; a change starts a fresh conversation</div>
+        </div>
+        <select id="voicebot-voice"></select>
+      </div>
+
       <div class="setting-row">
         <div class="setting-copy">
           <div class="setting-label">Voice Print</div>
@@ -617,8 +625,30 @@ var(--background);
 
         <div class="provider-field">
           <div>
+            <div class="setting-label">Reasoning</div>
+            <div class="setting-desc">How much the model thinks before it answers. Low keeps replies quick; Off works on OpenRouter only; Default sends nothing and leaves it to the model.</div>
+          </div>
+          <select id="model-reasoning">
+            <option value="default">Default</option>
+            <option value="off">Off</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+
+        <div class="provider-field">
+          <div>
+            <div class="setting-label">Vision Model</div>
+            <div class="setting-desc">Reads screenshots when Voicebot looks at your screen; empty uses the chat model</div>
+          </div>
+          <input type="text" id="vision-model" spellcheck="false" placeholder="Same as the chat model">
+        </div>
+
+        <div class="provider-field">
+          <div>
             <div class="setting-label">AI Connection</div>
-            <div class="setting-desc">Send a small provider check with the current fields</div>
+            <div class="setting-desc">Sends the request Voicebot sends, with these fields, before you save</div>
           </div>
           <div style="display: grid; gap: 6px; justify-items: end;">
             <button class="btn-secondary" id="test-ai-button" onclick="testAiConnection()">
@@ -653,7 +683,7 @@ var(--background);
       <div class="setting-row">
         <div>
           <div class="setting-label">Run Health Check</div>
-          <div class="setting-desc">Check permissions, audio, and keyboard setup</div>
+          <div class="setting-desc">Check permissions, audio and Voicebot</div>
         </div>
         <button class="btn-primary" onclick="runDoctor()">Doctor</button>
       </div>
@@ -709,6 +739,13 @@ var(--background);
         voicebotEl('voicebot-terminal-toggle').classList.toggle('active', cfg.terminal);
         voicebotEl('voicebot-context-command').value = cfg.context_command;
         voicebotEl('voicebot-wake-word').value = cfg.wake_word;
+        const voice = voicebotEl('voicebot-voice');
+        voice.textContent = '';
+        for (const name of ['', ...cfg.voices]) {
+          const [, who, kind] = name.match(/^(?:[a-z]{2}-)?([^_]+)(?:_(.+))?$/) || [];
+          voice.append(new Option(name ? (kind ? `${who} (${kind})` : who) : 'Default (Emma)', name));
+        }
+        voice.value = cfg.voice;
         voicebotEl('voicebot-voiceprint-clear').hidden = !cfg.voiceprint;
         if (cfg.voiceprint) voicebotEl('voicebot-voiceprint-status').textContent = 'On: Voicebot only answers your voice. Other voices still go to its transcript, marked as someone else.';
         voicebotEl('voicebot-prompt').value = cfg.prompt;
@@ -742,6 +779,7 @@ var(--background);
       await invoke('save_voicebot_prompt', { prompt: voicebotEl('voicebot-prompt').value });
       await invoke('set_voicebot_context_command', { command: voicebotEl('voicebot-context-command').value });
       await invoke('set_voicebot_wake_word', { wakeWord: voicebotEl('voicebot-wake-word').value });
+      await invoke('set_voicebot_voice', { voice: voicebotEl('voicebot-voice').value });
     }
     voicebotEl('voicebot-save')?.addEventListener('click', async () => {
       try {
@@ -937,6 +975,8 @@ var(--background);
       setFieldValue('rewrite-api-key', prefs.rewriteApiKey);
       setFieldValue('rewrite-model', prefs.rewriteModel);
       setFieldValue('rewrite-api-url', prefs.rewriteApiUrl);
+      setFieldValue('model-reasoning', prefs.modelReasoning || 'default');
+      setFieldValue('vision-model', prefs.visionModel);
     }
 
     function collectPreferences() {
@@ -945,7 +985,9 @@ var(--background);
         showInMenuBar: isToggleActive('menubar-toggle'),
         rewriteApiKey: document.getElementById('rewrite-api-key').value,
         rewriteModel: document.getElementById('rewrite-model').value,
-        rewriteApiUrl: document.getElementById('rewrite-api-url').value
+        rewriteApiUrl: document.getElementById('rewrite-api-url').value,
+        modelReasoning: document.getElementById('model-reasoning').value,
+        visionModel: document.getElementById('vision-model').value
       };
     }
 

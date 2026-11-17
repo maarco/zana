@@ -37,15 +37,17 @@ Everything per-user lives in the Voicebot folder,
 | `logs/` | `debug.jsonl` (the Debug window), plus each process's log |
 | `venv/`, `voices/` | The Python environment and VibeVoice voices |
 
-The chat model is set in Preferences > Model (API key, model, OpenAI-compatible
-API URL); Zana writes it into `config.json`, readable only by you, and a change
-starts a fresh conversation so the new model answers at once.
+Preferences > Model sets the chat model (API key, model, OpenAI-compatible API
+URL), its reasoning level and the vision model; Preferences > Voicebot sets the
+voice. Zana writes them into `config.json`, readable only by you, and a change
+starts a fresh conversation so it applies at once. When the model fails,
+Voicebot says why out loud. Test AI sends the request Voicebot sends.
 
-`.env` settings (all optional):
+`.env` settings (all optional, for special setups):
 
 ```
-VISION_MODEL=...                  # model that reads screenshots (default: the chat model)
-TTS_BASE_URL=... TTS_MODEL=... TTS_VOICE=en-Emma_woman   # TTS override (default: local VibeVoice)
+VISION_BASE_URL=... VISION_API_KEY=...        # vision model on another provider
+TTS_BASE_URL=... TTS_MODEL=...                # another OpenAI-compatible speech server
 OPENROUTER_API_KEY=... OPENROUTER_MODEL=...   # only used when Preferences > Model has no model
 ```
 

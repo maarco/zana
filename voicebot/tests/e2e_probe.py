@@ -359,6 +359,38 @@ async def mode_memory():
             print("ERROR", e)
 
 
+async def mode_modelerror():
+    """A model that fails must not leave Voicebot silent: point this test's conversation at a model
+    that does not exist and expect the spoken explanation. config.json is restored afterwards."""
+    cfg_path = os.path.join(HOME, "config.json")
+    original = open(cfg_path).read()
+    cfg = json.loads(original)
+    debug_log = os.path.join(HOME, "logs", "debug.jsonl")
+    start = os.path.getsize(debug_log)
+    try:
+        with open(cfg_path, "w") as f:
+            json.dump({**cfg, "llm": {**cfg.get("llm", {}), "model": "zana-test/no-such-model"}}, f)
+        room = rtc.Room()
+        await room.connect(URL, token("probe-modelerror-" + str(int(time.time())), "probe-user", {"client": "zana"}))
+        for _ in range(60):
+            if room.remote_participants:
+                break
+            await asyncio.sleep(0.5)
+        await asyncio.sleep(2)
+    finally:
+        with open(cfg_path, "w") as f:
+            f.write(original)  # the test conversation already read its model
+    await room.local_participant.send_text(f"{cfg.get('wake_word') or ''}, what time is it?", topic="lk.chat")
+    await asyncio.sleep(15)
+    await room.disconnect()
+    with open(debug_log) as f:
+        f.seek(start)
+        for ev in (json.loads(l) for l in f if l.strip()):
+            if ev["kind"] in ("said", "error"):
+                print(ev["kind"], str(ev.get("text") or ev.get("error"))[:160])
+    print("config.json restored:", open(cfg_path).read() == original)
+
+
 async def mode_preview():
     """Ask the real orb to show a state for five seconds (argv[2], e.g. listening or speaking)."""
     lk = api.LiveKitAPI(HTTP, KEY, SECRET)
@@ -376,4 +408,5 @@ async def mode_preview():
 
 
 asyncio.run({"zana": mode_zana, "voiceprint": mode_voiceprint, "selfedit": mode_selfedit,
-             "preview": mode_preview, "jobs": mode_jobs, "memory": mode_memory}.get(MODE, mode_agent)())
+             "preview": mode_preview, "jobs": mode_jobs, "memory": mode_memory,
+             "modelerror": mode_modelerror}.get(MODE, mode_agent)())

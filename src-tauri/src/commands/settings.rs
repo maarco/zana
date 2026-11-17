@@ -54,6 +54,10 @@ pub struct Preferences {
     pub rewrite_api_url: String,
     pub rewrite_timeout_ms: u64,
     pub rewrite_include_screenshot: bool,
+    #[serde(default)]
+    pub model_reasoning: String,
+    #[serde(default)]
+    pub vision_model: String,
     pub writing_purpose: String,
     pub writing_tone: String,
     pub writing_format: String,
@@ -98,6 +102,8 @@ impl Preferences {
             rewrite_api_url: settings.cloud_rewrite.api_url.clone(),
             rewrite_timeout_ms: settings.cloud_rewrite.timeout_ms,
             rewrite_include_screenshot: settings.cloud_rewrite.include_screenshot,
+            model_reasoning: settings.cloud_rewrite.reasoning.clone(),
+            vision_model: settings.cloud_rewrite.vision_model.clone(),
         }
     }
 
@@ -161,6 +167,8 @@ impl Preferences {
             api_url: self.rewrite_api_url.clone(),
             timeout_ms: self.rewrite_timeout_ms,
             include_screenshot: self.rewrite_include_screenshot,
+            reasoning: self.model_reasoning.clone(),
+            vision_model: self.vision_model.trim().to_string(),
         };
         settings.double_tap_enabled = self.double_tap_enabled;
         settings.min_hold_duration_ms = self.min_hold_duration;
@@ -302,7 +310,9 @@ pub async fn save_preferences(
         let after = &settings.cloud_rewrite;
         let changed = before.api_url != after.api_url
             || before.model != after.model
-            || before.api_key != after.api_key;
+            || before.api_key != after.api_key
+            || before.reasoning != after.reasoning
+            || before.vision_model != after.vision_model;
         (settings.clone(), changed)
     };
 
@@ -318,7 +328,7 @@ pub async fn save_preferences(
     if let Err(e) = crate::voicebot::write_agent_config(&settings) {
         log::warn!("Could not update Voicebot's config: {e}");
     } else if model_changed {
-        let _ = app.emit("voicebot-model-changed", ());
+        let _ = app.emit("voicebot-config-changed", ());
     }
 
     let _ = app.emit("orb-style-changed", &preferences.orb_style);
@@ -340,7 +350,7 @@ pub async fn test_ai_connection(preferences: Preferences) -> Result<AiTestRespon
         });
     }
 
-    let request_body = json!({
+    let mut request_body = json!({
         "model": preferences.rewrite_model.trim(),
         "messages": [
             {
@@ -352,9 +362,15 @@ pub async fn test_ai_connection(preferences: Preferences) -> Result<AiTestRespon
                 "content": "Zana AI connection test."
             }
         ],
-        "temperature": 0,
-        "max_tokens": 16
+        "max_tokens": 64
     });
+    // Send what Voicebot sends (its reasoning setting included), so a pass here means it works there.
+    if let (Some(body), serde_json::Value::Object(extra)) = (
+        request_body.as_object_mut(),
+        crate::voicebot::llm_extra_body(&preferences.rewrite_api_url, &preferences.model_reasoning),
+    ) {
+        body.extend(extra);
+    }
 
     let client = reqwest::Client::new();
     let url = normalize_ai_test_url(&preferences.rewrite_api_url);
@@ -458,6 +474,8 @@ mod tests {
             rewrite_api_url: "https://api.openai.com/v1/chat/completions".to_string(),
             rewrite_timeout_ms: 15_000,
             rewrite_include_screenshot: false,
+            model_reasoning: "low".to_string(),
+            vision_model: String::new(),
             writing_purpose: "Write polished text".to_string(),
             writing_tone: "Rewrite this:\n{captured}".to_string(),
             writing_format: String::new(),

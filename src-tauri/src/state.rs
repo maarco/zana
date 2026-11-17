@@ -87,6 +87,10 @@ pub struct CloudRewriteSettings {
     pub timeout_ms: u64,
     /// Attach a screenshot to the rewrite request when the provider supports vision
     pub include_screenshot: bool,
+    /// How much the model reasons before answering: default (send nothing), off, low, medium, high
+    pub reasoning: String,
+    /// Model that reads screenshots; empty means the chat model
+    pub vision_model: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -141,6 +145,8 @@ impl Default for CloudRewriteSettings {
             api_url: "https://api.openai.com/v1/chat/completions".to_string(),
             timeout_ms: 15_000,
             include_screenshot: false,
+            reasoning: "low".to_string(),
+            vision_model: String::new(),
         }
     }
 }
@@ -195,6 +201,8 @@ pub struct Settings {
     pub voicebot_context_command: String,
     /// Wake word; empty means Voicebot always answers
     pub voicebot_wake_word: String,
+    /// Voicebot's voice (a VibeVoice voice name); empty means the default voice
+    pub voicebot_voice: String,
 }
 
 impl Settings {
@@ -275,6 +283,7 @@ impl Settings {
             voicebot_terminal: false,
             voicebot_context_command: String::new(),
             voicebot_wake_word: String::new(),
+            voicebot_voice: String::new(),
         }
     }
 }

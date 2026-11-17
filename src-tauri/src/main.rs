@@ -413,10 +413,10 @@ fn main() {
                 setup_config_watcher(app.handle().clone());
             }
 
-            // A new chat model in Preferences: start a fresh Voicebot conversation so it answers now.
+            // A new model or voice in Preferences: start a fresh Voicebot conversation so it applies now.
             {
                 let app_handle = app.handle().clone();
-                app.listen("voicebot-model-changed", move |_| {
+                app.listen("voicebot-config-changed", move |_| {
                     if let Some(window) = app_handle.get_webview_window("voicebot") {
                         let _ = window
                             .eval("typeof newConversation === 'function' && newConversation()");
@@ -603,6 +603,7 @@ fn main() {
             commands::set_voicebot_terminal,
             commands::set_voicebot_context_command,
             commands::set_voicebot_wake_word,
+            commands::set_voicebot_voice,
             commands::voicebot_screenshot,
             commands::save_voicebot_prompt,
             commands::save_voicebot_mcp,

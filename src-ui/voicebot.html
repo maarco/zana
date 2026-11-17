@@ -138,7 +138,11 @@
       }[agentState] || agentState);
     }
 
+    let restarting = false; // a model and a voice change can both ask for a new conversation at once
     async function newConversation() {
+      if (restarting) return;
+      restarting = true;
+      setTimeout(() => { restarting = false; }, 3000);
       leaving = true;
       if (room) await room.disconnect();
       leaving = false;

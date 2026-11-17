@@ -88,8 +88,11 @@ pub fn write_agent_config(settings: &crate::state::Settings) -> std::io::Result<
             "base_url": llm_base_url(&model.api_url),
             "model": model.model.trim(),
             "api_key": model.api_key.trim(),
+            "extra_body": llm_extra_body(&model.api_url, &model.reasoning),
+            "vision_model": model.vision_model.trim(),
         }),
     );
+    config.insert("voice".into(), settings.voicebot_voice.trim().into());
     std::fs::write(&path, serde_json::Value::Object(config).to_string())?;
     #[cfg(unix)]
     {
@@ -97,6 +100,43 @@ pub fn write_agent_config(settings: &crate::state::Settings) -> std::io::Result<
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
     }
     Ok(())
+}
+
+/// Extra request fields for the model's reasoning setting. OpenRouter takes a `reasoning`
+/// object (an effort, or enabled: false for Off); other OpenAI-compatible servers take
+/// `reasoning_effort` and have no Off. "default" sends nothing and leaves it to the model.
+pub fn llm_extra_body(api_url: &str, reasoning: &str) -> serde_json::Value {
+    let openrouter = api_url.contains("openrouter.ai");
+    match (reasoning.trim(), openrouter) {
+        ("off", true) => serde_json::json!({ "reasoning": { "enabled": false } }),
+        (effort @ ("low" | "medium" | "high"), true) => {
+            serde_json::json!({ "reasoning": { "effort": effort, "exclude": true } })
+        }
+        (effort @ ("low" | "medium" | "high"), false) => {
+            serde_json::json!({ "reasoning_effort": effort })
+        }
+        _ => serde_json::json!({}),
+    }
+}
+
+/// Voices the speech server can use: the stock VibeVoice voices plus any `.pt` voice in
+/// the Voicebot folder's voices/custom.
+pub fn voices() -> Vec<String> {
+    let mut names: Vec<String> = STOCK_VOICES.iter().map(|v| v.to_string()).collect();
+    if let Ok(entries) = std::fs::read_dir(home_dir().join("voices").join("custom")) {
+        for path in entries.flatten().map(|e| e.path()) {
+            let stem = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .map(str::to_string);
+            if let (Some(stem), true) = (stem, path.extension().is_some_and(|e| e == "pt")) {
+                if !names.contains(&stem) {
+                    names.push(stem);
+                }
+            }
+        }
+    }
+    names
 }
 
 /// The OpenAI-compatible base URL for a chat-completions endpoint: ".../v1/chat/completions"
@@ -676,6 +716,28 @@ fn dead_child() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reasoning_setting_becomes_the_provider_field() {
+        let or = "https://openrouter.ai/api/v1/chat/completions";
+        assert_eq!(
+            llm_extra_body(or, "low"),
+            serde_json::json!({"reasoning": {"effort": "low", "exclude": true}})
+        );
+        assert_eq!(
+            llm_extra_body(or, "off"),
+            serde_json::json!({"reasoning": {"enabled": false}})
+        );
+        assert_eq!(llm_extra_body(or, "default"), serde_json::json!({}));
+        assert_eq!(
+            llm_extra_body("https://api.openai.com/v1/chat/completions", "high"),
+            serde_json::json!({"reasoning_effort": "high"})
+        );
+        assert_eq!(
+            llm_extra_body("http://localhost:1234/v1", "off"),
+            serde_json::json!({})
+        );
+    }
 
     #[test]
     fn chat_completions_urls_become_base_urls() {

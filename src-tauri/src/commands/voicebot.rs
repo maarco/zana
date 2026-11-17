@@ -5,13 +5,15 @@ use crate::voicebot;
 use serde::Serialize;
 use std::process::Command;
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 #[derive(Debug, Serialize)]
 pub struct VoicebotConfig {
     pub terminal: bool,
     pub context_command: String,
     pub wake_word: String,
+    pub voice: String,
+    pub voices: Vec<String>,
     pub voiceprint: bool,
     pub prompt: String,
     pub mcp: String,
@@ -35,6 +37,8 @@ pub async fn get_voicebot_config(
         terminal: settings.voicebot_terminal,
         context_command: settings.voicebot_context_command.clone(),
         wake_word: settings.voicebot_wake_word.clone(),
+        voice: settings.voicebot_voice.clone(),
+        voices: voicebot::voices(),
         voiceprint: home.join("voiceprint.npy").is_file(),
         prompt,
         mcp: std::fs::read_to_string(home.join("mcp.json")).unwrap_or_else(|_| MCP_EXAMPLE.into()),
@@ -71,6 +75,27 @@ pub async fn set_voicebot_wake_word(
     };
     state.save_settings().await.map_err(|e| e.to_string())?;
     voicebot::write_agent_config(&settings).map_err(|e| e.to_string())
+}
+
+/// Voicebot's voice; a fresh conversation starts so it speaks in it right away.
+#[tauri::command]
+pub async fn set_voicebot_voice(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    voice: String,
+) -> Result<(), String> {
+    let (settings, changed) = {
+        let mut settings = state.settings.write().await;
+        let changed = settings.voicebot_voice != voice.trim();
+        settings.voicebot_voice = voice.trim().to_string();
+        (settings.clone(), changed)
+    };
+    state.save_settings().await.map_err(|e| e.to_string())?;
+    voicebot::write_agent_config(&settings).map_err(|e| e.to_string())?;
+    if changed {
+        let _ = app.emit("voicebot-config-changed", ());
+    }
+    Ok(())
 }
 
 /// Path of a fresh screenshot for the agent's vision tool.

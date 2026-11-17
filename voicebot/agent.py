@@ -132,23 +132,27 @@ def make_llm(vision: bool = False):
         model = chosen["model"]
         base_url = chosen.get("base_url") or "https://api.openai.com/v1"
         api_key = chosen.get("api_key") or "none"
+        extra_body = chosen.get("extra_body") or {}  # Preferences > Model > Reasoning, shaped by Zana
+        vision_model = chosen.get("vision_model") or ""
     else:
         model = os.getenv("LLM_MODEL") or os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3.5-super-vl:free")
         base_url = os.getenv("LLM_BASE_URL", "https://openrouter.ai/api/v1")
         api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENROUTER_API_KEY") or os.getenv("openrouter") or "none"
+        extra_body = {"reasoning": {"effort": "low", "exclude": True}} if "openrouter.ai" in base_url else {}
+        vision_model = ""
     if vision:
-        model = os.getenv("VISION_MODEL", model)
+        model = vision_model or os.getenv("VISION_MODEL", model)
         base_url = os.getenv("VISION_BASE_URL", base_url)
         api_key = os.getenv("VISION_API_KEY", api_key)
-    # OpenRouter's switch for thinking out loud; other providers reject unknown fields
-    extra = {"extra_body": {"reasoning": {"enabled": False}}} if "openrouter.ai" in base_url else {}
-    return openai.LLM(model=model, base_url=base_url, api_key=api_key, **extra)
+    return openai.LLM(model=model, base_url=base_url, api_key=api_key,
+                      **({"extra_body": extra_body} if extra_body else {}))
 
 
 def make_tts():
     """Local VibeVoice by default; TTS_BASE_URL points at any OpenAI-compatible speech endpoint instead."""
     return openai.TTS(base_url=os.getenv("TTS_BASE_URL", VOICE), api_key=os.getenv("TTS_API_KEY", "local"),
-                      model=os.getenv("TTS_MODEL", "tts-1"), voice=os.getenv("TTS_VOICE", "en-Emma_woman"),
+                      model=os.getenv("TTS_MODEL", "tts-1"),
+                      voice=read_json("config.json").get("voice") or os.getenv("TTS_VOICE", "en-Emma_woman"),
                       response_format="pcm")
 
 
@@ -880,9 +884,24 @@ async def entrypoint(ctx: agents.JobContext):
                 debug("said", text=said, interrupted=bool(getattr(ev.item, "interrupted", False)),
                       context_chars=context_chars(agent.chat_ctx))
 
+    spoke_error_at = [0.0]
+
     @session.on("error")
     def _on_error(ev):
-        debug("error", source=type(getattr(ev, "source", None)).__name__, error=str(getattr(ev, "error", ev))[:1000])
+        err = getattr(ev, "error", ev)
+        debug("error", source=type(getattr(ev, "source", None)).__name__, error=str(err)[:1000])
+        # A failing chat model would leave Voicebot silent: say why (speech is local), at most every 30 s.
+        if getattr(err, "type", "") == "llm_error" and not getattr(err, "recoverable", True) \
+                and time.time() - spoke_error_at[0] > 30:
+            spoke_error_at[0] = time.time()
+            found = re.search(r"'message': '([^']+)'", str(err))
+            reason = (found.group(1) if found else "it did not answer").rstrip(".")
+            message = f"My chat model failed: {reason}; check Preferences, Model."
+            try:
+                session.say(message, add_to_chat_ctx=False)
+                debug("said", text=message, interrupted=False)
+            except RuntimeError:
+                pass  # the conversation is closing
 
     @session.on("user_state_changed")
     def _on_user_state(ev):
