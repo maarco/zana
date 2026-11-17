@@ -76,7 +76,10 @@
     const fixed = { uBlur: 1.0, uShape: 1.0, uBloom: 0.0, uSpacing: 0.5, uColorShift: colorShift,
       uVariance: 0.1, uSmoothing: 1.0, uMode: themeMode === 'light' ? 1.0 : 0.0, uSpeed: 1.0 };
     for (const [name, value] of Object.entries(fixed)) gl.uniform1f(u(name), value);
-    gl.uniform3fv(u('uColor'), hexToRgb(color));
+    // The color eases toward its target (set with setColor) like the other values.
+    const colorNow = hexToRgb(color);
+    let colorTarget = colorNow.slice();
+    gl.uniform3fv(u('uColor'), colorNow);
 
     // Animated values: each eases toward its target (0.5 s ease-out); brightness can pulse.
     const value = { speed: 10, scale: 0.2, amplitude: 2, frequency: 0.5, brightness: 1.5 };
@@ -113,6 +116,8 @@
         value.brightness += (target.brightness - value.brightness) * ease;
       }
       if (state === 'speaking' && volume > 0) value.scale = 0.2 + 0.2 * volume;
+      for (let i = 0; i < 3; i++) colorNow[i] += (colorTarget[i] - colorNow[i]) * ease;
+      gl.uniform3fv(u('uColor'), colorNow);
       // Integrate speed into time, so a speed change never jumps the waves.
       phase += dt * value.speed;
       resize();
@@ -137,7 +142,7 @@
         pulseStart = performance.now();
       },
       setVolume(v) { volume = Math.max(0, Math.min(1, v || 0)); },
-      setColor(hex) { gl.useProgram(program); gl.uniform3fv(u('uColor'), hexToRgb(hex)); },
+      setColor(hex) { colorTarget = hexToRgb(hex); },
       destroy() { running = false; },
     };
   };

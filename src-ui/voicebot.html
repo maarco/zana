@@ -42,8 +42,10 @@
     let leaving = false;
     let asleep = false;
     let voicePrint = null; // { seconds, needed } while voice print mode records
-    const AURA_COLOR = '#1FD5F9';
-    const VOICEPRINT_COLOR = '#FF3B30';
+    const AURA_COLOR = '#1FD5F9';      // thinking, sleeping, idle
+    const LISTENING_COLOR = '#30D158'; // green while it listens
+    const SPEAKING_COLOR = '#0A84FF';  // blue while it talks
+    const VOICEPRINT_COLOR = '#FF3B30'; // red while voice print mode records
     let wakeWord = '';
     let agentTimer = null;
 
@@ -82,7 +84,6 @@
           if (ev.kind === 'sleep') { asleep = ev.asleep; wakeWord = ev.wake_word || ''; showState(); return; }
           if (ev.kind === 'voiceprint') {
             voicePrint = ev.action === 'enrolled' ? null : { seconds: ev.seconds || 0, needed: ev.needed || 8 };
-            aura?.setColor(voicePrint ? VOICEPRINT_COLOR : AURA_COLOR);
             if (ev.action === 'enrolled') addLog('voice print saved');
             showState();
             return;
@@ -188,7 +189,13 @@
     }
     function auraTick() {
       if (aura) {
-        aura.setState(!room || muted || dictating || asleep ? 'idle' : agentState);
+        const quiet = !room || muted || dictating || asleep;
+        aura.setState(quiet ? 'idle' : agentState);
+        aura.setColor(voicePrint ? VOICEPRINT_COLOR
+          : quiet ? AURA_COLOR
+          : agentState === 'listening' ? LISTENING_COLOR
+          : agentState === 'speaking' ? SPEAKING_COLOR
+          : AURA_COLOR);
         let voice = 0;
         if (room) room.remoteParticipants.forEach((p) => { voice = Math.max(voice, p.audioLevel || 0); });
         aura.setVolume(voice);
