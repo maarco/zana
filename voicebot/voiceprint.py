@@ -106,4 +106,14 @@ class VoicePrint:
 
     def score(self, audio: np.ndarray) -> float:
         """Cosine similarity to the enrolled voice (same speaker is usually above 0.5)."""
-        return float(self._embed(audio) @ self.reference)
+        return self.score_and_embedding(audio)[0]
+
+    def score_and_embedding(self, audio: np.ndarray) -> tuple[float, np.ndarray]:
+        embedding = self._embed(audio)
+        return float(embedding @ self.reference), embedding
+
+    def adapt(self, embedding: np.ndarray, weight: float = 0.1) -> None:
+        """Nudge the saved print toward a confidently matched turn, so it keeps learning the voice."""
+        mixed = (1 - weight) * self.reference + weight * embedding
+        self.reference = mixed / np.linalg.norm(mixed)
+        np.save(self.path, self.reference)

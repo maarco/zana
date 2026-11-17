@@ -19,6 +19,20 @@ class ToMono16kTest(unittest.TestCase):
         self.assertLessEqual(float(np.abs(out).max()), 1.0)
 
 
+class AdaptTest(unittest.TestCase):
+    def test_adapt_moves_the_print_toward_the_voice_and_saves_it(self):
+        import tempfile
+        from voiceprint import VoicePrint
+        with tempfile.TemporaryDirectory() as home:
+            vp = VoicePrint(home)
+            vp.reference = np.array([1.0, 0.0, 0.0])
+            vp.adapt(np.array([0.0, 1.0, 0.0]), weight=0.1)
+            self.assertAlmostEqual(float(np.linalg.norm(vp.reference)), 1.0, places=6)
+            self.assertGreater(vp.reference[1], 0.0)
+            self.assertGreater(vp.reference[0], vp.reference[1])
+            self.assertTrue(np.allclose(np.load(os.path.join(home, "voiceprint.npy")), vp.reference))
+
+
 class VoiceTapTest(unittest.TestCase):
     def test_keeps_each_segment_with_preroll_and_clears_on_take(self):
         tap = VoiceTap(preroll_seconds=0.1)

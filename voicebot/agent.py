@@ -48,6 +48,8 @@ TRANSCRIPT = Transcript(HOME)  # always-on: every line heard and said
 DEBUG_LOG = os.path.join(HOME, "logs", "debug.jsonl")  # what Voicebot does, for Zana's Debug window
 SAY = "\n(Now say one short sentence with the answer.)"
 MIN_VOICE_CHECK = int(0.5 * RATE)  # shorter turns are not checked against the voice print
+SHORT_TURN = 2.0  # seconds; short phrases give noisier voice prints, so they get a lower cutoff
+ADAPT_SCORE = 0.55  # confident matches this long or longer refine the saved print
 ENROLL_SECONDS = 8
 
 log = logging.getLogger("voicebot")
@@ -186,6 +188,7 @@ class Voicebot(Agent):
         self.tap = VoiceTap()
         self.voiceprint = VoicePrint(HOME)
         self.threshold = float(config.get("voiceprint_threshold") or 0.4)
+        self.short_threshold = float(config.get("voiceprint_short_threshold") or 0.28)
         self.enrolling = False
         self.enroll_audio: list = []
         threading.Thread(target=self._warm_voiceprint, daemon=True).start()
@@ -339,11 +342,17 @@ class Voicebot(Agent):
             raise StopResponse()
         score = None
         if self.voiceprint.enrolled and len(audio) >= MIN_VOICE_CHECK:
-            score = await asyncio.get_running_loop().run_in_executor(None, self.voiceprint.score, audio)
-            if score < self.threshold:
+            seconds = len(audio) / RATE
+            score, embedding = await asyncio.get_running_loop().run_in_executor(
+                None, self.voiceprint.score_and_embedding, audio)
+            cutoff = self.short_threshold if seconds < SHORT_TURN else self.threshold
+            if score < cutoff:
                 TRANSCRIPT.record("Other", heard)
-                debug("heard", text=heard, action=f"ignored (not your voice, match {score:.2f})")
+                debug("heard", text=heard, action=f"ignored (not your voice, match {score:.2f} < {cutoff:.2f}, "
+                                                   f"{seconds:.1f} s)")
                 raise StopResponse()
+            if score >= ADAPT_SCORE and seconds >= SHORT_TURN:
+                await asyncio.get_running_loop().run_in_executor(None, self.voiceprint.adapt, embedding)
         extra = self.gate(heard, score)
         if extra is not None and is_goodbye(heard):
             await self.sign_off()
