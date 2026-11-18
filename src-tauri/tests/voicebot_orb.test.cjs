@@ -3,7 +3,16 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const orb = require('../../src-ui/voicebot-orb-state.js');
-const { ParticipantKind } = require('../../src-ui/vendor/livekit-client.umd.min.js');
+const { Participant, ParticipantKind } = require('../../src-ui/vendor/livekit-client.umd.min.js');
+
+function participant(identity, kind, attributes = {}, permissions = {}) {
+  const value = Object.create(Participant.prototype);
+  value.identity = identity;
+  value._kind = kind;
+  value.permissions = permissions;
+  Object.defineProperty(value, 'attributes', { value: attributes });
+  return value;
+}
 
 // FROZEN orb wire contract, 2026-11-17, UI owner: aquamarine.
 // The LiveKit agent participant's retained `zana.orb.state` attribute is a
@@ -112,7 +121,7 @@ function makeUi(agent, options = {}) {
   let releaseFirstConnection;
   let connectionCount = 0;
   let disconnectCount = 0;
-  if (agent && agent.kind === undefined) agent.kind = ParticipantKind.AGENT;
+  if (agent && agent.isAgent === undefined) agent.isAgent = true;
   class FakeRoom {
     constructor() {
       this.handlers = {};
@@ -200,13 +209,13 @@ test('agent arrival cancels the watchdog before delayed attributes, while humans
   const ui = makeUi(null);
   await ui.flush();
   const room = ui.room();
-  const human = { identity: 'human', kind: ParticipantKind.STANDARD, attributes: { 'lk.agent.state': 'speaking' } };
+  const human = participant('human', ParticipantKind.STANDARD, { 'lk.agent.state': 'speaking' });
   room.remoteParticipants.set(human.identity, human);
   room.emit('ParticipantConnected', human);
   room.emit('ParticipantAttributesChanged', human.attributes, human);
   assert.equal(ui.timers.size, 1, 'a human must not cancel the arrival watchdog');
   ui.advance(14999);
-  const agent = { identity: 'agent', kind: ParticipantKind.AGENT, attributes: {} };
+  const agent = participant('agent', ParticipantKind.AGENT);
   room.remoteParticipants.set(agent.identity, agent);
   room.emit('ParticipantConnected', agent);
   assert.equal(ui.timers.size, 0, 'agent arrival cancels the watchdog without state attributes');
@@ -222,7 +231,7 @@ test('agent arrival cancels the watchdog before delayed attributes, while humans
 });
 
 test('an agent with no attributes in the join snapshot is recognized', async () => {
-  const agent = { identity: 'agent', kind: ParticipantKind.AGENT, attributes: {} };
+  const agent = participant('agent', ParticipantKind.AGENT);
   const ui = makeUi(agent);
   await ui.flush();
   assert.equal(ui.timers.size, 0);
@@ -232,6 +241,24 @@ test('an agent with no attributes in the join snapshot is recognized', async () 
   agent.attributes['lk.agent.state'] = 'thinking';
   ui.room().emit('ParticipantAttributesChanged', agent.attributes, agent);
   assert.match(ui.element.title, /^Thinking/);
+});
+
+test('agent permission identifies an agent before its state attributes arrive', async () => {
+  const ui = makeUi(null);
+  await ui.flush();
+  const room = ui.room();
+  const agent = participant('permission-agent', ParticipantKind.STANDARD, {}, { agent: true });
+  assert.equal(agent.isAgent, true);
+  ui.advance(14999);
+  room.remoteParticipants.set(agent.identity, agent);
+  room.emit('ParticipantConnected', agent);
+  assert.equal(ui.timers.size, 0);
+  ui.advance(15000);
+  await ui.flush();
+  assert.equal(ui.disconnectCount(), 0);
+  agent.attributes['zana.orb.state'] = 'talking';
+  room.emit('ParticipantAttributesChanged', agent.attributes, agent);
+  assert.match(ui.element.title, /^Talking/);
 });
 
 test('Voicebot reads retained state on join, reacts to changes, and resets on agent departure', async () => {

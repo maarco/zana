@@ -82,8 +82,8 @@
       const has = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
       if (agentParticipant && agentParticipant !== participant) return;
       // Arrival and readiness are separate: the agent may join before its
-      // state attributes exist. Participant kind excludes other room members.
-      if (!agentParticipant && participant.kind !== LK.ParticipantKind.AGENT) return;
+      // state attributes exist. LiveKit's isAgent covers kind and permissions.
+      if (!agentParticipant && !participant.isAgent) return;
       const first = !agentParticipant;
       agentParticipant = participant;
       clearTimeout(agentTimer);
