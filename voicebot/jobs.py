@@ -11,6 +11,9 @@ import time
 
 from listening import clean
 
+# zsh as a login shell on macOS (the user's PATH and aliases); bash or sh elsewhere, such as CI
+SHELL = next(([path, "-lc"] for path in ("/bin/zsh", "/bin/bash") if os.path.exists(path)), ["/bin/sh", "-c"])
+
 
 class Job:
     """One terminal command running in its own process group, its output going to a log file."""
@@ -78,7 +81,7 @@ class Jobs:
         log_file = open(log_path, "wb")
         try:
             proc = await asyncio.create_subprocess_exec(
-                "/bin/zsh", "-lc", command, cwd=os.path.expanduser(os.getenv("VOICEBOT_TERMINAL_DIR", "~")),
+                *SHELL, command, cwd=os.path.expanduser(os.getenv("VOICEBOT_TERMINAL_DIR", "~")),
                 stdout=log_file, stderr=asyncio.subprocess.STDOUT,
                 start_new_session=True)  # its own process group, so stop() takes pipelines down too
         except OSError as exc:
