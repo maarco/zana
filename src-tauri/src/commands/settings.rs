@@ -327,6 +327,12 @@ pub async fn save_preferences(
     // conversation when it changed so the new model answers right away.
     if let Err(e) = crate::voicebot::write_agent_config(&settings) {
         log::warn!("Could not update Voicebot's config: {e}");
+        return Ok(SettingsResponse {
+            success: false,
+            error: Some(format!(
+                "Saved, but Voicebot's settings file could not be written: {e}"
+            )),
+        });
     } else if model_changed {
         let _ = app.emit("voicebot-config-changed", ());
     }

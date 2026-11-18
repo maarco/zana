@@ -102,13 +102,29 @@ pub fn write_agent_config(settings: &crate::state::Settings) -> std::io::Result<
             "days": settings.voicebot_filler_days,
         }),
     );
-    std::fs::write(&path, serde_json::Value::Object(config).to_string())?;
+    write_private(&path, &serde_json::Value::Object(config).to_string())
+}
+
+/// Write a file only the user can read: a temp file created with mode 0600 (never briefly
+/// readable by others) is filled, then renamed over the target in one step.
+pub fn write_private(path: &Path, text: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    let tmp = path.with_extension("tmp");
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+        options.mode(0o600);
+        let mut file = options.open(&tmp)?;
+        // a temp file left by a crash keeps its old mode; tighten it before the key goes in
+        file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+        file.write_all(text.as_bytes())?;
+        file.sync_all()?;
     }
-    Ok(())
+    #[cfg(not(unix))]
+    options.open(&tmp)?.write_all(text.as_bytes())?;
+    std::fs::rename(&tmp, path)
 }
 
 /// Extra request fields for the model's reasoning setting. OpenRouter takes a `reasoning`
@@ -725,6 +741,26 @@ fn dead_child() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn private_files_are_only_readable_by_the_user() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("zana-private-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.json");
+        std::fs::write(&path, "old").unwrap(); // an existing, world-readable file
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        write_private(&path, r#"{"llm":{"api_key":"k"}}"#).unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            r#"{"llm":{"api_key":"k"}}"#
+        );
+        assert!(!path.with_extension("tmp").exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn reasoning_setting_becomes_the_provider_field() {
