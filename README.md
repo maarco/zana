@@ -156,9 +156,14 @@ servers. Fn dictation and Whisper are retired. Zana installs and supervises
 everything itself; you need `brew install uv livekit`. Details and tests:
 [voicebot/README.md](voicebot/README.md).
 
-### Orb Appearance
+The Voicebot orb uses Aura and LiveKit activity states: dim idle, green
+listening, pulsing teal thinking, blue talking, and orange working while a tool
+is executing. Talking takes precedence when speech and tool activity overlap.
+Its appearance is separate from the legacy `src-ui/orb_config.json`.
 
-Edit `src-ui/orb_config.json` to customize the orb:
+### Legacy Orb Appearance
+
+Edit `src-ui/orb_config.json` to customize the legacy dictation orb:
 
 ```json
 {

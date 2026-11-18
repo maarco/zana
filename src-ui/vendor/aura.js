@@ -25,10 +25,11 @@
   // The hook's targets per agent state (speed, scale, amplitude, frequency, brightness or a
   // [low, high] brightness pulse).
   const STATES = {
-    idle: { speed: 10, scale: 0.2, amplitude: 1.2, frequency: 0.4, brightness: 1.0 },
+    idle: { speed: 8, scale: 0.2, amplitude: 1.2, frequency: 0.4, brightness: 0.6 },
     listening: { speed: 20, scale: 0.3, amplitude: 1.0, frequency: 0.7, brightness: [1.5, 2.0] },
-    thinking: { speed: 30, scale: 0.3, amplitude: 0.5, frequency: 1.0, brightness: [0.5, 2.5] },
+    thinking: { speed: 30, scale: 0.3, amplitude: 0.5, frequency: 1.0, brightness: [1.4, 2.5] },
     speaking: { speed: 70, scale: 0.3, amplitude: 0.75, frequency: 1.25, brightness: 1.5 },
+    working: { speed: 45, scale: 0.3, amplitude: 0.9, frequency: 0.6, brightness: [1.2, 1.8] },
   };
   const ALIASES = { failed: 'idle', disconnected: 'idle', 'pre-connect-buffering': 'listening',
     connecting: 'thinking', initializing: 'thinking' };
