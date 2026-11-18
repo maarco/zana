@@ -81,8 +81,9 @@
       const attrs = participant.attributes || {};
       const has = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
       if (agentParticipant && agentParticipant !== participant) return;
-      if (!agentParticipant && !has(attrs, 'lk.agent.state') && !has(attrs, 'zana.orb.state')
-          && !has(changed, 'lk.agent.state') && !has(changed, 'zana.orb.state')) return;
+      // Arrival and readiness are separate: the agent may join before its
+      // state attributes exist. Participant kind excludes other room members.
+      if (!agentParticipant && participant.kind !== LK.ParticipantKind.AGENT) return;
       const first = !agentParticipant;
       agentParticipant = participant;
       clearTimeout(agentTimer);

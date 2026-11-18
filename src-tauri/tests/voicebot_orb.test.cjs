@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const orb = require('../../src-ui/voicebot-orb-state.js');
+const { ParticipantKind } = require('../../src-ui/vendor/livekit-client.umd.min.js');
 
 // FROZEN orb wire contract, 2026-11-17, UI owner: aquamarine.
 // The LiveKit agent participant's retained `zana.orb.state` attribute is a
@@ -110,6 +111,8 @@ function makeUi(agent, options = {}) {
   let activeRoom;
   let releaseFirstConnection;
   let connectionCount = 0;
+  let disconnectCount = 0;
+  if (agent && agent.kind === undefined) agent.kind = ParticipantKind.AGENT;
   class FakeRoom {
     constructor() {
       this.handlers = {};
@@ -128,6 +131,7 @@ function makeUi(agent, options = {}) {
       }
     }
     async disconnect() {
+      disconnectCount++;
       if (options.failFirstDisconnect) {
         options.failFirstDisconnect = false;
         throw new Error('disconnect failed');
@@ -148,10 +152,11 @@ function makeUi(agent, options = {}) {
   };
   const timers = new Map();
   let nextTimer = 0;
+  let now = 0;
   let frame;
   const window = {
     VoicebotOrb: orb,
-    LivekitClient: { Room: FakeRoom, RoomEvent },
+    LivekitClient: { Room: FakeRoom, RoomEvent, ParticipantKind },
     createAura: () => aura,
     __TAURI__: { core: { invoke: async (command) => command === 'voicebot_status'
       ? { stage: 'ready' } : { url: 'ws://localhost', token: 'test' } } },
@@ -164,7 +169,12 @@ function makeUi(agent, options = {}) {
     },
     navigator: { clipboard: { writeText: async () => {} } },
     requestAnimationFrame: (callback) => { frame = callback; },
-    setTimeout: (callback) => { const id = ++nextTimer; timers.set(id, callback); return id; },
+    setTimeout: (callback, delay = 0) => {
+      const id = ++nextTimer;
+      callback.due = now + delay;
+      timers.set(id, callback);
+      return id;
+    },
     clearTimeout: (id) => timers.delete(id),
     TextDecoder,
     console,
@@ -173,11 +183,56 @@ function makeUi(agent, options = {}) {
   return {
     element, visual, timers,
     room: () => activeRoom,
+    disconnectCount: () => disconnectCount,
+    advance: (ms) => {
+      now += ms;
+      for (const [id, callback] of [...timers]) {
+        if (callback.due <= now && timers.delete(id)) callback();
+      }
+    },
     releaseFirstConnection: () => releaseFirstConnection(),
     tick: () => frame(),
     flush: () => new Promise((resolve) => setImmediate(resolve)),
   };
 }
+
+test('agent arrival cancels the watchdog before delayed attributes, while humans do not', async () => {
+  const ui = makeUi(null);
+  await ui.flush();
+  const room = ui.room();
+  const human = { identity: 'human', kind: ParticipantKind.STANDARD, attributes: { 'lk.agent.state': 'speaking' } };
+  room.remoteParticipants.set(human.identity, human);
+  room.emit('ParticipantConnected', human);
+  room.emit('ParticipantAttributesChanged', human.attributes, human);
+  assert.equal(ui.timers.size, 1, 'a human must not cancel the arrival watchdog');
+  ui.advance(14999);
+  const agent = { identity: 'agent', kind: ParticipantKind.AGENT, attributes: {} };
+  room.remoteParticipants.set(agent.identity, agent);
+  room.emit('ParticipantConnected', agent);
+  assert.equal(ui.timers.size, 0, 'agent arrival cancels the watchdog without state attributes');
+  ui.advance(10000);
+  await ui.flush();
+  assert.equal(ui.room(), room);
+  assert.equal(ui.disconnectCount(), 0);
+  agent.attributes['zana.orb.state'] = 'working';
+  room.emit('ParticipantAttributesChanged', agent.attributes, agent);
+  ui.tick();
+  assert.match(ui.element.title, /^Working/);
+  assert.equal(ui.visual.state, 'working');
+});
+
+test('an agent with no attributes in the join snapshot is recognized', async () => {
+  const agent = { identity: 'agent', kind: ParticipantKind.AGENT, attributes: {} };
+  const ui = makeUi(agent);
+  await ui.flush();
+  assert.equal(ui.timers.size, 0);
+  ui.advance(15000);
+  await ui.flush();
+  assert.equal(ui.disconnectCount(), 0);
+  agent.attributes['lk.agent.state'] = 'thinking';
+  ui.room().emit('ParticipantAttributesChanged', agent.attributes, agent);
+  assert.match(ui.element.title, /^Thinking/);
+});
 
 test('Voicebot reads retained state on join, reacts to changes, and resets on agent departure', async () => {
   const agent = {
