@@ -87,6 +87,10 @@ pub struct CloudRewriteSettings {
     pub timeout_ms: u64,
     /// Attach a screenshot to the rewrite request when the provider supports vision
     pub include_screenshot: bool,
+    /// How much the model reasons before answering: default (send nothing), off, low, medium, high
+    pub reasoning: String,
+    /// Model that reads screenshots; empty means the chat model
+    pub vision_model: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -141,6 +145,8 @@ impl Default for CloudRewriteSettings {
             api_url: "https://api.openai.com/v1/chat/completions".to_string(),
             timeout_ms: 15_000,
             include_screenshot: false,
+            reasoning: "low".to_string(),
+            vision_model: String::new(),
         }
     }
 }
@@ -187,6 +193,22 @@ pub struct Settings {
     pub style_memories: Vec<StyleMemory>,
     /// Learned project terms and context
     pub project_memories: Vec<ProjectMemory>,
+    /// Voicebot mode (experimental, macOS): run the local LiveKit voice agent and its orb
+    pub voicebot_mode: bool,
+    /// Give Voicebot's agent a terminal tool
+    pub voicebot_terminal: bool,
+    /// Optional zsh command whose output Voicebot gets as screen history
+    pub voicebot_context_command: String,
+    /// Wake word; empty means Voicebot always answers
+    pub voicebot_wake_word: String,
+    /// Voicebot's voice (a VibeVoice voice name); empty means the default voice
+    pub voicebot_voice: String,
+    /// Thinking sounds ("hmm...") while Voicebot works out a reply
+    pub voicebot_fillers: bool,
+    /// The thinking sound lines; empty means the agent's built-in sixteen
+    pub voicebot_filler_phrases: Vec<String>,
+    /// Days before the thinking sounds are made again
+    pub voicebot_filler_days: u32,
 }
 
 impl Settings {
@@ -215,6 +237,8 @@ impl Settings {
             self.dictionary_replacements = default_dictionary_replacements();
         }
         self.writing_profile.migrate_legacy_fields();
+        // Zana is the Voicebot app now: Fn dictation and Whisper no longer run.
+        self.voicebot_mode = true;
     }
 
     /// Save to disk
@@ -261,6 +285,14 @@ impl Settings {
             transcript_history: Vec::new(),
             style_memories: Vec::new(),
             project_memories: Vec::new(),
+            voicebot_mode: true,
+            voicebot_terminal: false,
+            voicebot_context_command: String::new(),
+            voicebot_wake_word: String::new(),
+            voicebot_voice: String::new(),
+            voicebot_fillers: true,
+            voicebot_filler_phrases: Vec::new(),
+            voicebot_filler_days: 7,
         }
     }
 }
@@ -321,9 +353,13 @@ impl AppState {
         let whisper_engine = WhisperEngine::new(event_bus.clone())?;
         let settings = Settings::load();
 
-        // Preload whisper model in background
+        // Preload whisper model in background (not in Voicebot Mode, which has its
+        // own speech-to-text and turns Zana's dictation off)
         let whisper_engine_clone = whisper_engine.clone();
-        let preload_model = settings.whisper_model.clone();
+        let preload_model = settings
+            .whisper_model
+            .clone()
+            .filter(|_| !settings.voicebot_mode);
         std::thread::spawn(move || {
             let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(async move {

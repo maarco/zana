@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voicebot Debug</title>
+  <style>
+    * { scrollbar-width: none; box-sizing: border-box; margin: 0; padding: 0; }
+    *::-webkit-scrollbar { display: none; }
+    :root {
+      --background: oklch(0.145 0 0);
+      --card: oklch(0.185 0 0);
+      --muted: oklch(0.269 0 0);
+      --foreground: oklch(0.985 0 0);
+      --muted-foreground: oklch(0.68 0 0);
+      --destructive: #f87171;
+      --radius: 6px;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+      color: var(--foreground); height: 100vh; display: flex; flex-direction: column;
+    }
+    .titlebar { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px; flex: none; }
+    .title { font-size: 13px; font-weight: 700; }
+    .meta { font-size: 11px; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+    .actions label { font-size: 11px; color: var(--muted-foreground); display: flex; align-items: center; gap: 4px; }
+    .btn { border: 0; border-radius: 5px; padding: 4px 9px; background: var(--muted); color: var(--foreground); font-size: 11px; cursor: pointer; }
+    .btn:hover { background: oklch(0.32 0 0); }
+    .log { flex: 1; overflow-y: auto; padding: 4px 10px 14px; font-size: 12px; }
+    .row { display: grid; grid-template-columns: 58px 64px minmax(0, 1fr); gap: 8px; padding: 4px 6px; border-radius: 5px; }
+    .row:hover { background: var(--card); }
+    .row[hidden] { display: none; }
+    .time { font: 11px ui-monospace, 'SF Mono', Menlo, monospace; color: var(--muted-foreground); padding-top: 1px; }
+    .kind { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted-foreground); padding-top: 2px; }
+    .text { line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; }
+    .detail { display: block; margin-top: 2px; font: 11px/1.45 ui-monospace, 'SF Mono', Menlo, monospace; color: var(--muted-foreground); }
+    .row.dim .text { color: var(--muted-foreground); }
+    .row.said .text { color: var(--foreground); font-weight: 600; }
+    .row.error .kind, .row.error .text { color: var(--destructive); }
+    .row.tool { cursor: pointer; }
+    .row.tool .detail.long { max-height: 3.2em; overflow: hidden; }
+    .row.tool.open .detail.long { max-height: none; }
+    .empty { padding: 48px 12px; text-align: center; color: var(--muted-foreground); line-height: 1.5; }
+  </style>
+  <link rel="stylesheet" href="window-chrome.css">
+  <script src="window-controls.js"></script>
+</head>
+<body data-escape-closes data-close-hides>
+  <div class="titlebar" data-tauri-drag-region>
+    <div class="title" data-tauri-drag-region>Voicebot Debug</div>
+    <div class="meta" id="status" data-tauri-drag-region>Loading…</div>
+    <div class="actions">
+      <label title="Show listening, thinking and speaking changes"><input type="checkbox" id="show-states"> States</label>
+      <button class="btn" type="button" id="clear">Clear</button>
+    </div>
+    <div class="window-controls"></div>
+  </div>
+  <div class="log" id="log" aria-live="polite"></div>
+
+  <script>
+    // Live view of Voicebot's debug log (logs/debug.jsonl in its folder), newest at the bottom.
+    const invoke = (cmd, args) => window.__TAURI__.core.invoke(cmd, args);
+    const logEl = document.getElementById('log');
+    const showStates = document.getElementById('show-states');
+    let offset = 0;
+    let first = true;
+    const LABELS = {
+      session: 'Session', heard: 'Heard', wake: 'Woke', sleep: 'Sleep', said: 'Said',
+      tool: 'Tool', error: 'Error', mcp: 'MCP', state: 'State', voiceprint: 'Voice', goodbye: 'Bye', context: 'Context', prompt: 'Prompt', settings: 'Settings', job: 'Job', compact: 'Compact', model: 'Model', filler: 'Sound', fillers: 'Sounds',
+    };
+
+    function el(tag, cls, text) {
+      const e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text !== undefined) e.textContent = text;
+      return e;
+    }
+
+    function describe(ev) {
+      switch (ev.kind) {
+        case 'session': return [`New conversation · model ${ev.model}`, `vision ${ev.vision_model} · wake word ${ev.wake_word ? `"${ev.wake_word}"` : 'none'} · terminal ${ev.terminal ? 'on' : 'off'}\ntools: ${(ev.tools || []).join(', ')}`];
+        case 'heard': return [ev.text, ev.action + (ev.voice_match != null ? ` · voice match ${ev.voice_match}` : '') + (ev.unread_chars ? ` · with ${ev.unread_chars} characters of unread transcript` : '')];
+        case 'wake': return [`Heard the wake word "${ev.wake_word}"`];
+        case 'sleep': return [`Asleep until "${ev.wake_word}"`];
+        case 'said': return [ev.text, [ev.interrupted ? 'interrupted' : '', ev.context_chars != null ? `conversation ${ev.context_chars.toLocaleString()} characters` : ''].filter(Boolean).join(' · ')];
+        case 'model': return [ev.note, ev.text];
+        case 'filler': return [`Thinking sound: ${ev.text}`];
+        case 'fillers': return [`Made ${ev.count} thinking sounds in the ${ev.voice} voice (${ev.seconds} s)`];
+        case 'compact': return ev.action === 'skipped'
+          ? [`Compaction skipped: nothing old enough to fold (${ev.before_chars.toLocaleString()} characters)`]
+          : [`Compacted the conversation: ${ev.before_items} items, ${ev.before_chars.toLocaleString()} characters → ${ev.after_items} items, ${ev.after_chars.toLocaleString()} characters`, ev.summary || ''];
+        case 'tool': return [`${ev.name}(${ev.args && Object.keys(ev.args).length ? JSON.stringify(ev.args) : ''})`, ev.output || '(no output)'];
+        case 'error': return [ev.error, ev.source];
+        case 'mcp': return [`MCP servers: ${(ev.servers || []).join('; ') || 'none configured'}`];
+        case 'state': return [`Agent is ${ev.state}`];
+        case 'voiceprint': return [{ started: 'Setting up your voice print: keep talking', recording: `Voice print: ${ev.seconds} s recorded`, enrolled: `Voice print saved (${ev.seconds} s of speech)` }[ev.action] || ev.action];
+        case 'job': return ev.action === 'stopped' ? [`Stopped job ${ev.id}`] : [`Job ${ev.id} running in the background (process ${ev.pid})`, `${ev.command}\noutput: ${ev.log}`];
+        case 'prompt': return ev.action === 'edited' ? ['Edited the system prompt and reloaded it', `${ev.diff || ''}\nbackup: ${ev.backup || ''}`] : [`Reloaded the system prompt (name ${ev.name})`];
+        case 'settings': return [ev.name !== undefined ? `Name is now ${ev.name}` : `Wake word is now ${ev.wake_word ? `"${ev.wake_word}"` : 'off'}`];
+        case 'context': return [`Gave the agent how-to notes: ${(ev.topics || []).join(', ')}`];
+        case 'goodbye': return [ev.wake_word ? `Goodbye: asleep until "${ev.wake_word}"` : 'Goodbye: microphone off'];
+        default: return [JSON.stringify(ev)];
+      }
+    }
+
+    function addRow(ev) {
+      const [text, detail] = describe(ev);
+      const row = el('div', `row ${ev.kind}`);
+      if (ev.kind === 'state') row.classList.add('dim', 'state-row');
+      if (ev.kind === 'heard' && String(ev.action).startsWith('ignored')) row.classList.add('dim');
+      if (ev.kind === 'state' && !showStates.checked) row.hidden = true;
+      const t = new Date(ev.t * 1000);
+      row.append(el('div', 'time', t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })));
+      row.append(el('div', 'kind', LABELS[ev.kind] || ev.kind));
+      const body = el('div', 'text', text);
+      if (detail) {
+        const d = el('span', 'detail', detail);
+        if (ev.kind === 'tool' && String(detail).length > 160) d.classList.add('long');
+        body.append(d);
+      }
+      row.append(body);
+      if (ev.kind === 'tool') row.addEventListener('click', () => row.classList.toggle('open'));
+      logEl.append(row);
+    }
+
+    async function poll() {
+      try {
+        const nearBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 40;
+        const tail = await invoke('voicebot_debug_tail', { offset });
+        if (tail.offset < offset) logEl.textContent = '';
+        offset = tail.offset;
+        for (const line of tail.lines) {
+          try { addRow(JSON.parse(line)); } catch (_) { /* partial line */ }
+        }
+        logEl.querySelector('.empty')?.remove();
+        if (!logEl.children.length) logEl.append(el('div', 'empty', 'Nothing yet. Talk to Voicebot and every step shows up here.'));
+        if (tail.lines.length && (nearBottom || first)) logEl.scrollTop = logEl.scrollHeight;
+        first = false;
+      } catch (e) {
+        document.getElementById('status').textContent = String(e);
+      }
+      setTimeout(poll, 600);
+    }
+
+    async function pollStatus() {
+      try {
+        const s = await invoke('voicebot_status');
+        document.getElementById('status').textContent = s.detail;
+      } catch (_) { /* window closing */ }
+      setTimeout(pollStatus, 2000);
+    }
+
+    showStates.addEventListener('change', () => {
+      logEl.querySelectorAll('.state-row').forEach((r) => { r.hidden = !showStates.checked; });
+    });
+    document.getElementById('clear').addEventListener('click', async () => {
+      await invoke('clear_voicebot_debug');
+      offset = 0;
+      logEl.textContent = '';
+    });
+
+    if (window.__TAURI__) { poll(); pollStatus(); }
+  </script>
+</body>
+</html>

@@ -96,15 +96,11 @@ fn preferences_exposes_rewrite_provider_fields() {
     let state = read_repo_file("src-tauri/src/state.rs");
     let transcription = read_repo_file("src-tauri/src/commands/transcription.rs");
 
-    for field in [
-        "rewrite-api-key",
-        "rewrite-model",
-        "rewrite-api-url",
-        "rewrite-timeout-ms",
-    ] {
+    // Preferences > Model: the provider fields are Voicebot's chat model now.
+    for field in ["rewrite-api-key", "rewrite-model", "rewrite-api-url"] {
         assert!(
             html.contains(field),
-            "preferences UI must expose persisted rewrite provider field {field}"
+            "preferences UI must expose persisted model provider field {field}"
         );
     }
 
@@ -137,15 +133,7 @@ fn transcriptions_live_in_their_own_window() {
     let settings = read_repo_file("src-tauri/src/commands/settings.rs");
     let main = read_repo_file("src-tauri/src/main.rs");
 
-    // Preferences keeps only a launcher; the history list no longer lives inline.
-    assert!(
-        prefs.contains("viewTranscriptions"),
-        "preferences must keep a launcher for the standalone transcriptions window"
-    );
-    assert!(
-        prefs.contains("open_transcriptions_window"),
-        "preferences launcher must open the standalone transcriptions window"
-    );
+    // Zana is the Voicebot app: Preferences no longer shows dictation history.
     assert!(
         !prefs.contains("transcript-history-list"),
         "the transcript history list must not be rendered inline in preferences"
@@ -203,23 +191,10 @@ fn transcripts_persist_in_local_only_mode() {
 }
 
 #[test]
-fn preferences_exposes_exact_ai_messages() {
-    let html = read_repo_file("src-ui/preferences.html");
+fn rewrite_pipeline_sends_only_its_visible_messages() {
     let transcription = read_repo_file("src-tauri/src/commands/transcription.rs");
     let state = read_repo_file("src-tauri/src/state.rs");
 
-    assert!(
-        html.contains("Exact system message sent to the rewrite model"),
-        "preferences must explain that System Prompt controls the exact system message"
-    );
-    assert!(
-        html.contains("Exact user message sent after variable replacement"),
-        "preferences must explain that User Prompt controls the exact user message"
-    );
-    assert!(
-        !html.contains("<div class=\"setting-label\">Response Contract</div>"),
-        "preferences must not expose a third visible prompt layer when only two AI messages are sent"
-    );
     assert!(
         !transcription.contains("Technical contract:"),
         "rewrite pipeline must not append hidden system instructions outside the visible template"
@@ -547,5 +522,100 @@ fn whisper_full_runs_on_blocking_thread() {
     assert!(
         source.contains(".full(params, &samples)") || source.contains(".full(params, samples"),
         "the blocking task must own or borrow audio samples inside the blocking closure"
+    );
+}
+
+#[test]
+fn voicebot_preferences_commands_and_bundle_stay_wired() {
+    let preferences = read_repo_file("src-ui/preferences.html");
+    let orb = read_repo_file("src-ui/voicebot.html");
+    let main_rs = read_repo_file("src-tauri/src/main.rs");
+    let config = read_repo_file("src-tauri/tauri.conf.json");
+    let supervisor = read_repo_file("src-tauri/src/voicebot.rs");
+
+    for id in [
+        "voicebot-fillers-toggle",
+        "voicebot-filler-phrases",
+        "voicebot-filler-days",
+        "voicebot-voice",
+        "model-reasoning",
+        "vision-model",
+        "voicebot-terminal-toggle",
+        "voicebot-context-command",
+        "voicebot-wake-word",
+        "voicebot-prompt",
+        "voicebot-mcp",
+        "voicebot-save",
+        "voicebot-debug",
+        "voicebot-voiceprint-clear",
+    ] {
+        assert!(
+            preferences.contains(id),
+            "Preferences must keep the Voicebot control {id}"
+        );
+    }
+    for command in [
+        "commands::get_voicebot_config",
+        "commands::set_voicebot_voice",
+        "commands::set_voicebot_fillers",
+        "commands::set_voicebot_terminal",
+        "commands::save_voicebot_prompt",
+        "commands::save_voicebot_mcp",
+        "commands::voicebot_join",
+        "commands::voicebot_screen_context",
+        "commands::set_voicebot_wake_word",
+        "commands::voicebot_debug_tail",
+        "open_voicebot_debug",
+        "commands::voicebot_screenshot",
+        "voicebot_paste",
+    ] {
+        assert!(main_rs.contains(command), "main.rs must register {command}");
+    }
+    for rpc in [
+        "zana.paste",
+        "zana.screen",
+        "voicebot_join",
+        "zanaDictation",
+    ] {
+        assert!(orb.contains(rpc), "the Voicebot orb must handle {rpc}");
+    }
+    // Zana is the Voicebot app: no on/off switch, and Preferences > Model reaches the agent.
+    assert!(
+        !preferences.contains("voicebot-mode-toggle") && !main_rs.contains("set_voicebot_mode"),
+        "Voicebot is always on; there is no Voicebot Mode switch"
+    );
+    assert!(
+        preferences.contains("data-section=\"model\"") && supervisor.contains("\"llm\""),
+        "Preferences > Model must be written into the agent's config"
+    );
+    // Every file the supervisor needs ships in the bundle.
+    for file in [
+        "agent.py",
+        "voice_server.py",
+        "speech.py",
+        "listening.py",
+        "jobs.py",
+        "fillers.py",
+        "voiceprint.py",
+        "system_prompt.default.md",
+        "requirements.txt",
+        "requirements-nodeps.txt",
+    ] {
+        assert!(
+            config.contains(&format!("\"../voicebot/{file}\": \"voicebot/{file}\"")),
+            "tauri.conf.json must bundle voicebot/{file}"
+        );
+        assert!(
+            supervisor.contains(&format!("\"{file}\"")),
+            "voicebot.rs CODE_FILES must list {file}"
+        );
+        assert!(
+            repo_file(&format!("voicebot/{file}")).exists(),
+            "voicebot/{file} must exist"
+        );
+    }
+    assert!(
+        main_rs.contains("Zana_app::voicebot::stop()"),
+        "Zana must stop Voicebot's processes when it exits"
     );
 }

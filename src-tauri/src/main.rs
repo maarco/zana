@@ -29,10 +29,34 @@ use tauri_nspanel::WebviewWindowExt;
 #[allow(unused_imports)]
 use tauri_nspanel::Panel; // for as_panel()
 
+/// The app handle, so code on any thread can hop to the main thread.
+#[cfg(target_os = "macos")]
+static APP_HANDLE: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
+
 /// Evaluate JavaScript directly in the panel's WKWebView
-/// This bypasses Tauri's IPC which doesn't work with NSPanel
+/// This bypasses Tauri's IPC which doesn't work with NSPanel.
+/// WebKit kills the app when evaluateJavaScript runs off the main thread (it did on
+/// every Preferences save: save_preferences emits orb-style-changed from a tokio
+/// worker), so calls from other threads are handed to the main thread.
 #[cfg(target_os = "macos")]
 fn eval_js_in_panel(panel: &tauri_nspanel::PanelHandle<tauri::Wry>, js: &str) {
+    use objc::{class, msg_send, sel, sel_impl};
+    // SAFETY: +[NSThread isMainThread] has no side effects.
+    let on_main: bool = unsafe { msg_send![class!(NSThread), isMainThread] };
+    if on_main {
+        return eval_js_now(panel, js);
+    }
+    let Some(app) = APP_HANDLE.get() else {
+        return log::warn!("[eval_js] called off the main thread before setup; skipped");
+    };
+    let (panel, js) = (panel.clone(), js.to_string());
+    if let Err(e) = app.run_on_main_thread(move || eval_js_now(&panel, &js)) {
+        log::warn!("[eval_js] could not reach the main thread: {e}");
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn eval_js_now(panel: &tauri_nspanel::PanelHandle<tauri::Wry>, js: &str) {
     use cocoa::base::{id, nil};
     use cocoa::foundation::NSString;
     use objc::{msg_send, sel, sel_impl};
@@ -260,6 +284,8 @@ fn main() {
         .menu(create_app_menu)
         .setup(|app| {
             let is_first_run = Zana_app::onboarding::is_first_run();
+            #[cfg(target_os = "macos")]
+            let _ = APP_HANDLE.set(app.handle().clone());
 
             // ALWAYS create application state (needed for commands)
             log::info!("Initializing application state...");
@@ -270,6 +296,12 @@ fn main() {
 
             // Store state for commands
             app.manage(state);
+
+            // Voicebot mode: Zana supervises the voice agent and shows its orb.
+            let settings = Zana_app::state::Settings::load();
+            if settings.voicebot_mode {
+                start_voicebot(app.handle(), &settings);
+            }
 
             // Check if first run - show onboarding window
             if is_first_run {
@@ -359,11 +391,14 @@ fn main() {
                 event_bus_for_emit.emit(HookEvent::AppStarted).await;
             });
 
-            // Setup Fn key monitor (macOS)
+            // Setup Fn key monitor (macOS). Voicebot Mode replaces dictation: no Fn
+            // hold, no Whisper and no recording orb while it is on (one mic user).
             #[cfg(target_os = "macos")]
-            {
+            if !settings.voicebot_mode {
                 let app_handle = app.handle().clone();
                 setup_fn_key_monitor(app_handle);
+            } else {
+                log::info!("Voicebot Mode is on: Fn dictation is off");
             }
 
             // Setup Ctrl key monitor (Windows)
@@ -376,6 +411,17 @@ fn main() {
             // Setup config file watcher for hot reload
             {
                 setup_config_watcher(app.handle().clone());
+            }
+
+            // A new model or voice in Preferences: start a fresh Voicebot conversation so it applies now.
+            {
+                let app_handle = app.handle().clone();
+                app.listen("voicebot-config-changed", move |_| {
+                    if let Some(window) = app_handle.get_webview_window("voicebot") {
+                        let _ = window
+                            .eval("typeof newConversation === 'function' && newConversation()");
+                    }
+                });
             }
 
             // Listen for orb style changes and relay to the orb panel/window
@@ -420,22 +466,11 @@ fn main() {
                     true,
                     Some("CmdOrCtrl+,"),
                 )?;
-                let transcriptions =
-                    MenuItem::with_id(app, "transcriptions", "Transcriptions", true, None::<&str>)?;
                 let separator = tauri::menu::PredefinedMenuItem::separator(app)?;
                 let separator2 = tauri::menu::PredefinedMenuItem::separator(app)?;
 
-                let menu = Menu::with_items(
-                    app,
-                    &[
-                        &about,
-                        &separator,
-                        &transcriptions,
-                        &preferences,
-                        &separator2,
-                        &quit,
-                    ],
-                )?;
+                let menu =
+                    Menu::with_items(app, &[&about, &separator, &preferences, &separator2, &quit])?;
 
                 // Try to get the config-created tray icon and add menu
                 if let Some(tray) = app.tray_by_id("main") {
@@ -524,7 +559,7 @@ fn main() {
 
             // Warm up orb window (create, show, hide to preload NSPanel and webview)
             #[cfg(target_os = "macos")]
-            {
+            if !settings.voicebot_mode {
                 warmup_orb(app.handle());
             }
             Ok(())
@@ -564,12 +599,35 @@ fn main() {
             commands::get_transcript_history,
             commands::open_transcriptions_window,
             commands::save_preferences,
+            commands::get_voicebot_config,
+            commands::set_voicebot_terminal,
+            commands::set_voicebot_context_command,
+            commands::set_voicebot_wake_word,
+            commands::set_voicebot_voice,
+            commands::set_voicebot_fillers,
+            commands::voicebot_screenshot,
+            commands::save_voicebot_prompt,
+            commands::save_voicebot_mcp,
+            commands::voicebot_status,
+            commands::voicebot_join,
+            commands::voicebot_screen_context,
+            commands::open_voicebot_folder,
+            commands::voicebot_debug_tail,
+            commands::clear_voicebot_voiceprint,
+            commands::clear_voicebot_debug,
+            open_voicebot_debug,
+            voicebot_paste,
             commands::test_ai_connection,
             // Updates
             commands::check_for_updates,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, event| {
+            if let tauri::RunEvent::Exit = event {
+                Zana_app::voicebot::stop();
+            }
+        });
 }
 
 /// Create the orb window as an NSPanel (macOS only)
@@ -1059,6 +1117,7 @@ fn clear_recording_buffers(app: tauri::AppHandle) {
 fn cancel_recording_without_transcription(app: &tauri::AppHandle) {
     log::info!("[RecordingCancel] Cancelling pending/active recording without transcription");
     clear_recording_flags();
+    voicebot_dictation(app, false);
     clear_recording_buffers(app.clone());
     hide_orb(app);
 }
@@ -1067,6 +1126,7 @@ fn cancel_recording_without_transcription(app: &tauri::AppHandle) {
 fn handle_recording_start_failed(app: &tauri::AppHandle, error: &str) {
     log::error!("[RecordingStart] Failed to start recording: {}", error);
     clear_recording_flags();
+    voicebot_dictation(app, false);
     clear_recording_buffers(app.clone());
     hide_orb(app);
 }
@@ -1118,6 +1178,7 @@ fn handle_fn_press(app: &tauri::AppHandle) {
     if !IS_RECORDING.load(Ordering::SeqCst) {
         IS_RECORDING.store(true, Ordering::SeqCst);
         log::info!("[FnPress] IS_RECORDING flag set to true");
+        voicebot_dictation(app, true);
 
         // Small delay to ensure orb window has loaded
         let app_clone = app.clone();
@@ -1236,6 +1297,7 @@ fn stop_recording(app: &tauri::AppHandle) {
     IS_RECORDING.store(false, Ordering::SeqCst);
     LATCHED_RECORDING.store(false, Ordering::SeqCst); // Clear latched mode
     log::info!("[StopRecording] Stopping recording");
+    voicebot_dictation(app, false);
 
     // Use direct WKWebView eval - Tauri IPC doesn't work with NSPanel
     {
@@ -1314,6 +1376,168 @@ fn stop_recording(app: &tauri::AppHandle) {
     });
 }
 
+/// Start Voicebot's processes (in the background) and open its orb: an
+/// always-on-top window in the bottom-right corner.
+fn start_voicebot(app: &tauri::AppHandle, settings: &Zana_app::state::Settings) {
+    use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+
+    let code = Zana_app::voicebot::code_dir(app.path().resource_dir().ok());
+    if let Err(e) = Zana_app::voicebot::write_agent_config(settings) {
+        log::error!("Voicebot config could not be written: {e}");
+    }
+    log::info!("Voicebot mode on; code in {}", code.display());
+    Zana_app::voicebot::start(code);
+    #[cfg(target_os = "macos")]
+    if let Err(e) = create_voicebot_debug_panel(app) {
+        log::error!("The Voicebot Debug panel could not be created: {e}");
+    }
+
+    let (w, h) = (220.0, 220.0); // the orb alone; its state shows on hover
+    let mut builder =
+        WebviewWindowBuilder::new(app, "voicebot", WebviewUrl::App("voicebot.html".into()))
+            .title("Voicebot")
+            .inner_size(w, h)
+            .resizable(false)
+            .decorations(false)
+            .transparent(true)
+            .shadow(false)
+            .always_on_top(true)
+            .focused(false)
+            .visible_on_all_workspaces(true)
+            .skip_taskbar(true);
+    if let Ok(Some(monitor)) = app.primary_monitor() {
+        let scale = monitor.scale_factor();
+        let size = monitor.size().to_logical::<f64>(scale);
+        builder = builder.position(size.width - w - 24.0, size.height - h - 72.0);
+    }
+    let window = match builder.build() {
+        Ok(window) => window,
+        Err(e) => return log::error!("Failed to open the Voicebot window: {e}"),
+    };
+
+    // Like the recording orb: a non-activating floating panel, so clicking the
+    // orb never takes focus from the app Voicebot pastes into, and it shows over
+    // full-screen apps.
+    #[cfg(target_os = "macos")]
+    {
+        use panel::OrbPanel;
+        use tauri_nspanel::panel::{NSWindowCollectionBehavior, NSWindowStyleMask};
+        match window.to_panel::<OrbPanel>() {
+            Ok(panel) => {
+                use cocoa::base::id;
+                use objc::{msg_send, sel, sel_impl};
+                panel.set_floating_panel(true);
+                panel.set_hides_on_deactivate(false);
+                panel.set_style_mask(NSWindowStyleMask::NonactivatingPanel);
+                panel.set_collection_behavior(
+                    NSWindowCollectionBehavior::CanJoinAllSpaces
+                        | NSWindowCollectionBehavior::FullScreenAuxiliary,
+                );
+                panel.set_level(1000);
+                let ns_panel = panel.as_panel() as *const _ as id;
+                unsafe {
+                    let _: () = msg_send![ns_panel, setMovableByWindowBackground: true];
+                }
+                // Panels are not ordered in on creation: show it on the active
+                // Space, over full-screen apps too.
+                panel.show();
+                panel.order_front_regardless();
+                *VOICEBOT_PANEL.lock().unwrap() = Some(panel);
+            }
+            Err(e) => log::error!("The Voicebot window could not become a panel: {e}"),
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = window;
+}
+
+#[cfg(target_os = "macos")]
+static VOICEBOT_PANEL: StdMutex<Option<tauri_nspanel::PanelHandle<tauri::Wry>>> =
+    StdMutex::new(None);
+
+/// The Voicebot Debug window: a live view of what Voicebot hears, says and runs.
+/// Created hidden at startup (same steps as the orb panel); this only shows it.
+#[tauri::command]
+async fn open_voicebot_debug(app: tauri::AppHandle) -> Result<(), String> {
+    app.run_on_main_thread(|| {
+        #[cfg(target_os = "macos")]
+        if let Some(panel) = VOICEBOT_DEBUG_PANEL.lock().unwrap().as_ref() {
+            panel.show();
+            panel.order_front_regardless();
+        }
+    })
+    .map_err(|e| e.to_string())
+}
+
+/// Build the Debug panel hidden, mirroring create_orb_window, which is proven
+/// to show over full-screen apps without raising Objective-C exceptions.
+#[cfg(target_os = "macos")]
+fn create_voicebot_debug_panel(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    use panel::OrbPanel;
+    use tauri::{WebviewUrl, WebviewWindowBuilder};
+    use tauri_nspanel::panel::{NSWindowCollectionBehavior, NSWindowStyleMask};
+
+    let window = WebviewWindowBuilder::new(
+        app,
+        "voicebot-debug",
+        WebviewUrl::App("voicebot-debug.html".into()),
+    )
+    .title("Voicebot Debug")
+    .inner_size(620.0, 680.0)
+    .decorations(false)
+    .transparent(true)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .visible_on_all_workspaces(true)
+    .focused(false)
+    .shadow(true)
+    .build()?;
+    // Created visible, like the Voicebot orb: a panel converted while hidden loses
+    // Tauri IPC (see the recording orb), and this page needs invoke().
+    let panel = window.to_panel::<OrbPanel>()?;
+    panel.set_floating_panel(true);
+    panel.set_hides_on_deactivate(false);
+    panel.set_style_mask(NSWindowStyleMask::NonactivatingPanel | NSWindowStyleMask::Resizable);
+    panel.set_collection_behavior(
+        NSWindowCollectionBehavior::MoveToActiveSpace
+            | NSWindowCollectionBehavior::FullScreenAuxiliary,
+    );
+    panel.set_level(1000);
+    panel.hide();
+    *VOICEBOT_DEBUG_PANEL.lock().unwrap() = Some(panel);
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+static VOICEBOT_DEBUG_PANEL: StdMutex<Option<tauri_nspanel::PanelHandle<tauri::Wry>>> =
+    StdMutex::new(None);
+
+/// Voicebot's "type up" tool: put text on the clipboard and paste it at the cursor.
+#[tauri::command]
+fn voicebot_paste(text: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        paste_text(&text);
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = text;
+        Err("Voicebot runs on macOS only".into())
+    }
+}
+
+/// Mute Voicebot's mic while Zana dictation records, so the agent does not
+/// answer dictated speech.
+fn voicebot_dictation(app: &tauri::AppHandle, active: bool) {
+    use tauri::Manager;
+    if let Some(window) = app.get_webview_window("voicebot") {
+        let _ = window.eval(format!(
+            "window.zanaDictation && window.zanaDictation({active})"
+        ));
+    }
+}
+
 /// Paste text to active input using clipboard + Cmd+V
 /// Transcription stays in clipboard (not restored to original)
 #[cfg(target_os = "macos")]
@@ -1351,6 +1575,7 @@ fn paste_text(text: &str) {
 fn cancel_recording_without_transcription(app: &tauri::AppHandle) {
     log::info!("[RecordingCancel] Cancelling pending/active recording without transcription");
     clear_recording_flags();
+    voicebot_dictation(app, false);
     clear_recording_buffers(app.clone());
     win_hide_orb(app);
 }
@@ -1359,6 +1584,7 @@ fn cancel_recording_without_transcription(app: &tauri::AppHandle) {
 fn handle_recording_start_failed(app: &tauri::AppHandle, error: &str) {
     log::error!("[RecordingStart] Failed to start recording: {}", error);
     clear_recording_flags();
+    voicebot_dictation(app, false);
     clear_recording_buffers(app.clone());
     win_hide_orb(app);
 }

@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Voicebot</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+      color: oklch(0.985 0 0); user-select: none; -webkit-user-select: none;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #orb { width: 200px; height: 200px; cursor: pointer; transition: transform .45s ease; }
+    body.asleep #orb { transform: scale(.5); }
+  </style>
+</head>
+<body>
+  <canvas id="orb" title="Drag to move. Click to mute or unmute. Double-click for a new conversation. Right-click for the Debug window." aria-label="Voicebot orb"></canvas>
+
+  <script src="vendor/livekit-client.umd.min.js"></script>
+  <script src="vendor/aura.js"></script>
+  <script>
+    // Voicebot orb: waits for Zana's supervisor, joins a fresh LiveKit room as the
+    // user's mic and speaker, and answers the agent's RPCs (zana.paste, zana.screen).
+    const LK = window.LivekitClient;
+    const invoke = (cmd, args) => window.__TAURI__.core.invoke(cmd, args);
+    let room = null;
+    let agentState = 'starting';
+    let muted = false;
+    let dictating = false;
+    let leaving = false;
+    let asleep = false;
+    let voicePrint = null; // { seconds, needed } while voice print mode records
+    let preview = null;    // a state shown for a few seconds by zana.preview_state (tests)
+    const AURA_COLOR = '#1FD5F9';      // thinking, muted, paused
+    const ASLEEP_COLOR = '#636366';    // muted grey while asleep
+    const LISTENING_COLOR = '#30D158'; // green while it listens
+    const SPEAKING_COLOR = '#0A84FF';  // blue while it talks
+    const VOICEPRINT_COLOR = '#FF3B30'; // red while voice print mode records
+    let wakeWord = '';
+    let agentTimer = null;
+
+    // No text under the orb: the state shows on hover (and every step is in the Debug window).
+    const HELP = 'Drag to move. Click to mute or unmute. Double-click for a new conversation. Right-click for the Debug window.';
+    function setStatus(text, detail = '') {
+      const line = detail ? `${text}: ${detail}` : text;
+      orb.title = `${line}\n${HELP}`;
+      orb.setAttribute('aria-label', `Voicebot: ${line}`);
+    }
+
+    async function waitUntilReady() {
+      for (;;) {
+        const s = await invoke('voicebot_status');
+        if (s.stage === 'ready') return;
+        setStatus({ installing: 'Installing', starting: 'Starting', loading: 'Loading', error: 'Error', off: 'Off' }[s.stage] || s.stage, s.detail);
+        await new Promise((r) => setTimeout(r, s.stage === 'error' ? 5000 : 1000));
+      }
+    }
+
+    async function connect() {
+      await waitUntilReady();
+      setStatus('Joining');
+      const { url, token } = await invoke('voicebot_join');
+      room = new LK.Room({ adaptiveStream: true, dynacast: true });
+      room.on(LK.RoomEvent.TrackSubscribed, (track) => {
+        if (track.kind === 'audio') document.body.appendChild(track.attach());
+      });
+      room.on(LK.RoomEvent.ParticipantAttributesChanged, (changed) => {
+        if (changed['lk.agent.state']) { agentState = changed['lk.agent.state']; showState(); }
+      });
+      room.on(LK.RoomEvent.DataReceived, (payload, _p, _k, topic) => {
+        if (topic !== 'events') return;
+        try {
+          const ev = JSON.parse(new TextDecoder().decode(payload));
+          if (ev.kind === 'sleep') { asleep = ev.asleep; wakeWord = ev.wake_word || ''; showState(); return; }
+          if (ev.kind === 'voiceprint') {
+            voicePrint = ev.action === 'enrolled' ? null : { seconds: ev.seconds || 0, needed: ev.needed || 8 };
+            showState();
+            return;
+          }
+        } catch (_) { /* not an event */ }
+      });
+      room.on(LK.RoomEvent.Disconnected, () => {
+        room = null;
+        if (leaving) return;
+        agentState = 'offline';
+        showState();
+        setTimeout(() => connect().catch(fail), 2000);
+      });
+      room.registerRpcMethod('zana.paste', async ({ payload }) => {
+        await invoke('voicebot_paste', { text: payload });
+        return 'pasted at the cursor';
+      });
+      room.registerRpcMethod('zana.screen', async () => invoke('voicebot_screen_context'));
+      room.registerRpcMethod('zana.screenshot', async () => invoke('voicebot_screenshot'));
+      room.registerRpcMethod('zana.mute', async () => { muted = true; await applyMic(); return 'microphone off'; });
+      // Test hook (local room only): show a state for five seconds, e.g. "listening" or "speaking".
+      room.registerRpcMethod('zana.preview_state', async ({ payload }) => {
+        preview = payload || null;
+        setTimeout(() => { preview = null; }, 5000);
+        return `previewing ${payload}`;
+      });
+      room.registerRpcMethod('zana.set_wake_word', async ({ payload }) => {
+        await invoke('set_voicebot_wake_word', { wakeWord: payload });
+        return payload ? `wake word set to ${payload}` : 'wake word removed';
+      });
+      room.on(LK.RoomEvent.ParticipantConnected, () => clearTimeout(agentTimer));
+      await room.connect(url, token);
+      await applyMic();
+      // No agent within 15 s (it was busy or restarting): start over in a fresh room.
+      clearTimeout(agentTimer);
+      agentTimer = setTimeout(() => { if (room && room.remoteParticipants.size === 0) newConversation(); }, 15000);
+      agentState = 'connecting';
+      showState();
+    }
+
+    function fail(e) {
+      setStatus('Error', String(e && e.message || e).slice(0, 120));
+      setTimeout(() => connect().catch(fail), 5000);
+    }
+
+    async function applyMic() {
+      if (room) await room.localParticipant.setMicrophoneEnabled(!muted && !dictating);
+      showState();
+    }
+
+    // Zana calls this while its own dictation records, so the agent ignores it.
+    window.zanaDictation = (active) => { dictating = active; applyMic(); };
+
+    function showState() {
+      if (dictating) return setStatus('Paused', 'Zana is dictating');
+      if (muted) return setStatus('Muted', 'Click the orb to unmute');
+      if (voicePrint) return setStatus('Voice Print', `Keep talking: ${Math.min(voicePrint.seconds, voicePrint.needed).toFixed(0)} of ${voicePrint.needed} seconds`);
+      if (asleep) return setStatus('Sleeping', wakeWord ? `Say "${wakeWord}" to wake it` : '');
+      setStatus({
+        connecting: 'Joining', initializing: 'Waking Up', listening: 'Listening',
+        thinking: 'Thinking', speaking: 'Speaking', offline: 'Reconnecting',
+      }[agentState] || agentState);
+    }
+
+    let restarting = false; // a model and a voice change can both ask for a new conversation at once
+    async function newConversation() {
+      if (restarting) return;
+      restarting = true;
+      setTimeout(() => { restarting = false; }, 3000);
+      leaving = true;
+      if (room) await room.disconnect();
+      leaving = false;
+      connect().catch(fail);
+    }
+
+    // Drag anywhere to move the orb (after 4 px, so clicks still work).
+    let downAt = null;
+    let dragged = false;
+    document.addEventListener('pointerdown', (event) => {
+      if (event.button === 0) { downAt = [event.screenX, event.screenY]; dragged = false; }
+    });
+    document.addEventListener('pointermove', (event) => {
+      if (!downAt || Math.hypot(event.screenX - downAt[0], event.screenY - downAt[1]) < 4) return;
+      downAt = null;
+      dragged = true;
+      window.__TAURI__.window.getCurrentWindow().startDragging().catch(() => {});
+    });
+    document.addEventListener('pointerup', () => { downAt = null; });
+
+    // Single click mutes; a double-click starts a new conversation instead.
+    let clickTimer = null;
+    const orb = document.getElementById('orb');
+    orb.addEventListener('click', () => {
+      if (dragged) { dragged = false; return; }
+      clearTimeout(clickTimer);
+      clickTimer = setTimeout(() => { muted = !muted; applyMic(); }, 250);
+    });
+    orb.addEventListener('dblclick', () => { clearTimeout(clickTimer); newConversation(); });
+    // Right-click opens the Debug window: what Voicebot hears, says and runs.
+    orb.addEventListener('contextmenu', (event) => { event.preventDefault(); invoke('open_voicebot_debug'); });
+
+    // The orb: LiveKit's Aura visualizer (vendor/aura.js), driven by the agent's state
+    // and voice level. Asleep, muted or paused shows its idle look.
+    let aura = null;
+    try {
+      aura = window.createAura(orb, { color: AURA_COLOR, colorShift: 0.05, themeMode: 'dark' });
+    } catch (e) {
+      setStatus('Error', `The orb needs WebGL: ${e.message}`);
+    }
+    function auraTick() {
+      if (aura) {
+        const quiet = !room || muted || dictating || asleep;
+        const sleeping = asleep && !preview;
+        document.body.classList.toggle('asleep', sleeping);
+        const shown = preview || (quiet ? 'idle' : agentState);
+        aura.setState(shown === 'voiceprint' ? 'listening' : shown);
+        aura.setColor(voicePrint || shown === 'voiceprint' ? VOICEPRINT_COLOR
+          : shown === 'listening' ? LISTENING_COLOR
+          : shown === 'speaking' ? SPEAKING_COLOR
+          : sleeping ? ASLEEP_COLOR
+          : AURA_COLOR);
+        let voice = 0;
+        if (room) room.remoteParticipants.forEach((p) => { voice = Math.max(voice, p.audioLevel || 0); });
+        aura.setVolume(voice);
+      }
+      requestAnimationFrame(auraTick);
+    }
+    requestAnimationFrame(auraTick);
+    connect().catch(fail);
+  </script>
+</body>
+</html>

@@ -5,7 +5,6 @@
 use crate::audio::AudioCapture;
 use crate::onboarding;
 use crate::state::AppState;
-use crate::stt::WhisperModel;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tauri::State;
@@ -24,10 +23,10 @@ pub struct DiagnosticCheck {
 
 /// Run full diagnostics
 ///
-/// Checks accessibility, audio devices, model download, and keyboard hooks.
+/// Checks accessibility, audio devices and Voicebot.
 #[tauri::command]
 pub async fn run_diagnostics(
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
 ) -> Result<HashMap<String, DiagnosticCheck>, String> {
     let mut checks = HashMap::new();
 
@@ -47,7 +46,8 @@ pub async fn run_diagnostics(
                 message: if has_accessibility {
                     "App has accessibility permissions".to_string()
                 } else {
-                    "Fn key monitoring requires accessibility permissions".to_string()
+                    "Voicebot needs accessibility permission to type, paste and press keys"
+                        .to_string()
                 },
                 fix: if !has_accessibility {
                     Some("Open System Settings".to_string())
@@ -78,7 +78,6 @@ pub async fn run_diagnostics(
     }
 
     // 2. Audio devices
-    let engine = state.whisper_engine.lock().await;
     match AudioCapture::list_devices() {
         Ok(devices) if !devices.is_empty() => {
             checks.insert(
@@ -118,28 +117,20 @@ pub async fn run_diagnostics(
         }
     }
 
-    // 3. Whisper model
-    let model = WhisperModel::Small;
-    let model_downloaded = engine.is_model_downloaded(model);
+    // 3. Voicebot (Zana is the Voicebot app; Whisper and Fn dictation are retired)
+    let voicebot = crate::voicebot::status();
     checks.insert(
-        "whisper_model".to_string(),
+        "voicebot".to_string(),
         DiagnosticCheck {
-            name: "Whisper Model".to_string(),
-            status: if model_downloaded {
-                "ok".to_string()
-            } else {
-                "warning".to_string()
-            },
-            message: if model_downloaded {
-                "Model downloaded and ready".to_string()
-            } else {
-                "Model not downloaded yet".to_string()
-            },
-            fix: if !model_downloaded {
-                Some("Will download on first use".to_string())
-            } else {
-                None
-            },
+            name: "Voicebot".to_string(),
+            status: match voicebot.stage.as_str() {
+                "ready" => "ok",
+                "error" | "off" => "error",
+                _ => "warning",
+            }
+            .to_string(),
+            message: voicebot.detail,
+            fix: None,
             fix_action: None,
         },
     );
@@ -155,38 +146,6 @@ pub async fn run_diagnostics(
             fix_action: None,
         },
     );
-
-    // 5. Recording state check
-    #[cfg(target_os = "macos")]
-    {
-        let has_accessibility = onboarding::check_accessibility();
-        checks.insert(
-            "keyboard".to_string(),
-            DiagnosticCheck {
-                name: "Keyboard Hook".to_string(),
-                status: if has_accessibility {
-                    "ok".to_string()
-                } else {
-                    "warning".to_string()
-                },
-                message: if has_accessibility {
-                    "Fn key monitor ready; hold Fn to record".to_string()
-                } else {
-                    "Fn key monitoring is waiting on accessibility permissions".to_string()
-                },
-                fix: if !has_accessibility {
-                    Some("Open System Settings".to_string())
-                } else {
-                    None
-                },
-                fix_action: if !has_accessibility {
-                    Some("openAccessibilitySettings()".to_string())
-                } else {
-                    None
-                },
-            },
-        );
-    }
 
     Ok(checks)
 }

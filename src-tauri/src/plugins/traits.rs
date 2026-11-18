@@ -2,6 +2,9 @@
 //!
 //! Defines the trait interfaces that plugins must implement.
 
+// async_trait marks the boxed futures it generates #[must_use]; newer clippy flags that twice.
+#![allow(clippy::double_must_use)]
+
 use super::manifest::PluginManifest;
 use crate::hooks::{EventBus, HookHandler};
 use async_trait::async_trait;

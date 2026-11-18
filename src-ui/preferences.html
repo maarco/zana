@@ -509,7 +509,7 @@ var(--background);
     </div>
     <div class="title-copy" data-tauri-drag-region>
       <h1 data-tauri-drag-region>Preferences</h1>
-      <p data-tauri-drag-region>Local voice, rewrite, and capture controls</p>
+      <p data-tauri-drag-region>Voicebot, its model and the app</p>
     </div>
     <button id="update-banner" class="update-banner" type="button">Update</button>
     <div class="window-controls">
@@ -519,67 +519,104 @@ var(--background);
   </div>
 
   <div class="content">
-    <div class="section" data-section="speech">
+    <div class="section" data-section="voicebot" id="voicebot-section">
       <div class="section-head">
-        <div class="section-title">Speech Recognition</div>
-        <div class="section-meta">Local</div>
+        <div class="section-title">Voicebot</div>
+        <div class="section-meta">Experimental</div>
       </div>
 
       <div class="setting-row">
         <div class="setting-copy">
-          <div class="setting-label">Whisper Model</div>
-          <div class="setting-desc">Larger models are more accurate but slower</div>
+          <div class="setting-label">Terminal Tool</div>
+          <div class="setting-desc">Lets the agent run shell commands on this Mac. Text on screen can try to steer it; every command shows in the orb.</div>
         </div>
-        <select id="whisper-model">
-          <option value="tiny">Tiny (75MB, fastest)</option>
-          <option value="base">Base (150MB)</option>
-          <option value="small" selected>Small (500MB, recommended)</option>
-          <option value="medium">Medium (1.5GB)</option>
-          <option value="large">Large (3GB, most accurate)</option>
-        </select>
+        <div class="toggle" id="voicebot-terminal-toggle"></div>
+      </div>
+
+      <div class="provider-field">
+        <div>
+          <div class="setting-label">Wake Word</div>
+          <div class="setting-desc">Voicebot only answers after hearing it; everything you say is still written to its transcript. Empty means it always answers.</div>
+        </div>
+        <input type="text" id="voicebot-wake-word" spellcheck="false" placeholder="For example: hey voicebot">
+      </div>
+
+      <div class="provider-field">
+        <div>
+          <div class="setting-label">Voice</div>
+          <div class="setting-desc">How Voicebot sounds; a change starts a fresh conversation</div>
+        </div>
+        <select id="voicebot-voice"></select>
       </div>
 
       <div class="setting-row">
         <div class="setting-copy">
-          <div class="setting-label">Language</div>
-          <div class="setting-desc">Auto-detect or specify language</div>
+          <div class="setting-label">Thinking Sounds</div>
+          <div class="setting-desc">Plays a random "hmm" or "uhh" in Voicebot's voice while it works out a reply, then a short pause</div>
         </div>
-        <select id="language">
-          <option value="auto" selected>Auto-detect</option>
-          <option value="en">English</option>
-          <option value="es">Spanish</option>
-          <option value="fr">French</option>
-          <option value="de">German</option>
-          <option value="ja">Japanese</option>
-          <option value="zh">Chinese</option>
-        </select>
+        <div class="toggle" id="voicebot-fillers-toggle"></div>
+      </div>
+
+      <div class="provider-field">
+        <div>
+          <div class="setting-label">Thinking Sound Lines</div>
+          <div class="setting-desc">One per line, made once in Voicebot's voice and cached; empty uses the built-in sixteen</div>
+        </div>
+        <textarea id="voicebot-filler-phrases" spellcheck="false" aria-label="Thinking sound lines" placeholder="Ummmm...&#10;Hmmmm...&#10;Uhhhhh...&#10;Ooooookay..."></textarea>
+      </div>
+
+      <div class="provider-field">
+        <div>
+          <div class="setting-label">Remake Sounds Every</div>
+          <div class="setting-desc">Days before the thinking sounds are made again, so they stay fresh</div>
+        </div>
+        <input type="number" id="voicebot-filler-days" min="1" step="1" value="7">
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-copy">
+          <div class="setting-label">Voice Print</div>
+          <div class="setting-desc" id="voicebot-voiceprint-status">Say "set up my voice print" to Voicebot, then talk for about ten seconds; after that it only answers your voice.</div>
+        </div>
+        <button class="btn-secondary" type="button" id="voicebot-voiceprint-clear" hidden>Clear</button>
+      </div>
+
+      <div class="provider-field">
+        <div>
+          <div class="setting-label">Screen History Command</div>
+          <div class="setting-desc">Optional shell command; its output tells the agent what you were recently looking at</div>
+        </div>
+        <input type="text" id="voicebot-context-command" spellcheck="false" placeholder="Leave empty to send only the front app">
+      </div>
+
+      <div class="writing-profile-field">
+        <div>
+          <div class="setting-label">System Prompt</div>
+          <div class="setting-desc">Applies from the next conversation (double-click the orb)</div>
+        </div>
+        <textarea id="voicebot-prompt" spellcheck="false" aria-label="Voicebot system prompt"></textarea>
+      </div>
+
+      <div class="writing-profile-field">
+        <div>
+          <div class="setting-label">MCP Servers</div>
+          <div class="setting-desc">Claude Desktop format: a "command" with "args", or a "url"</div>
+        </div>
+        <textarea id="voicebot-mcp" spellcheck="false" aria-label="Voicebot MCP servers JSON"></textarea>
+      </div>
+
+      <div class="setting-row" style="background: none; padding-top: 0;">
+        <div class="setting-desc" id="voicebot-status" role="status"></div>
+        <button class="btn-secondary" type="button" id="voicebot-debug" title="Live view of what Voicebot hears, says and runs">Debug</button>
+        <button class="btn-secondary" type="button" id="voicebot-open-folder" title="Voicebot's prompt, transcript, logs and voices">Open Folder</button>
+        <button class="btn-secondary" type="button" id="voicebot-save">Save Voicebot</button>
       </div>
     </div>
 
-    <div class="section" data-section="polish">
+    <div class="section" data-section="model">
       <div class="section-head">
-        <div class="section-title">Writing Polish</div>
-        <div class="section-meta">Optional</div>
-      </div>
-
-      <div class="setting-row">
-        <div class="setting-copy">
-          <div class="setting-label">Enable Writing Polish</div>
-          <div class="setting-desc">
-            Use clipboard context and your writing profile to polish local transcripts
-          </div>
-        </div>
-        <div class="toggle" id="cloud-rewrite-toggle"></div>
-      </div>
-
-      <div class="setting-row">
-        <div class="setting-copy">
-          <div class="setting-label">Include Screenshot Context</div>
-          <div class="setting-desc">
-            Attach the screen on release for vision-capable rewrite models
-          </div>
-        </div>
-        <div class="toggle" id="rewrite-screenshot-toggle"></div>
+        <div class="section-title">Model</div>
+        <div class="section-meta">Voicebot</div>
       </div>
 
       <div class="provider-grid">
@@ -597,7 +634,7 @@ var(--background);
         <div class="provider-field">
           <div>
             <div class="setting-label">Model</div>
-            <div class="setting-desc">Chat completions model</div>
+            <div class="setting-desc">The chat model Voicebot talks with, for example nvidia/nemotron-3.5-super-vl:free</div>
           </div>
           <input type="text" id="rewrite-model" value="gpt-4o-mini">
         </div>
@@ -605,23 +642,37 @@ var(--background);
         <div class="provider-field">
           <div>
             <div class="setting-label">API URL</div>
-            <div class="setting-desc">Chat completions endpoint, or local server root</div>
+            <div class="setting-desc">OpenAI-compatible chat completions endpoint: OpenRouter, OpenAI or a local server</div>
           </div>
           <input type="url" id="rewrite-api-url" value="https://api.openai.com/v1/chat/completions">
         </div>
 
         <div class="provider-field">
           <div>
-            <div class="setting-label">Timeout</div>
-            <div class="setting-desc">Milliseconds before fallback paste</div>
+            <div class="setting-label">Reasoning</div>
+            <div class="setting-desc">How much the model thinks before it answers. Low keeps replies quick; Off works on OpenRouter only; Default sends nothing and leaves it to the model.</div>
           </div>
-          <input type="number" id="rewrite-timeout-ms" value="15000" min="1000" step="1000">
+          <select id="model-reasoning">
+            <option value="default">Default</option>
+            <option value="off">Off</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+
+        <div class="provider-field">
+          <div>
+            <div class="setting-label">Vision Model</div>
+            <div class="setting-desc">Reads screenshots when Voicebot looks at your screen; empty uses the chat model</div>
+          </div>
+          <input type="text" id="vision-model" spellcheck="false" placeholder="Same as the chat model">
         </div>
 
         <div class="provider-field">
           <div>
             <div class="setting-label">AI Connection</div>
-            <div class="setting-desc">Send a small provider check with the current fields</div>
+            <div class="setting-desc">Sends the request Voicebot sends, with these fields, before you save</div>
           </div>
           <div style="display: grid; gap: 6px; justify-items: end;">
             <button class="btn-secondary" id="test-ai-button" onclick="testAiConnection()">
@@ -631,158 +682,11 @@ var(--background);
           </div>
         </div>
       </div>
-
-      <div class="writing-profile-grid">
-        <div class="writing-profile-field">
-          <div class="setting-copy">
-            <div class="setting-label">System Prompt</div>
-            <div class="setting-desc">Exact system message sent to the rewrite model</div>
-          </div>
-          <textarea id="writing-purpose" spellcheck="false"></textarea>
-        </div>
-
-        <div class="writing-profile-field">
-          <div class="setting-copy">
-            <div class="setting-label">User Prompt</div>
-            <div class="setting-desc">Exact user message sent after variable replacement</div>
-          </div>
-          <textarea id="writing-tone" spellcheck="false"></textarea>
-        </div>
-        <textarea id="writing-format" spellcheck="false" style="display: none;"></textarea>
-
-        <div class="writing-profile-field">
-          <div class="setting-copy">
-            <div class="setting-label">Variables</div>
-            <div class="setting-desc">Use these in prompt templates</div>
-          </div>
-          <div class="template-vars">
-            <code>{time}</code>
-            <code>{captured}</code>
-            <code>{clipboard}</code>
-            <code>{screen_shot}</code>
-            <code>{dictionary}</code>
-            <code>{history}</code>
-            <code>{style_memory}</code>
-            <code>{project_memory}</code>
-          </div>
-        </div>
-      </div>
     </div>
 
-    <div class="section" data-section="history">
+    <div class="section" data-section="general">
       <div class="section-head">
-        <div class="section-title">Transcriptions</div>
-        <div class="section-meta">Local History</div>
-      </div>
-
-      <div class="setting-row">
-        <div class="setting-copy">
-          <div class="setting-label">Transcript History</div>
-          <div class="setting-desc">Open recent raw Whisper text and final pasted text in its own window</div>
-        </div>
-        <button class="btn-secondary" id="transcript-history-button" onclick="viewTranscriptions()">
-          Open
-        </button>
-      </div>
-    </div>
-
-    <div class="section" data-section="recording">
-      <div class="section-head">
-        <div class="section-title">Recording</div>
-        <div class="section-meta">Input</div>
-      </div>
-
-      <div class="setting-row">
-        <div>
-          <div class="setting-label">Audio Input</div>
-          <div class="setting-desc">Select microphone for recording</div>
-        </div>
-        <select id="audio-input">
-          <option value="default">Default Microphone</option>
-        </select>
-      </div>
-
-      <div class="setting-row">
-        <div>
-          <div class="setting-label">Double-tap to Latch</div>
-          <div class="setting-desc">Double-tap Fn to start continuous recording</div>
-        </div>
-        <div class="toggle active" id="double-tap-toggle"></div>
-      </div>
-
-      <div class="setting-row">
-        <div>
-          <div class="setting-label">Minimum Hold Duration</div>
-          <div class="setting-desc">Ignore quick taps shorter than this</div>
-        </div>
-        <select id="min-hold">
-          <option value="200">200ms</option>
-          <option value="300" selected>300ms</option>
-          <option value="400">400ms</option>
-          <option value="500">500ms</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="section" data-section="shortcuts">
-      <div class="section-head">
-        <div class="section-title">Keyboard Shortcuts</div>
-        <div class="section-meta">System</div>
-      </div>
-
-      <div class="setting-row">
-        <div>
-          <div class="setting-label">Recording Trigger</div>
-          <div class="setting-desc">Key to hold for recording</div>
-        </div>
-        <select id="trigger-key">
-          <option value="fn" selected>Fn Key</option>
-          <option value="ctrl">Control Key</option>
-          <option value="option">Option Key</option>
-          <option value="shift">Shift Key</option>
-        </select>
-      </div>
-
-      <div class="setting-row">
-        <div>
-          <div class="setting-label">Global Shortcut</div>
-          <div class="setting-desc">Alternative keyboard shortcut</div>
-        </div>
-        <input type="text" id="global-shortcut" value="Cmd+Shift+Space" placeholder="Press keys...">
-      </div>
-    </div>
-
-    <div class="section" data-section="appearance">
-      <div class="section-head">
-        <div class="section-title">Appearance</div>
-        <div class="section-meta">Orb</div>
-      </div>
-
-      <div class="orb-picker" id="orb-picker">
-        <select id="orb-style" aria-label="Orb style"></select>
-        <div class="orb-picker-head">
-          <div class="orb-brand">Zana orb</div>
-          <div class="orb-count" id="orb-count">01 / 09</div>
-        </div>
-        <div class="orb-carousel">
-          <button class="orb-arrow" type="button" onclick="shiftOrbPreview(-1)" aria-label="Previous orb">&lt;</button>
-          <div class="orb-preview-shell">
-            <div class="orb-preview-frame">
-              <iframe id="orb-preview" title="Orb preview" src="orb.html?style=fire-v8"></iframe>
-            </div>
-            <div class="orb-preview-copy">
-              <div class="orb-preview-name" id="orb-preview-name">Zana Cosmos</div>
-              <div class="orb-preview-desc" id="orb-preview-desc">
-                wide field stars, soft voice rings, clean transparent edge
-              </div>
-            </div>
-          </div>
-          <button class="orb-arrow" type="button" onclick="shiftOrbPreview(1)" aria-label="Next orb">&gt;</button>
-        </div>
-        <div class="orb-picker-actions">
-          <div class="orb-active-label" id="orb-active-label">selected: Zana Cosmos</div>
-          <button class="btn-primary" id="orb-select-button" type="button" onclick="selectPreviewedOrb()">Select</button>
-        </div>
+        <div class="section-title">General</div>
       </div>
 
       <div class="setting-row">
@@ -803,7 +707,7 @@ var(--background);
       <div class="setting-row">
         <div>
           <div class="setting-label">Run Health Check</div>
-          <div class="setting-desc">Check permissions, audio, and keyboard setup</div>
+          <div class="setting-desc">Check permissions, audio and Voicebot</div>
         </div>
         <button class="btn-primary" onclick="runDoctor()">Doctor</button>
       </div>
@@ -838,7 +742,7 @@ var(--background);
       new MutationObserver(sync).observe(toggle, { attributes: true, attributeFilter: ['class'] });
       toggle.addEventListener('click', () => {
         toggle.classList.toggle('active');
-        markDirty();
+        if (!toggle.closest('[data-section="voicebot"]')) markDirty();
       });
       toggle.addEventListener('keydown', (event) => {
         if (event.key === ' ' || event.key === 'Enter') {
@@ -848,11 +752,83 @@ var(--background);
       });
     });
 
+    // Voicebot saves on its own: its switches act at once, Save Voicebot writes the rest.
+    const voicebotEl = (id) => document.getElementById(id);
+    function voicebotSay(text) { voicebotEl('voicebot-status').textContent = text; }
+    async function loadVoicebot() {
+      if (!/Mac/i.test(navigator.platform)) { voicebotEl('voicebot-section').hidden = true; return; }
+      if (!window.__TAURI__) return;
+      try {
+        const cfg = await window.__TAURI__.core.invoke('get_voicebot_config');
+        voicebotEl('voicebot-terminal-toggle').classList.toggle('active', cfg.terminal);
+        voicebotEl('voicebot-context-command').value = cfg.context_command;
+        voicebotEl('voicebot-wake-word').value = cfg.wake_word;
+        const voice = voicebotEl('voicebot-voice');
+        voice.textContent = '';
+        for (const name of ['', ...cfg.voices]) {
+          const [, who, kind] = name.match(/^(?:[a-z]{2}-)?([^_]+)(?:_(.+))?$/) || [];
+          voice.append(new Option(name ? (kind ? `${who} (${kind})` : who) : 'Default (Emma)', name));
+        }
+        voice.value = cfg.voice;
+        voicebotEl('voicebot-fillers-toggle').classList.toggle('active', cfg.fillers);
+        voicebotEl('voicebot-filler-phrases').value = cfg.filler_phrases;
+        voicebotEl('voicebot-filler-days').value = cfg.filler_days;
+        voicebotEl('voicebot-voiceprint-clear').hidden = !cfg.voiceprint;
+        if (cfg.voiceprint) voicebotEl('voicebot-voiceprint-status').textContent = 'On: Voicebot only answers your voice. Other voices still go to its transcript, marked as someone else.';
+        voicebotEl('voicebot-prompt').value = cfg.prompt;
+        voicebotEl('voicebot-mcp').value = cfg.mcp;
+        voicebotSay(`Status: ${cfg.status.detail}`);
+      } catch (e) {
+        voicebotSay(String(e));
+      }
+    }
+    voicebotEl('voicebot-terminal-toggle')?.addEventListener('click', async (event) => {
+      const enabled = event.currentTarget.classList.contains('active');
+      try {
+        await window.__TAURI__.core.invoke('set_voicebot_terminal', { enabled });
+        voicebotSay(`Terminal Tool ${enabled ? 'on' : 'off'} from the next conversation`);
+      } catch (e) { voicebotSay(String(e)); }
+    });
+    voicebotEl('voicebot-voiceprint-clear')?.addEventListener('click', async () => {
+      try {
+        await window.__TAURI__.core.invoke('clear_voicebot_voiceprint');
+        voicebotSay('Voice print cleared; Voicebot answers anyone from the next conversation');
+        loadVoicebot();
+      } catch (e) { voicebotSay(String(e)); }
+    });
+    voicebotEl('voicebot-debug')?.addEventListener('click', () => window.__TAURI__.core.invoke('open_voicebot_debug').catch((e) => voicebotSay(String(e))));
+    voicebotEl('voicebot-open-folder')?.addEventListener('click', () => window.__TAURI__.core.invoke('open_voicebot_folder').catch((e) => voicebotSay(String(e))));
+    // Save Voicebot and the footer Save both write these, so an edit here is never lost.
+    async function saveVoicebot() {
+      if (voicebotEl('voicebot-section').hidden) return;
+      const invoke = window.__TAURI__.core.invoke;
+      await invoke('save_voicebot_mcp', { json: voicebotEl('voicebot-mcp').value });
+      await invoke('save_voicebot_prompt', { prompt: voicebotEl('voicebot-prompt').value });
+      await invoke('set_voicebot_context_command', { command: voicebotEl('voicebot-context-command').value });
+      await invoke('set_voicebot_wake_word', { wakeWord: voicebotEl('voicebot-wake-word').value });
+      await invoke('set_voicebot_voice', { voice: voicebotEl('voicebot-voice').value });
+      await invoke('set_voicebot_fillers', {
+        on: voicebotEl('voicebot-fillers-toggle').classList.contains('active'),
+        phrases: voicebotEl('voicebot-filler-phrases').value,
+        days: Math.max(1, parseInt(voicebotEl('voicebot-filler-days').value, 10) || 7),
+      });
+    }
+    voicebotEl('voicebot-save')?.addEventListener('click', async () => {
+      try {
+        await saveVoicebot();
+        voicebotSay('Saved; applies from the next conversation');
+      } catch (e) {
+        voicebotSay(String(e));
+      }
+    });
+    loadVoicebot();
+
     function markDirty() {
       setSaveStatus('Unsaved changes', 'dirty');
     }
-    document.querySelector('.content')?.addEventListener('input', markDirty);
-    document.querySelector('.content')?.addEventListener('change', markDirty);
+    const markDirtyOutsideVoicebot = (event) => { if (!event.target.closest('[data-section="voicebot"]')) markDirty(); };
+    document.querySelector('.content')?.addEventListener('input', markDirtyOutsideVoicebot);
+    document.querySelector('.content')?.addEventListener('change', markDirtyOutsideVoicebot);
 
     document.addEventListener('keydown', (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
@@ -902,8 +878,7 @@ var(--background);
     }
 
     function setToggle(id, active) {
-      const toggle = document.getElementById(id);
-      toggle.classList.toggle('active', Boolean(active));
+      document.getElementById(id)?.classList.toggle('active', Boolean(active));
     }
 
     function isToggleActive(id) {
@@ -912,7 +887,7 @@ var(--background);
 
     function setFieldValue(id, value) {
       const field = document.getElementById(id);
-      if (value !== undefined && value !== null) {
+      if (field && value !== undefined && value !== null) {
         field.value = String(value);
       }
     }
@@ -1023,47 +998,28 @@ var(--background);
       select.value = selectedAudioInput || 'default';
     }
 
+    // Settings no longer on this page (the retired dictation ones) are saved back unchanged.
+    let loadedPrefs = {};
+
     function applyPreferences(prefs) {
-      setFieldValue('whisper-model', prefs.whisperModel);
-      setFieldValue('language', prefs.language);
-      setFieldValue('audio-input', prefs.audioInput);
-      setToggle('double-tap-toggle', prefs.doubleTapEnabled);
-      setFieldValue('min-hold', prefs.minHoldDuration);
-      setFieldValue('trigger-key', prefs.triggerKey);
-      setFieldValue('global-shortcut', prefs.globalShortcut);
-      setOrbStyleValue(prefs.orbStyle);
+      loadedPrefs = prefs;
       setToggle('menubar-toggle', prefs.showInMenuBar);
-      setToggle('cloud-rewrite-toggle', prefs.cloudRewriteEnabled);
-      setToggle('rewrite-screenshot-toggle', prefs.rewriteIncludeScreenshot);
       setFieldValue('rewrite-api-key', prefs.rewriteApiKey);
       setFieldValue('rewrite-model', prefs.rewriteModel);
       setFieldValue('rewrite-api-url', prefs.rewriteApiUrl);
-      setFieldValue('rewrite-timeout-ms', prefs.rewriteTimeoutMs);
-      setFieldValue('writing-purpose', prefs.writingPurpose);
-      setFieldValue('writing-tone', prefs.writingTone);
-      setFieldValue('writing-format', prefs.writingFormat);
+      setFieldValue('model-reasoning', prefs.modelReasoning || 'default');
+      setFieldValue('vision-model', prefs.visionModel);
     }
 
     function collectPreferences() {
       return {
-        whisperModel: document.getElementById('whisper-model').value,
-        language: document.getElementById('language').value,
-        audioInput: document.getElementById('audio-input').value,
-        doubleTapEnabled: isToggleActive('double-tap-toggle'),
-        minHoldDuration: parseInt(document.getElementById('min-hold').value, 10),
-        triggerKey: document.getElementById('trigger-key').value,
-        globalShortcut: document.getElementById('global-shortcut').value,
-        orbStyle: document.getElementById('orb-style').value,
+        ...loadedPrefs,
         showInMenuBar: isToggleActive('menubar-toggle'),
-        cloudRewriteEnabled: isToggleActive('cloud-rewrite-toggle'),
-        rewriteIncludeScreenshot: isToggleActive('rewrite-screenshot-toggle'),
         rewriteApiKey: document.getElementById('rewrite-api-key').value,
         rewriteModel: document.getElementById('rewrite-model').value,
         rewriteApiUrl: document.getElementById('rewrite-api-url').value,
-        rewriteTimeoutMs: parseInt(document.getElementById('rewrite-timeout-ms').value, 10),
-        writingPurpose: document.getElementById('writing-purpose').value,
-        writingTone: document.getElementById('writing-tone').value,
-        writingFormat: document.getElementById('writing-format').value
+        modelReasoning: document.getElementById('model-reasoning').value,
+        visionModel: document.getElementById('vision-model').value
       };
     }
 
@@ -1204,6 +1160,7 @@ var(--background);
 
       try {
         const { invoke } = window.__TAURI__.core;
+        await saveVoicebot();
         const result = await invoke('save_preferences', {
           preferences: collectPreferences()
         });
@@ -1223,18 +1180,11 @@ var(--background);
 
     // Load current preferences on page load
     document.addEventListener('DOMContentLoaded', async () => {
-      setupOrbOptions();
-      setOrbStyleValue('fire-v8');
-
-      if (!window.__TAURI__) {
-        await loadAudioInputs();
-        return;
-      }
+      if (!window.__TAURI__) return;
 
       try {
         const { invoke } = window.__TAURI__.core;
         const prefs = await invoke('get_preferences');
-        await loadAudioInputs(prefs.audioInput);
         applyPreferences(prefs);
         await checkForUpdates();
       } catch (e) {

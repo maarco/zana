@@ -3,6 +3,9 @@
 //! Defines the interface for components that want to handle hook events.
 //! Handlers can intercept, modify, or stop event propagation.
 
+// async_trait marks the boxed futures it generates #[must_use]; newer clippy flags that twice.
+#![allow(clippy::double_must_use)]
+
 use super::event::{HookEvent, HookEventType};
 use async_trait::async_trait;
 use std::fmt::{self, Debug};

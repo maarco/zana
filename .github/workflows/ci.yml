@@ -80,8 +80,34 @@ jobs:
           bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
           ./actionlint -color
 
+      - name: Syntax-check inline scripts in src-ui pages
+        run: python3 scripts/check_inline_js.py
+
       - name: Check release scripts and Tauri config
         run: |
           for f in scripts/*.sh; do bash -n "$f"; done
           shellcheck --severity=error scripts/*.sh
           jq empty src-tauri/tauri.conf.json
+
+  voicebot-tests:
+    name: Voicebot unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The speech filter, wake word, transcript, scrubber and voice-print audio plumbing.
+      # The live e2e check (voicebot/tests/e2e_probe.py) needs a running Voicebot and stays manual.
+      - name: Install numpy and scipy for the voice-print tests
+        run: python -m pip install numpy==2.4.6 scipy==1.18.1
+
+      - name: Run Voicebot unit tests
+        run: python -m unittest discover -s voicebot/tests -p "test_*.py" -v

@@ -57,6 +57,7 @@ pub mod onboarding;
 pub mod plugins;
 pub mod state;
 pub mod stt;
+pub mod voicebot;
 
 // Re-exports for convenience
 pub use audio::{AudioCapture, AudioDevice, AudioMetrics, CapturedAudio};
