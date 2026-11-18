@@ -596,6 +596,7 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
         "listening.py",
         "jobs.py",
         "fillers.py",
+        "orb_state.py",
         "voiceprint.py",
         "system_prompt.default.md",
         "requirements.txt",
@@ -617,5 +618,28 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
     assert!(
         main_rs.contains("Zana_app::voicebot::stop()"),
         "Zana must stop Voicebot's processes when it exits"
+    );
+}
+
+#[test]
+fn voicebot_orb_keeps_the_five_state_frontend_contract_wired() {
+    let voicebot = include_str!("../../src-ui/voicebot.html");
+    let orb_state = include_str!("../../src-ui/voicebot-orb-state.js");
+    let aura = include_str!("../../src-ui/vendor/aura.js");
+
+    assert!(voicebot.contains("<script src=\"voicebot-orb-state.js\"></script>"));
+    assert!(voicebot.contains("'zana.orb.state'"));
+    assert!(voicebot.contains("'lk.agent.state'")); // Legacy agents still work.
+    assert!(voicebot.contains("ParticipantAttributesChanged"));
+    assert!(voicebot.contains("ParticipantDisconnected"));
+    for state in ["idle", "listening", "thinking", "talking", "working"] {
+        assert!(
+            orb_state.contains(&format!("{state}:")),
+            "missing {state} style"
+        );
+    }
+    assert!(
+        aura.contains("working: {"),
+        "working needs its own animation"
     );
 }

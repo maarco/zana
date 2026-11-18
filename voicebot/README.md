@@ -35,6 +35,7 @@ Everything per-user lives in the Voicebot folder,
 | `mcp.json` | MCP servers, Claude Desktop format |
 | `transcript.md` | Always-on transcript of everything heard and said |
 | `logs/` | `debug.jsonl` (the Debug window), plus each process's log |
+| `fillers/` | Cached thinking-sound audio and its manifest |
 | `venv/`, `voices/` | The Python environment and VibeVoice voices |
 
 Preferences > Model sets the chat model (API key, model, OpenAI-compatible API
@@ -65,6 +66,10 @@ OPENROUTER_API_KEY=... OPENROUTER_MODEL=...   # only used when Preferences > Mod
 - **One sentence at a time**: replies are cut to one sentence (a short opener
   like "I'm listening." is skipped). Numbers are spoken as words; paths, links,
   code and JSON are never read out.
+- **Thinking sounds**: short clips are cached in the selected voice and retain
+  their quiet endings. When enabled, clips made with older audio processing are
+  regenerated in the background when Voicebot starts; the old cache remains
+  available until the replacement is ready. Configure them in Preferences > Voicebot.
 - **Tools**: `see_screen`, `look_at_screen` (vision model), `type_up` (pastes at
   your cursor), `press_keys`, `stop_listening` (also said with "goodbye"),
   `search_conversations` (the transcript of every conversation), `run_terminal`,

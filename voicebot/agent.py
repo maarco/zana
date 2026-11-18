@@ -36,6 +36,7 @@ from livekit.plugins import openai, silero
 
 from fillers import DEFAULT_PHRASES, Fillers, chunks_with_gap
 from jobs import Jobs
+from orb_state import OrbState
 from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls,
                        repeats, split_say, topics, wants_redo, wants_voiceprint)
 from voiceprint import RATE, VoicePrint, VoiceTap, to_mono_16k
@@ -555,7 +556,11 @@ class Voicebot(Agent):
         keeps everything."""
         try:
             snapshot = self.chat_ctx.copy()
-            seen = {item.id for item in snapshot.items}
+            order = {item.id: index for index, item in enumerate(snapshot.items)}
+            seen = set(order)
+            calls = [item for item in snapshot.items if item.type == "function_call"]
+            completed = {item.call_id for item in snapshot.items if item.type == "function_call_output"}
+            pending = {call.call_id for call in calls} - completed
             before_items, before_chars = len(snapshot.items), context_chars(snapshot)
             if self.summary:
                 snapshot.items.insert(0, llm.ChatMessage(role="assistant", content=[
@@ -569,6 +574,19 @@ class Voicebot(Agent):
             self.summary = re.sub(r"</?chat_history_summary>", "", made[-1].text_content or "").strip()
             compacted.items = [i for i in compacted.items if i not in made]
             compacted.items.extend(item for item in self.chat_ctx.items if item.id not in seen)  # said meanwhile
+            # LiveKit splits on messages, so an intervening message can leave a tool call in the
+            # summarized head and its result in the tail (or a result can arrive meanwhile).
+            # Keep matching and still-pending calls; provider formatting otherwise drops results.
+            needed = pending | {item.call_id for item in compacted.items if item.type == "function_call_output"}
+            present = {item.call_id for item in compacted.items if item.type == "function_call"}
+            for call in calls:
+                if call.call_id in needed and call.call_id not in present:
+                    # Preserve snapshot order rather than sorting by timestamps: LiveKit can
+                    # put instructions first even when their timestamp is newer than the call.
+                    pos = next((i for i, item in enumerate(compacted.items)
+                                if order.get(item.id, len(order)) > order[call.id]), len(compacted.items))
+                    compacted.items.insert(pos, call)
+                    present.add(call.call_id)
             await self.update_instructions(self.full_instructions())
             await self.update_chat_ctx(compacted)
             after = context_chars(compacted)
@@ -946,6 +964,9 @@ server.setup_fnc = prewarm
 
 @server.rtc_session()
 async def entrypoint(ctx: agents.JobContext):
+    orb = OrbState(ctx.room.local_participant.set_attributes)
+    ctx.add_shutdown_callback(orb.close)
+
     def publish(kind, **data):
         payload = json.dumps({"kind": kind, "t": time.time(), **data}, default=str).encode()
         asyncio.create_task(ctx.room.local_participant.publish_data(payload, reliable=True, topic="events"))
@@ -976,6 +997,13 @@ async def entrypoint(ctx: agents.JobContext):
                                            tts_conn_options=APIConnectOptions(timeout=45)),
         turn_handling={"turn_detection": inference.TurnDetector(version="v1-mini"), "interruption": {"mode": "vad"}},
     )
+
+    @session.on("tool_execution_updated")
+    def _on_tool_execution(ev):
+        try:
+            orb.tool_execution_updated(ev)
+        except Exception:  # noqa: BLE001 - display updates must not interrupt tool execution
+            log.exception("Could not update orb tool state")
 
     @session.on("function_tools_executed")
     def _on_tools(ev):
@@ -1025,6 +1053,7 @@ async def entrypoint(ctx: agents.JobContext):
     @session.on("user_state_changed")
     def _on_user_state(ev):
         state = str(getattr(ev, "new_state", ""))
+        orb.user_changed(state)
         if state == "speaking":
             agent.tap.start()
         else:
@@ -1033,6 +1062,7 @@ async def entrypoint(ctx: agents.JobContext):
     @session.on("agent_state_changed")
     def _on_state(ev):
         state = str(getattr(ev, "new_state", ""))
+        orb.agent_changed(state)
         debug("state", state=state)
         if state == "listening":
             agent.maybe_compact()
@@ -1040,6 +1070,7 @@ async def entrypoint(ctx: agents.JobContext):
     @session.on("close")
     def _on_close(_ev):
         JOBS.stop_all()
+        asyncio.create_task(orb.close())
 
     async def on_text(sess: AgentSession, ev) -> None:
         """Typed messages pass the same wake-word gate and transcript as speech."""
@@ -1068,6 +1099,7 @@ async def entrypoint(ctx: agents.JobContext):
           terminal=agent.terminal, tools=sorted(t.id for t in agent.tools))
     await session.start(room=ctx.room, agent=agent, room_options=room_io.RoomOptions(
         text_input=room_io.TextInputOptions(text_input_cb=on_text)))
+    orb.start()
     if agent.asleep:
         publish("sleep", asleep=True, wake_word=agent.wake_word)
     asyncio.create_task(agent.refresh_fillers())

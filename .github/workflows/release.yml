@@ -33,12 +33,14 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.source.outputs.tag }}
+      tag_object: ${{ steps.source.outputs.tag_object }}
       sha: ${{ steps.source.outputs.sha }}
       prerelease: ${{ steps.source.outputs.prerelease }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -51,22 +53,31 @@ jobs:
           [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::Run this workflow from main (got $GITHUB_REF)"; exit 1; }
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]] || { echo "::error::Tag must look like v1.2.3: $TAG"; exit 1; }
           [ "$(git cat-file -t "refs/tags/$TAG" 2>/dev/null)" = tag ] || { echo "::error::$TAG is not an existing annotated tag"; exit 1; }
-          sha="$(git rev-parse "$TAG^{commit}")"
+          tag_object="$(git rev-parse "refs/tags/$TAG")"
+          sha="$(git rev-parse "refs/tags/$TAG^{commit}")" || { echo "::error::$TAG does not resolve to a commit"; exit 1; }
+          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main || { echo "::error::Dispatched commit is no longer on origin/main"; exit 1; }
+          git merge-base --is-ancestor "$sha" "$GITHUB_SHA" || { echo "::error::$TAG is not an ancestor of the dispatched main commit"; exit 1; }
+          remote_tag_object="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq 'select(.object.type == "tag") | .object.sha')" || { echo "::error::Could not read the remote tag $TAG"; exit 1; }
+          [ "$remote_tag_object" = "$tag_object" ] || { echo "::error::Remote tag $TAG changed since checkout"; exit 1; }
           want="${TAG#v}"
           cargo_version="$(git show "$sha:Cargo.toml" | sed -n 's/^version = "\(.*\)"/\1/p' | head -1)"
           tauri_version="$(git show "$sha:src-tauri/tauri.conf.json" | jq -r .version)"
           [ "$cargo_version" = "$want" ] || { echo "::error::Cargo.toml version $cargo_version != $want"; exit 1; }
           [ "$tauri_version" = "$want" ] || { echo "::error::tauri.conf.json version $tauri_version != $want"; exit 1; }
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          if response="$(gh api --include "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" 2>&1)"; then
             echo "::error::A GitHub release for $TAG already exists"; exit 1
+          elif [[ ! "$response" =~ ^HTTP/[^[:space:]]+[[:space:]]+404([[:space:]]|$) ]]; then
+            echo "::error::Could not check for an existing release: ${response%%$'\n'*}"; exit 1
           fi
           case "$TAG" in *alpha*|*beta*|*rc*) pre=true ;; *) pre=false ;; esac
-          { echo "tag=$TAG"; echo "sha=$sha"; echo "prerelease=$pre"; } >> "$GITHUB_OUTPUT"
+          { echo "tag=$TAG"; echo "tag_object=$tag_object"; echo "sha=$sha"; echo "prerelease=$pre"; } >> "$GITHUB_OUTPUT"
 
   verify:
     name: Verify release candidate
     needs: validate
     runs-on: macos-15-intel
+    env:
+      WHISPER_DONT_GENERATE_BINDINGS: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -79,8 +90,13 @@ jobs:
         with:
           components: clippy,rustfmt
 
+      - name: Configure macOS SDK for bindgen
+        run: echo "BINDGEN_EXTRA_CLANG_ARGS=--sysroot=$(xcrun --sdk macosx --show-sdk-path) -Wno-everything" >> "$GITHUB_ENV"
+
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
+        with:
+          key: whisper-bundled-bindings-v1
 
       - name: Check formatting
         run: cargo fmt --all -- --check
@@ -154,6 +170,7 @@ jobs:
       SIGNING: ${{ inputs.signing }}
       TAG: ${{ needs.validate.outputs.tag }}
       APP_PATH: target/universal-apple-darwin/release/bundle/macos/Zana.app
+      WHISPER_DONT_GENERATE_BINDINGS: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -166,8 +183,13 @@ jobs:
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
+      - name: Configure macOS SDK for bindgen
+        run: echo "BINDGEN_EXTRA_CLANG_ARGS=--sysroot=$(xcrun --sdk macosx --show-sdk-path) -Wno-everything" >> "$GITHUB_ENV"
+
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
+        with:
+          key: whisper-bundled-bindings-v1
 
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version "^2" --locked
@@ -344,9 +366,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.validate.outputs.tag }}
+          TAG_OBJECT: ${{ needs.validate.outputs.tag_object }}
           PRERELEASE: ${{ needs.validate.outputs.prerelease }}
           SIGNING: ${{ inputs.signing }}
         run: |
+          remote_tag_object="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq 'select(.object.type == "tag") | .object.sha')" || { echo "::error::Could not read the remote tag $TAG before publishing"; exit 1; }
+          [ -n "$TAG_OBJECT" ] && [ "$remote_tag_object" = "$TAG_OBJECT" ] || { echo "::error::Remote tag $TAG changed after validation; refusing to publish"; exit 1; }
           args=(--repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes --title "Zana $TAG")
           [ "$PRERELEASE" = true ] && args+=(--prerelease)
           if [ "$SIGNING" = unsigned ]; then

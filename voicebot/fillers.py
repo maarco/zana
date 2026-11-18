@@ -20,23 +20,29 @@ DEFAULT_PHRASES = [
     "Umm, let's see...", "Right, so...", "Oh, hmm...", "Alright...", "Let me think...", "Mm-hmm...",
 ]
 GAP_SECONDS = 0.5  # silence after a sound, so the reply does not run into it
+AUDIO_VERSION = 1  # increment when cached audio processing changes
 
 
 def trim_silence(pcm: bytes, rate: int, channels: int, floor_db: float = 35.0) -> bytes:
-    """Drop the quiet 20 ms frames at both ends (text-to-speech pads its clips)."""
+    """Trim the quiet lead-in and digital-silence padding, preserving the entire ending.
+
+    The end of a spoken sound can fall well below a relative loudness threshold;
+    only frames containing exact zeros are safe to remove from that end.
+    """
     samples = array.array("h", pcm)
+    if not samples or not any(samples):
+        return pcm
     step = max(1, rate // 50) * channels
     frames = [samples[i:i + step] for i in range(0, len(samples), step)]
-    if not frames:
-        return pcm
     level = [10 * math.log10(sum(s * s for s in f) / len(f) + 1e-9) for f in frames]
-    loud = [i for i, db in enumerate(level) if db > max(level) - floor_db]
-    if not loud:
+    threshold = max(level) - floor_db
+    start = next((i for i, db in enumerate(level) if db > threshold), None)
+    if start is None:
         return pcm
-    kept = array.array("h")
-    for f in frames[loud[0]:loud[-1] + 1]:
-        kept.extend(f)
-    return kept.tobytes()
+    end = len(frames)
+    while end > start and not any(frames[end - 1]):
+        end -= 1
+    return samples[start * step:end * step].tobytes()
 
 
 def chunks_with_gap(pcm: bytes, rate: int, channels: int, gap: float = GAP_SECONDS) -> list[bytes]:
@@ -63,17 +69,20 @@ class Fillers:
             return {}
 
     def stale(self, voice: str, phrases: list[str], days: float, now: float | None = None) -> bool:
-        """True when the sounds must be made (again): none yet, another voice or other lines,
-        a missing file, or older than `days`."""
+        """True when the sounds need regeneration: none yet, old audio processing, another
+        voice or lines, a missing file, or older than `days`."""
         m = self.manifest()
         now = time.time() if now is None else now
-        return (not m.get("clips") or m.get("voice") != voice or m.get("phrases") != phrases
+        return (not m.get("clips") or m.get("audio_version") != AUDIO_VERSION
+                or m.get("voice") != voice or m.get("phrases") != phrases
                 or now - m.get("made_at", 0) > days * 86400
                 or any(not os.path.isfile(os.path.join(self.folder, c["file"])) for c in m["clips"]))
 
     def save(self, voice: str, phrases: list[str], clips: list[tuple[str, bytes, int, int]]) -> None:
         """Write the clips (phrase, 16-bit PCM, sample rate, channels), then the manifest, then
         delete the previous set; a reader never sees a half-written set."""
+        if not clips:  # a failed refresh must leave the old cache available
+            return
         os.makedirs(self.folder, exist_ok=True)
         made_at = time.time()
         entries = []
@@ -87,7 +96,8 @@ class Fillers:
             entries.append({"file": name, "phrase": phrase})
         tmp = self.manifest_path + ".tmp"
         with open(tmp, "w") as f:
-            json.dump({"voice": voice, "phrases": phrases, "made_at": made_at, "clips": entries}, f)
+            json.dump({"audio_version": AUDIO_VERSION, "voice": voice, "phrases": phrases,
+                       "made_at": made_at, "clips": entries}, f)
         os.replace(tmp, self.manifest_path)
         keep = {e["file"] for e in entries} | {"manifest.json"}
         for name in os.listdir(self.folder):

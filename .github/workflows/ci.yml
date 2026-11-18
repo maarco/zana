@@ -2,6 +2,8 @@ name: CI
 
 on:
   pull_request:
+  merge_group:
+    types: [checks_requested]
   push:
     branches:
       - main
@@ -21,18 +23,27 @@ jobs:
   rust-quality:
     name: Rust quality gates
     runs-on: macos-latest
+    env:
+      WHISPER_DONT_GENERATE_BINDINGS: "1"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy,rustfmt
 
+      - name: Configure macOS SDK for bindgen
+        run: echo "BINDGEN_EXTRA_CLANG_ARGS=--sysroot=$(xcrun --sdk macosx --show-sdk-path) -Wno-everything" >> "$GITHUB_ENV"
+
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
+        with:
+          key: whisper-bundled-bindings-v1
 
       - name: Check formatting
         run: cargo fmt --all -- --check
@@ -53,6 +64,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -62,6 +75,36 @@ jobs:
 
       - name: Check Windows build
         run: cargo check -p Zana-app --locked
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Scan Git history with Gitleaks
+        run: |
+          archive="$RUNNER_TEMP/gitleaks.tar.gz"
+          curl -fsSL --retry 3 -o "$archive" https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          printf '%s  %s\n' '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb' "$archive" | sha256sum --check
+          tar -xzf "$archive" -C "$RUNNER_TEMP" gitleaks
+          # The repo config supplies allowlists only; explicitly load the default rules.
+          config="$RUNNER_TEMP/zana-gitleaks.toml"
+          printf '[extend]\nuseDefault = true\n\n' > "$config"
+          cat .gitleaks.toml >> "$config"
+          # The initial commit's deleted issue.txt contains the same macOS
+          # crash-reporter identifier twice, not an API key. Ignore only these
+          # immutable historical findings; all new findings still fail CI.
+          ignore="$RUNNER_TEMP/.gitleaksignore"
+          printf '%s\n' \
+            '74de91144a2ac5b0eed3d2eb92d5f1763f00bc24:issue.txt:generic-api-key:21' \
+            '74de91144a2ac5b0eed3d2eb92d5f1763f00bc24:issue.txt:generic-api-key:1018' > "$ignore"
+          "$RUNNER_TEMP/gitleaks" detect --source . --config "$config" --gitleaks-ignore-path "$ignore" --redact --no-banner --exit-code 1
 
   release-pipeline-check:
     name: Release pipeline lint
@@ -104,10 +147,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      # The speech filter, wake word, transcript, scrubber and voice-print audio plumbing.
       # The live e2e check (voicebot/tests/e2e_probe.py) needs a running Voicebot and stays manual.
-      - name: Install numpy and scipy for the voice-print tests
-        run: python -m pip install numpy==2.4.6 scipy==1.18.1
+      - name: Install Voicebot unit-test dependencies
+        run: |
+          python -m pip install numpy==2.4.6 scipy==1.18.1 python-dotenv==1.2.4 \
+            'livekit-agents[mcp]==1.8.8' livekit-plugins-openai==1.8.8 livekit-plugins-silero==1.8.8
 
       - name: Run Voicebot unit tests
         run: python -m unittest discover -s voicebot/tests -p "test_*.py" -v
