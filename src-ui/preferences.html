@@ -549,6 +549,21 @@ var(--background);
         <select id="voicebot-voice"></select>
       </div>
 
+      <div class="provider-field">
+        <div>
+          <div class="setting-label">Orb</div>
+          <div class="setting-desc">How the orb looks</div>
+        </div>
+        <select id="voicebot-orb-design">
+          <option value="original">Original</option>
+          <option value="strands">Strands</option>
+          <option value="halo">Halo</option>
+          <option value="fur">Fur</option>
+          <option value="nebula">Nebula</option>
+          <option value="liquid">Liquid</option>
+        </select>
+      </div>
+
       <div class="setting-row">
         <div class="setting-copy">
           <div class="setting-label">Thinking Sounds</div>
@@ -770,6 +785,7 @@ var(--background);
           voice.append(new Option(name ? (kind ? `${who} (${kind})` : who) : 'Default (Emma)', name));
         }
         voice.value = cfg.voice;
+        voicebotEl('voicebot-orb-design').value = cfg.orb_design || 'original';
         voicebotEl('voicebot-fillers-toggle').classList.toggle('active', cfg.fillers);
         voicebotEl('voicebot-filler-phrases').value = cfg.filler_phrases;
         voicebotEl('voicebot-filler-days').value = cfg.filler_days;
@@ -807,6 +823,7 @@ var(--background);
       await invoke('set_voicebot_context_command', { command: voicebotEl('voicebot-context-command').value });
       await invoke('set_voicebot_wake_word', { wakeWord: voicebotEl('voicebot-wake-word').value });
       await invoke('set_voicebot_voice', { voice: voicebotEl('voicebot-voice').value });
+      await invoke('set_voicebot_setting', { name: 'orb_design', value: voicebotEl('voicebot-orb-design').value });
       await invoke('set_voicebot_fillers', {
         on: voicebotEl('voicebot-fillers-toggle').classList.contains('active'),
         phrases: voicebotEl('voicebot-filler-phrases').value,
