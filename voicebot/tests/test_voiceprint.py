@@ -43,6 +43,29 @@ class AdaptTest(unittest.TestCase):
             self.assertTrue(np.allclose(np.load(os.path.join(home, "voiceprint.npy")), vp.reference))
 
 
+class WindowsTest(unittest.TestCase):
+    def test_always_fixed_three_second_windows(self):
+        from voiceprint import RATE, WINDOW, windows
+        for seconds, count in [(0.0, 1), (0.5, 1), (3.0, 1), (4.6, 2), (8.5, 3), (20.0, 3)]:
+            w = windows(np.ones(int(seconds * RATE), dtype=np.float32))
+            self.assertEqual(w.shape, (count, WINDOW), seconds)
+        audio = np.arange(int(4.6 * RATE), dtype=np.float32)
+        w = windows(audio)
+        self.assertEqual(w[0][0], 0)              # the first window starts at the start
+        self.assertEqual(w[-1][-1], audio[-1])    # the last one ends at the end
+
+
+class TapCapTest(unittest.TestCase):
+    def test_endless_speech_keeps_only_the_newest_seconds(self):
+        from voiceprint import RATE, VoiceTap
+        tap = VoiceTap(max_seconds=12)
+        tap.start()
+        for _ in range(60 * 100):  # a minute of 10 ms chunks without a pause
+            tap.push(np.zeros(160, dtype=np.float32))
+        self.assertLessEqual(tap.segment_len, 12 * RATE)
+        self.assertEqual(len(tap.take()), 12 * RATE)
+
+
 class VoiceTapTest(unittest.TestCase):
     def test_keeps_each_segment_with_preroll_and_clears_on_take(self):
         tap = VoiceTap(preroll_seconds=0.1)
