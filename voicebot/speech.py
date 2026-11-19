@@ -62,6 +62,12 @@ def speakable(text: str) -> str:
 TOOL_SAY = "\x1f"  # starts a tool call's spoken description; the one-sentence cap never cuts it
 
 
+def join_sentences(parts: list[str]) -> str:
+    """Join spoken descriptions so each ends in exactly one stop: a period is added only when none is there."""
+    parts = [p.strip() for p in parts if p.strip()]
+    return " ".join(p if p.endswith((".", "!", "?")) else p + "." for p in parts)
+
+
 async def one_sentence(text: AsyncIterable[str]) -> AsyncIterable[str]:
     """TTS text transform: speak one sentence per reply. A short opener like "I'm listening."
     or "Sure." is skipped when a real sentence follows, so the answer is what gets said.

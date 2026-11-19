@@ -40,7 +40,7 @@ from orb_state import OrbState
 from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls,
                        repeats, split_say, topics, wants_redo, wants_voiceprint)
 from voiceprint import RATE, VoicePrint, VoiceTap, to_mono_16k
-from speech import TOOL_SAY, one_sentence, speakable_stream
+from speech import TOOL_SAY, join_sentences, one_sentence, speakable_stream
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HOME = os.path.expanduser(os.getenv("VOICEBOT_HOME", os.path.join(HERE, ".home")))
@@ -534,7 +534,7 @@ class Voicebot(Agent):
                 choices = [p for p in self.filler_phrases if p != self.last_opener] or self.filler_phrases
                 self.last_opener = opener = random.choice(choices)
                 opener = (opener if opener.rstrip().endswith((".", ",", "!", "?")) else opener + "...") + " "
-        return " " + TOOL_SAY + opener + ". ".join(s.rstrip(".") for s in said) + ". "
+        return " " + TOOL_SAY + opener + join_sentences(said) + " "
 
     @function_tool()
     async def set_mood(self, context: RunContext, mood: str) -> str:
