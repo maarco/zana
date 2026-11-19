@@ -204,7 +204,7 @@ function glowSprite() {
 }
 
 // Fur: thousands of glowing hairs grown from a ball, swaying in gusts that roll across the coat
-// (after the fur coat in kollab's gem renderer): darker at the root, lighter at the tip.
+// darker at the root, lighter at the tip.
 function makeFur() {
   const scene = new THREE.Scene(); const m = motion(); const u = sharedUniforms();
   const cols = [0, 1, 2, 3].map(() => hex('#8E8E93')); let nextBoop = 0;

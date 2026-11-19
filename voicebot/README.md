@@ -76,7 +76,7 @@ OPENROUTER_API_KEY=... OPENROUTER_MODEL=...   # only used when Preferences > Mod
   `run_applescript` and `check_job`/`stop_job`/`list_jobs` (only with the Terminal
   Tool switch), and `list/add/remove/reload_mcp_servers` (adding and removing need
   the Terminal Tool switch). Every tool call carries a required "say" field the
-  model writes for that call ("Let me check your kollab folder"); it is spoken
+  model writes for that call ("Let me check your Downloads folder"); it is spoken
   while the tool runs and never reaches the tool.
 - **Terminal jobs**: a command still running after three seconds keeps going as
   a job; its output streams to `jobs/<n>.log`, Voicebot gets the job number and

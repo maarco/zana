@@ -57,7 +57,7 @@ MIN_VOICE_CHECK = int(0.5 * RATE)  # shorter turns are not checked against the v
 # Every tool, as the model sees it, gets this required field; its text is spoken while the tool runs.
 SAY_FIELD = {"type": "string",
              "description": "What you tell the user while this runs: a few words in your own words, specific to "
-                            "this call, like \"Let me check your kollab folder\". Vary it from call to call."}
+                            "this call, like \"Let me check your Downloads folder\". Vary it from call to call."}
 
 
 def with_say(tool):
@@ -1046,7 +1046,8 @@ server.setup_fnc = prewarm
 
 @server.rtc_session()
 async def entrypoint(ctx: agents.JobContext):
-    orb = OrbState(ctx.room.local_participant.set_attributes)
+    # The room connects in session.start below; look the participant up only when publishing.
+    orb = OrbState(lambda attributes: ctx.room.local_participant.set_attributes(attributes))
     ctx.add_shutdown_callback(orb.close)
 
     def publish(kind, **data):
