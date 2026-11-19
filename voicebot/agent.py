@@ -974,8 +974,8 @@ class Voicebot(Agent):
         output; longer ones keep running as a job whose output streams to a file, and you get the job number,
         process id and output file right away, then check_job and stop_job. You are told when a job finishes.
         Use fast, targeted commands: to find a file or folder by name use Spotlight (mdfind -name NAME | head;
-        it skips hidden folders like ~/.claude) or list the likely folder (ls ~/.claude/skills); never crawl
-        the whole home folder with find or grep -r.
+        it skips hidden folders, so list those directly) or list the likely folder; never crawl the whole
+        home folder with find or grep -r.
 
         Args:
             command: The zsh command to run.
