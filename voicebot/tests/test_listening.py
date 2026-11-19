@@ -145,9 +145,9 @@ class TextToolCallTest(unittest.TestCase):
 
 class MoreTextToolCallTest(unittest.TestCase):
     def test_reads_glm_hermes_and_function_formats(self):
-        glm = ('<tool_call>run_terminal<arg_key>command</arg_key><arg_value>grep -l kollab ~/x | head -5'
+        glm = ('<tool_call>run_terminal<arg_key>command</arg_key><arg_value>grep -l todo ~/x | head -5'
                '</arg_value></tool_call>')
-        self.assertEqual(parse_text_tool_calls(glm), [("run_terminal", '{"command": "grep -l kollab ~/x | head -5"}')])
+        self.assertEqual(parse_text_tool_calls(glm), [("run_terminal", '{"command": "grep -l todo ~/x | head -5"}')])
         self.assertEqual(parse_text_tool_calls('<tool_call><arg_key>x</arg_key></tool_call>'), [])
         hermes = '<tool_call>\n{"name": "check_job", "arguments": {"job": 1}}\n</tool_call>'
         self.assertEqual(parse_text_tool_calls(hermes), [("check_job", '{"job": 1}')])
@@ -170,8 +170,8 @@ class MoreTextToolCallTest(unittest.TestCase):
 
 class SplitSayTest(unittest.TestCase):
     def test_takes_the_spoken_field_out_of_the_arguments(self):
-        self.assertEqual(split_say('{"say": "Let me check your kollab folder", "command": "ls ~/dev/kollab"}'),
-                         ("Let me check your kollab folder", '{"command": "ls ~/dev/kollab"}'))
+        self.assertEqual(split_say('{"say": "Let me check your notes folder", "command": "ls ~/notes"}'),
+                         ("Let me check your notes folder", '{"command": "ls ~/notes"}'))
         self.assertEqual(split_say('{"job": 1}'), ("", '{"job": 1}'))
         self.assertEqual(split_say("not json"), ("", "not json"))
 
