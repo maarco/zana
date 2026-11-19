@@ -109,7 +109,8 @@ def _tts_generate(text, voice, streamer, stop=None):
     finally:
         streamer.end()
         if DEVICE == "mps":
-            torch.mps.empty_cache()
+            with tts_lock:  # never while another generation is using the GPU
+                torch.mps.empty_cache()
 
 app = FastAPI()
 
