@@ -299,11 +299,12 @@ export APPLE_TEAM_ID="TEAMID"
 ./scripts/cut-release.sh v0.1.1
 ```
 
-`cut-release.sh` checks you are on `main` matching `origin/main` and that
-`Cargo.toml` and `tauri.conf.json` carry the tag's version, pushes the
-annotated tag, then dispatches `.github/workflows/release.yml`. That workflow
-only runs from `main`, takes an existing tag as input, and refuses to replace
-an existing GitHub release. To re-run a release for a tag that already exists:
+Pushing an annotated `vX.Y.Z` tag on a `main` commit starts the release:
+`.github/workflows/release.yml` checks that `Cargo.toml` and `tauri.conf.json`
+carry the tag's version, builds, signs, notarizes and staples the universal
+DMG, and publishes the GitHub release; it refuses to replace an existing
+release. `cut-release.sh` runs the same checks locally first and pushes the
+tag. To re-run a release for a tag that already exists:
 
 ```bash
 gh workflow run release.yml --ref main -f tag=v0.1.2
@@ -321,7 +322,7 @@ Connect API key, preferred) or `APPLE_ID` and `APPLE_APP_PASSWORD`.
 
 ## Project Status
 
-**Current Version:** 0.1.3 (Alpha)
+**Current Version:** 0.1.4 (Alpha)
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes.
 

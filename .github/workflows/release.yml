@@ -1,9 +1,11 @@
 name: Release
 
-# Publish controller (same shape as kollab's publish.yml): dispatched from main,
-# an existing annotated tag selects the source. scripts/cut-release.sh pushes
-# the tag and dispatches this workflow.
+# Publish controller (same shape as kollab's publish.yml). Pushing an annotated
+# vX.Y.Z tag on a main commit starts it; it can also be run by hand from main
+# for an existing tag (a re-run). scripts/cut-release.sh checks and pushes the tag.
 on:
+  push:
+    tags: ["v*.*.*"]
   workflow_dispatch:
     inputs:
       tag:
@@ -47,16 +49,20 @@ jobs:
       - name: Resolve the tag and check version parity
         id: source
         env:
-          TAG: ${{ inputs.tag }}
+          TAG: ${{ inputs.tag || github.ref_name }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::Run this workflow from main (got $GITHUB_REF)"; exit 1; }
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            [ "$GITHUB_REF" = "refs/tags/$TAG" ] || { echo "::error::Unexpected ref $GITHUB_REF for tag $TAG"; exit 1; }
+          else
+            [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::Run this workflow from main (got $GITHUB_REF)"; exit 1; }
+          fi
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]] || { echo "::error::Tag must look like v1.2.3: $TAG"; exit 1; }
           [ "$(git cat-file -t "refs/tags/$TAG" 2>/dev/null)" = tag ] || { echo "::error::$TAG is not an existing annotated tag"; exit 1; }
           tag_object="$(git rev-parse "refs/tags/$TAG")"
           sha="$(git rev-parse "refs/tags/$TAG^{commit}")" || { echo "::error::$TAG does not resolve to a commit"; exit 1; }
-          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main || { echo "::error::Dispatched commit is no longer on origin/main"; exit 1; }
-          git merge-base --is-ancestor "$sha" "$GITHUB_SHA" || { echo "::error::$TAG is not an ancestor of the dispatched main commit"; exit 1; }
+          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main || { echo "::error::Commit $GITHUB_SHA is not on origin/main"; exit 1; }
+          git merge-base --is-ancestor "$sha" "$GITHUB_SHA" || { echo "::error::$TAG is not an ancestor of $GITHUB_SHA"; exit 1; }
           remote_tag_object="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq 'select(.object.type == "tag") | .object.sha')" || { echo "::error::Could not read the remote tag $TAG"; exit 1; }
           [ "$remote_tag_object" = "$tag_object" ] || { echo "::error::Remote tag $TAG changed since checkout"; exit 1; }
           want="${TAG#v}"
@@ -116,7 +122,7 @@ jobs:
   preflight:
     name: Check signing secrets and notary login
     needs: validate
-    if: inputs.signing == 'developer-id'
+    if: (inputs.signing || 'developer-id') == 'developer-id'
     runs-on: macos-15
     steps:
       - name: Check signing secrets before the long build
@@ -167,7 +173,7 @@ jobs:
     if: ${{ !failure() && !cancelled() }}
     runs-on: macos-15-intel
     env:
-      SIGNING: ${{ inputs.signing }}
+      SIGNING: ${{ inputs.signing || 'developer-id' }}
       TAG: ${{ needs.validate.outputs.tag }}
       APP_PATH: target/universal-apple-darwin/release/bundle/macos/Zana.app
       WHISPER_DONT_GENERATE_BINDINGS: "1"
@@ -222,7 +228,7 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Contents/Info.plist")" = "${TAG#v}"
 
       - name: Import Developer ID certificate
-        if: inputs.signing == 'developer-id'
+        if: (inputs.signing || 'developer-id') == 'developer-id'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -241,7 +247,7 @@ jobs:
           rm -f "$CERTIFICATE_PATH"
 
       - name: Sign universal app (Developer ID)
-        if: inputs.signing == 'developer-id'
+        if: (inputs.signing || 'developer-id') == 'developer-id'
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
@@ -263,7 +269,7 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
       - name: Seal universal app (ad-hoc, unsigned mode)
-        if: inputs.signing == 'unsigned'
+        if: (inputs.signing || 'developer-id') == 'unsigned'
         run: |
           # Unsigned arm64 binaries are killed at load; an ad-hoc seal lets the
           # app start after the user clears quarantine.
@@ -283,7 +289,7 @@ jobs:
           echo "DMG_PATH=$DMG_PATH" >> "$GITHUB_ENV"
 
       - name: Sign, notarize and staple DMG
-        if: inputs.signing == 'developer-id'
+        if: (inputs.signing || 'developer-id') == 'developer-id'
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -340,7 +346,7 @@ jobs:
           shasum -a 256 "$DMG_PATH" > "$DMG_PATH.sha256"
 
       - name: Clean up signing keychain
-        if: always() && inputs.signing == 'developer-id'
+        if: always() && (inputs.signing || 'developer-id') == 'developer-id'
         run: security delete-keychain "$RUNNER_TEMP/zana-signing.keychain-db" || true
 
       - name: Upload macOS artifact
@@ -368,7 +374,7 @@ jobs:
           TAG: ${{ needs.validate.outputs.tag }}
           TAG_OBJECT: ${{ needs.validate.outputs.tag_object }}
           PRERELEASE: ${{ needs.validate.outputs.prerelease }}
-          SIGNING: ${{ inputs.signing }}
+          SIGNING: ${{ inputs.signing || 'developer-id' }}
         run: |
           remote_tag_object="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq 'select(.object.type == "tag") | .object.sha')" || { echo "::error::Could not read the remote tag $TAG before publishing"; exit 1; }
           [ -n "$TAG_OBJECT" ] && [ "$remote_tag_object" = "$TAG_OBJECT" ] || { echo "::error::Remote tag $TAG changed after validation; refusing to publish"; exit 1; }

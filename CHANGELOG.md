@@ -6,6 +6,20 @@ This project follows SemVer once public releases begin.
 
 ## Unreleased
 
+## 0.1.4
+
+- Zana is now Voicebot, a hands-free voice agent with a floating orb, in place
+  of Fn dictation and Whisper. Speech stays local (Parakeet and VibeVoice); the
+  chat model is the one you set in Preferences > Model. It can see your screen,
+  type for you, press keys, run terminal commands and use MCP servers, and it
+  says what it is doing while it works.
+- Preferences: Voicebot first (wake word, voice, thinking sounds, voice print,
+  terminal tool, system prompt, MCP servers), then Model (provider, model,
+  reasoning, vision model) and General.
+- Fixed a crash when saving Preferences.
+- Fixed memory growth in long Voicebot sessions.
+- Releases start by pushing a version tag.
+
 ## 0.1.3
 
 - Restyled Preferences, Transcriptions and About: neutral gray surfaces with
