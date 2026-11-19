@@ -322,7 +322,7 @@ Connect API key, preferred) or `APPLE_ID` and `APPLE_APP_PASSWORD`.
 
 ## Project Status
 
-**Current Version:** 0.1.4 (Alpha)
+**Current Version:** 0.1.5 (Alpha)
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
