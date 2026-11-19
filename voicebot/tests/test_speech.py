@@ -5,7 +5,14 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from speech import TOOL_SAY, number_words, one_sentence, speakable, speakable_stream  # noqa: E402
+from speech import (  # noqa: E402
+    TOOL_SAY,
+    join_sentences,
+    number_words,
+    one_sentence,
+    speakable,
+    speakable_stream,
+)
 
 
 async def collect(transform, chunks):
@@ -55,6 +62,11 @@ class SpeakableTest(unittest.TestCase):
         self.assertEqual(" ".join(said.split()), "First real sentence right here. Peeking at job one")
         said = asyncio.run(collect(one_sentence, [" " + TOOL_SAY + "Checking the skills ", "folder real quick "]))
         self.assertEqual(" ".join(said.split()), "Checking the skills folder real quick")
+
+    def test_step_descriptions_end_in_exactly_one_stop(self):
+        self.assertEqual(join_sentences(["Checking your calendar!", "Reading the log", "Done.", "Ready? ", " "]),
+                         "Checking your calendar! Reading the log. Done. Ready?")
+        self.assertEqual(join_sentences(["Let me think..."]), "Let me think...")
 
     def test_one_sentence_per_reply(self):
         out = asyncio.run(collect(one_sentence, ["Checking your pull ", "requests now. Then I will ", "read the logs."]))
