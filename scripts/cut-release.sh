@@ -48,17 +48,16 @@ cargo metadata --locked --format-version 1 >/dev/null || {
 }
 
 if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-    echo "tag already on origin: $TAG (re-dispatching the release for it)"
+    # The tag is out already: re-run the release for it by hand.
+    echo "tag already on origin: $TAG (re-running the release for it)"
+    gh workflow run release.yml --ref main -f tag="$TAG" -f signing="${SIGNING:-developer-id}"
 else
     if git rev-parse "$TAG" >/dev/null 2>&1; then
         echo "error: local tag $TAG exists but is not on origin; push or delete it first"
         exit 1
     fi
     git tag -a "$TAG" -m "Release $TAG"
-    git push origin "$TAG"
+    git push origin "$TAG"  # pushing the tag starts the Release workflow
     echo "release tag pushed: $TAG"
 fi
-
-# The Release workflow is a dispatch-only controller that runs from main.
-gh workflow run release.yml --ref main -f tag="$TAG" -f signing="${SIGNING:-developer-id}"
-echo "release workflow dispatched; watch it with: gh run watch \$(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId')"
+echo "watch it with: gh run watch \$(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId')"
