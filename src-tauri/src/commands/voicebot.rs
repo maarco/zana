@@ -268,9 +268,7 @@ pub fn apply_setting(
             let minutes = whole_number(value, 1..=120, "Minutes")?;
             settings.voicebot_mic_check_minutes = minutes;
             change(
-                format!(
-                    "The orb pulses red after {minutes} minutes without sound from the microphone"
-                ),
+                format!("The orb pulses red after {minutes} minutes without a working microphone"),
                 false,
             )
         }
