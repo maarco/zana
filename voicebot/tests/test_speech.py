@@ -5,7 +5,14 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from speech import TOOL_SAY, join_sentences, number_words, one_sentence, speakable, speakable_stream  # noqa: E402
+from speech import (  # noqa: E402
+    TOOL_SAY,
+    join_sentences,
+    number_words,
+    one_sentence,
+    speakable,
+    speakable_stream,
+)
 
 
 async def collect(transform, chunks):
