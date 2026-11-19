@@ -279,6 +279,14 @@ pub fn apply_setting(
                 false,
             )
         }
+        "mood_minutes" => {
+            let minutes = whole_number(value, 1..=120, "Minutes")?;
+            settings.voicebot_mood_minutes = minutes;
+            change(
+                format!("The orb's mood changes at most every {minutes} minutes"),
+                false,
+            )
+        }
         "orb_design" => {
             let design = value.to_lowercase();
             if !ORB_DESIGNS.contains(&design.as_str()) {
@@ -299,7 +307,7 @@ pub fn apply_setting(
         _ => Err(format!(
             "{name} is not a setting Voicebot can change; it can change voice, model, reasoning, \
              vision_model, thinking_sounds, thinking_sound_lines, remake_sounds_days, \
-             mic_check_minutes, orb_design and terminal (off only)"
+             mic_check_minutes, orb_design, mood_minutes and terminal (off only)"
         )),
     }
 }
@@ -347,6 +355,7 @@ pub async fn voicebot_self_settings(
         "remake_sounds_days": s.voicebot_filler_days,
         "mic_check_minutes": s.voicebot_mic_check_minutes,
         "orb_design": s.voicebot_orb_design,
+        "mood_minutes": s.voicebot_mood_minutes,
         "orb_designs": ORB_DESIGNS,
         "terminal": s.voicebot_terminal,
         "voice_print": home.join("voiceprint.npy").is_file(),
@@ -561,6 +570,9 @@ mod tests {
         apply_setting(&mut s, "orb_design", "Fur").unwrap();
         assert_eq!(s.voicebot_orb_design, "fur");
         assert!(apply_setting(&mut s, "orb_design", "dots").is_err());
+        apply_setting(&mut s, "mood_minutes", "10").unwrap();
+        assert_eq!(s.voicebot_mood_minutes, 10);
+        assert!(apply_setting(&mut s, "mood_minutes", "0").is_err());
     }
 
     #[test]

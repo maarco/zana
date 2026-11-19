@@ -261,6 +261,7 @@ function makeFur() {
   const glow = glowSprite(); scene.add(glow);
   return {
     kind: 'three',
+    dispose() { freeScene(scene); },
     draw(dt, t, state, level) {
       if (state === 'thinking' && t > nextBoop) { m.boop.vel = 7; nextBoop = t + 2.6; }
       drive(m, state, level, dt); easeColors(cols, state, dt); feed(u, m, cols, t, state);
@@ -316,6 +317,7 @@ function makeNebula() {
   const glow = glowSprite(); scene.add(glow);
   return {
     kind: 'three',
+    dispose() { freeScene(scene); },
     draw(dt, t, state, level) {
       if (state === 'thinking' && t > nextBoop) { m.boop.vel = 7; nextBoop = t + 2.6; }
       drive(m, state, level, dt); easeColors(cols, state, dt); feed(u, m, cols, t, state);
@@ -372,6 +374,7 @@ function makeLiquid() {
   const drops = [0, 1, 2].map(() => { const d = new THREE.Mesh(geo, make()); scene.add(d); return d; });
   return {
     kind: 'three',
+    dispose() { freeScene(scene); },
     draw(dt, t, state, level) {
       if (state === 'thinking' && t > nextBoop) { m.boop.vel = 7; nextBoop = t + 2.6; }
       drive(m, state, level, dt); easeColors(cols, state, dt); feed(u, m, cols, t, state);
@@ -389,6 +392,16 @@ function makeLiquid() {
 }
 
 
+// Frees a 3D design's GPU buffers when another design replaces it.
+function freeScene(scene) {
+  scene.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
+  });
+}
+
+// Only the design on screen is loaded: each is built the first time it is shown, and the one it
+// replaces is freed, so switching moods never keeps every design in memory.
 function create({ canvas2d, canvas3d }) {
   ctxHolder.canvas = canvas2d;
   ctxHolder.ctx = canvas2d.getContext('2d');
@@ -408,6 +421,9 @@ function create({ canvas2d, canvas3d }) {
   return {
     names: Object.keys(makers),
     draw(name, dt, t, state, level) {
+      for (const other of Object.keys(made)) {
+        if (other !== name) { if (made[other].dispose) made[other].dispose(); delete made[other]; }
+      }
       const d = design(name);
       canvas2d.style.display = d && d.kind === '2d' ? 'block' : 'none';
       canvas3d.style.display = d && d.kind === 'three' ? 'block' : 'none';
