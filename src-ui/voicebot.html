@@ -219,33 +219,32 @@
       showState();
     }
 
-    // Mic check: no sound at all from the microphone (no track, or exact digital silence) for
-    // micCheckMinutes turns the orb into a pulsing red "No Microphone". A quiet room still has
-    // a little noise, so silence between sentences never trips it.
+    // Mic check: no working microphone track (none published, ended, or muted by the system, as when
+    // permission is missing) for micCheckMinutes turns the orb into a pulsing red "No Microphone".
+    // Silence never counts: noise-gated microphones (Voice Isolation) send exact zeros when quiet.
     let micCheckMinutes = 2;
     let lastMicSignal = Date.now();
     let micSilent = false;
     let micMeter = null;
-    function micLevel() {
+    function liveMicTrack() {
       const pub = room && room.localParticipant.getTrackPublication(LK.Track.Source.Microphone);
       const track = pub && pub.track && pub.track.mediaStreamTrack;
-      if (!track || track.readyState !== 'live') return 0;
-      if (!micMeter || micMeter.track !== track) {
-        try { micMeter && micMeter.ctx.close(); } catch (_) { /* already closed */ }
-        const ctx = new AudioContext();
-        const analyser = ctx.createAnalyser();
-        analyser.fftSize = 1024;
-        ctx.createMediaStreamSource(new MediaStream([track])).connect(analyser);
-        micMeter = { ctx, analyser, track, buf: new Float32Array(analyser.fftSize) };
-      }
-      if (micMeter.ctx.state !== 'running') { micMeter.ctx.resume().catch(() => {}); return 1; } // can't measure: assume fine
-      micMeter.analyser.getFloatTimeDomainData(micMeter.buf);
-      let peak = 0;
-      for (const v of micMeter.buf) peak = Math.max(peak, Math.abs(v));
-      return peak;
+      return track && track.readyState === 'live' && !track.muted ? track : null;
+    }
+    // A level meter on the live track, for showing your voice.
+    function meterFor(track) {
+      if (micMeter && micMeter.track === track) return;
+      try { micMeter && micMeter.ctx.close(); } catch (_) { /* already closed */ }
+      const ctx = new AudioContext();
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 1024;
+      ctx.createMediaStreamSource(new MediaStream([track])).connect(analyser);
+      micMeter = { ctx, analyser, track, buf: new Float32Array(analyser.fftSize) };
     }
     setInterval(() => {
-      if (!room || muted || dictating || micLevel() > 0) lastMicSignal = Date.now();
+      const track = liveMicTrack();
+      if (track) meterFor(track);
+      if (!room || muted || dictating || track) lastMicSignal = Date.now();
       const silent = Date.now() - lastMicSignal > micCheckMinutes * 60000;
       if (silent !== micSilent) { micSilent = silent; showState(); }
     }, 1000);
@@ -264,7 +263,7 @@
     function showState() {
       if (preview) return setStatus(Orb.styleForState(visualState()).label);
       if (dictating) return setStatus('Paused', 'Zana is dictating');
-      if (visualState() === 'nomic') return setStatus('No Microphone', `No sound from the microphone for ${micCheckMinutes} minutes: check System Settings, Privacy and Security, Microphone, for Zana`);
+      if (visualState() === 'nomic') return setStatus('No Microphone', `No working microphone for ${micCheckMinutes} minutes: check System Settings, Privacy and Security, Microphone, for Zana`);
       if (pendingRestart && agentState === 'listening') { pendingRestart = false; setTimeout(newConversation, 800); }
       if (muted) return setStatus('Muted', 'Click the orb to unmute');
       if (asleep) return setStatus('Sleeping', wakeWord ? `Say "${wakeWord}" to wake it` : '');

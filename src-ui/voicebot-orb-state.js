@@ -11,7 +11,7 @@
     talking:    { label: 'Talking',   color: '#0A84FF', auraState: 'speaking' },
     working:    { label: 'Working',   color: '#FF9F0A', auraState: 'working' },
     voiceprint: { label: 'Voice Print', color: '#FF3B30', auraState: 'listening' },
-    // UI-only overlay: no sound at all from the microphone for the mic-check minutes (pulses)
+    // UI-only overlay: no working microphone for the mic-check minutes (pulses)
     nomic:      { label: 'No Microphone', color: '#FF3B30', auraState: 'idle', pulse: true },
   });
 
