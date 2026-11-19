@@ -209,6 +209,8 @@ pub struct Settings {
     pub voicebot_filler_phrases: Vec<String>,
     /// Days before the thinking sounds are made again
     pub voicebot_filler_days: u32,
+    /// Minutes without any sound from the microphone before the orb pulses red
+    pub voicebot_mic_check_minutes: u32,
 }
 
 impl Settings {
@@ -293,6 +295,7 @@ impl Settings {
             voicebot_fillers: true,
             voicebot_filler_phrases: Vec::new(),
             voicebot_filler_days: 7,
+            voicebot_mic_check_minutes: 2,
         }
     }
 }

@@ -605,6 +605,8 @@ fn main() {
             commands::set_voicebot_wake_word,
             commands::set_voicebot_voice,
             commands::set_voicebot_fillers,
+            commands::set_voicebot_setting,
+            commands::voicebot_self_settings,
             commands::voicebot_screenshot,
             commands::save_voicebot_prompt,
             commands::save_voicebot_mcp,

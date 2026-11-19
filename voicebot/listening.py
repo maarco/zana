@@ -191,6 +191,8 @@ TOPICS = {
                    "last time", "yesterday", "compact", "logs"),
     "prompt": ("system prompt", "your prompt", "the prompt", "your instructions", "instructions", "prompt file"),
     "name": ("your name", "call you", "rename", "who are you", "wake word"),
+    "settings": ("setting", "settings", "your voice", "different voice", "change your voice", "which model",
+                 "your model", "reasoning", "thinking sounds", "mic check", "microphone"),
 }
 
 

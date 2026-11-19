@@ -558,6 +558,8 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
         "commands::get_voicebot_config",
         "commands::set_voicebot_voice",
         "commands::set_voicebot_fillers",
+        "commands::set_voicebot_setting",
+        "commands::voicebot_self_settings",
         "commands::set_voicebot_terminal",
         "commands::save_voicebot_prompt",
         "commands::save_voicebot_mcp",

@@ -336,6 +336,13 @@ class Voicebot(Agent):
                        "the path."),
             "name": (f"Your name is {self.name}; set_name changes it. Your wake word is "
                      f"{repr(self.wake_word) if self.wake_word else 'not set'}; set_wake_word changes it."),
+            "settings": ("my_settings tells you every setting of yours (voice and the voices available, chat model, "
+                         "reasoning, vision model, thinking sounds, mic check, terminal tool, voice print); "
+                         "change_setting changes voice, model, reasoning, vision_model, thinking_sounds, "
+                         "thinking_sound_lines, remake_sounds_days, mic_check_minutes, and terminal (off only). "
+                         "A model, reasoning or vision change starts a fresh conversation after your reply; say so. "
+                         "You cannot change the API key or URL or turn the terminal on: the user does that in "
+                         "Zana's Preferences."),
         }
         notes = [guides[t] for t in topics(heard) if t in guides]
         if notes:
@@ -838,6 +845,50 @@ class Voicebot(Agent):
         debug("settings", name=self.name)
         await self.reload_instructions()
         return f"Your name is now {self.name}." + SAY
+
+    @function_tool()
+    async def my_settings(self, context: RunContext) -> str:
+        """Your own settings, as the user sees them in Zana's Preferences: name, wake word, voice and the
+        voices available, chat model, reasoning, vision model, thinking sounds, mic check minutes, terminal
+        tool and voice print. Use it when asked about yourself or before changing a setting."""
+        raw = await zana("zana.settings")
+        try:
+            settings = json.loads(raw)
+        except ValueError:
+            return raw + SAY
+        return "\n".join(f"{k}: {v}" for k, v in settings.items()) + SAY
+
+    @function_tool()
+    async def change_setting(self, context: RunContext, setting: str, value: str) -> str:
+        """Change one of your own settings; it is saved in Zana's Preferences. Use set_name and
+        set_wake_word for your name and wake word.
+
+        Args:
+            setting: One of voice, model, reasoning, vision_model, thinking_sounds, thinking_sound_lines,
+                remake_sounds_days, mic_check_minutes, terminal.
+            value: A voice from my_settings (a first name like "Emma" works); a model id; reasoning default,
+                off, low, medium or high; on or off; sound lines separated by "|" ("default" for the built-in
+                ones); a whole number of days or minutes; terminal only "off".
+        """
+        result = await zana("zana.set_setting", json.dumps({"name": setting, "value": value}))
+        debug("settings", setting=setting, value=value, result=result)
+        if result.startswith(("Not changed", "Zana didn't answer", "Zana isn't")):
+            return result + SAY
+        if setting == "voice":  # speak in it from the next sentence, without a new conversation
+            voice = re.search(r"Voice set to (\S+)", result)
+            if voice:
+                self.session.tts.update_options(voice=voice.group(1))
+        elif setting == "thinking_sounds":
+            self.fillers_on = value.strip().lower() in ("on", "true", "yes", "1", "enable", "enabled")
+        elif setting == "thinking_sound_lines":
+            lines = [p.strip() for p in re.split(r"[|\n]", value) if p.strip() and p.strip().lower() != "default"]
+            self.filler_phrases = lines or DEFAULT_PHRASES
+            asyncio.create_task(self.refresh_fillers())
+        elif setting == "remake_sounds_days":
+            self.filler_days = float(value)
+        elif setting == "terminal":
+            self.terminal = False
+        return result + SAY
 
     @function_tool()
     async def open_system_prompt(self, context: RunContext) -> str:

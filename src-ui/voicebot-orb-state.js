@@ -11,14 +11,18 @@
     talking:    { label: 'Talking',   color: '#0A84FF', auraState: 'speaking' },
     working:    { label: 'Working',   color: '#FF9F0A', auraState: 'working' },
     voiceprint: { label: 'Voice Print', color: '#FF3B30', auraState: 'listening' },
+    // UI-only overlay: no working microphone for the mic-check minutes (pulses)
+    nomic:      { label: 'No Microphone', color: '#FF3B30', auraState: 'idle', pulse: true },
   });
 
   const hasStyle = (state) => Object.prototype.hasOwnProperty.call(styles, state);
 
   function resolveState({ connected, muted, dictating, asleep, voicePrint, preview,
-    agentOrbState, agentState, userSpeaking }) {
+    agentOrbState, agentState, userSpeaking, micSilent }) {
     const previewState = preview === 'speaking' ? 'talking' : preview;
     if (hasStyle(previewState)) return previewState;
+    // A dead microphone shows even while asleep (the wake word needs it); not when muted on purpose.
+    if (micSilent && connected && !muted && !dictating) return 'nomic';
     if (!connected || muted || dictating || asleep) return 'idle';
     if (voicePrint) return 'voiceprint';
     if (agentOrbState !== 'voiceprint' && hasStyle(agentOrbState)) return agentOrbState;
