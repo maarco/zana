@@ -1,6 +1,6 @@
 name: Release
 
-# Publish controller (same shape as kollab's publish.yml). Pushing an annotated
+# Release controller. Pushing an annotated
 # vX.Y.Z tag on a main commit starts it; it can also be run by hand from main
 # for an existing tag (a re-run). scripts/cut-release.sh checks and pushes the tag.
 on:
