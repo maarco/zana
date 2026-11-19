@@ -339,7 +339,8 @@ class Voicebot(Agent):
             "settings": ("my_settings tells you every setting of yours (voice and the voices available, chat model, "
                          "reasoning, vision model, thinking sounds, mic check, terminal tool, voice print); "
                          "change_setting changes voice, model, reasoning, vision_model, thinking_sounds, "
-                         "thinking_sound_lines, remake_sounds_days, mic_check_minutes, and terminal (off only). "
+                         "thinking_sound_lines, remake_sounds_days, mic_check_minutes, orb_design (original, "
+                         "strands, halo, fur, nebula, liquid), and terminal (off only). "
                          "A model, reasoning or vision change starts a fresh conversation after your reply; say so. "
                          "You cannot change the API key or URL or turn the terminal on: the user does that in "
                          "Zana's Preferences."),
@@ -865,10 +866,11 @@ class Voicebot(Agent):
 
         Args:
             setting: One of voice, model, reasoning, vision_model, thinking_sounds, thinking_sound_lines,
-                remake_sounds_days, mic_check_minutes, terminal.
+                remake_sounds_days, mic_check_minutes, orb_design, terminal.
             value: A voice from my_settings (a first name like "Emma" works); a model id; reasoning default,
                 off, low, medium or high; on or off; sound lines separated by "|" ("default" for the built-in
-                ones); a whole number of days or minutes; terminal only "off".
+                ones); a whole number of days or minutes; orb_design original, strands, halo, fur, nebula or
+                liquid; terminal only "off".
         """
         result = await zana("zana.set_setting", json.dumps({"name": setting, "value": value}))
         debug("settings", setting=setting, value=value, result=result)

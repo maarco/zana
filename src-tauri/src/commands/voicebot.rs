@@ -18,6 +18,7 @@ pub struct VoicebotConfig {
     pub filler_phrases: String,
     pub filler_days: u32,
     pub mic_check_minutes: u32,
+    pub orb_design: String,
     pub voiceprint: bool,
     pub prompt: String,
     pub mcp: String,
@@ -47,6 +48,7 @@ pub async fn get_voicebot_config(
         filler_phrases: settings.voicebot_filler_phrases.join("\n"),
         filler_days: settings.voicebot_filler_days,
         mic_check_minutes: settings.voicebot_mic_check_minutes,
+        orb_design: settings.voicebot_orb_design.clone(),
         voiceprint: home.join("voiceprint.npy").is_file(),
         prompt,
         mcp: std::fs::read_to_string(home.join("mcp.json")).unwrap_or_else(|_| MCP_EXAMPLE.into()),
@@ -130,6 +132,9 @@ pub async fn set_voicebot_fillers(
     state.save_settings().await.map_err(|e| e.to_string())?;
     voicebot::write_agent_config(&settings).map_err(|e| e.to_string())
 }
+
+/// The orb's looks: the original Aura and the designs in src-ui/orb-designs.js.
+pub const ORB_DESIGNS: [&str; 6] = ["original", "strands", "halo", "fur", "nebula", "liquid"];
 
 /// What changing one setting did, for whoever asked to say.
 #[derive(Debug, Serialize, PartialEq)]
@@ -274,6 +279,14 @@ pub fn apply_setting(
                 false,
             )
         }
+        "orb_design" => {
+            let design = value.to_lowercase();
+            if !ORB_DESIGNS.contains(&design.as_str()) {
+                return Err(format!("The orb designs are {}", ORB_DESIGNS.join(", ")));
+            }
+            settings.voicebot_orb_design = design.clone();
+            change(format!("Orb design set to {design}"), false)
+        }
         "terminal" => {
             if on_off(value)? {
                 return Err(
@@ -286,7 +299,7 @@ pub fn apply_setting(
         _ => Err(format!(
             "{name} is not a setting Voicebot can change; it can change voice, model, reasoning, \
              vision_model, thinking_sounds, thinking_sound_lines, remake_sounds_days, \
-             mic_check_minutes and terminal (off only)"
+             mic_check_minutes, orb_design and terminal (off only)"
         )),
     }
 }
@@ -333,6 +346,8 @@ pub async fn voicebot_self_settings(
         "thinking_sound_lines": if s.voicebot_filler_phrases.is_empty() { "built-in".to_string() } else { s.voicebot_filler_phrases.join(" | ") },
         "remake_sounds_days": s.voicebot_filler_days,
         "mic_check_minutes": s.voicebot_mic_check_minutes,
+        "orb_design": s.voicebot_orb_design,
+        "orb_designs": ORB_DESIGNS,
         "terminal": s.voicebot_terminal,
         "voice_print": home.join("voiceprint.npy").is_file(),
     }))
@@ -543,6 +558,9 @@ mod tests {
         assert!(apply_setting(&mut s, "mic_check_minutes", "0").is_err());
         apply_setting(&mut s, "mic_check_minutes", "5").unwrap();
         assert_eq!(s.voicebot_mic_check_minutes, 5);
+        apply_setting(&mut s, "orb_design", "Fur").unwrap();
+        assert_eq!(s.voicebot_orb_design, "fur");
+        assert!(apply_setting(&mut s, "orb_design", "dots").is_err());
     }
 
     #[test]

@@ -211,6 +211,8 @@ pub struct Settings {
     pub voicebot_filler_days: u32,
     /// Minutes without any sound from the microphone before the orb pulses red
     pub voicebot_mic_check_minutes: u32,
+    /// The orb's look: original (Aura), strands, halo, fur, nebula or liquid
+    pub voicebot_orb_design: String,
 }
 
 impl Settings {
@@ -296,6 +298,7 @@ impl Settings {
             voicebot_filler_phrases: Vec::new(),
             voicebot_filler_days: 7,
             voicebot_mic_check_minutes: 2,
+            voicebot_orb_design: "original".to_string(),
         }
     }
 }
