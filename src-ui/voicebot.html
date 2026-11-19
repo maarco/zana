@@ -12,6 +12,8 @@
     }
     #orb { width: 200px; height: 200px; cursor: pointer; transition: transform .45s ease; }
     body.asleep #orb { transform: scale(.5); }
+    body.nomic #orb { animation: nomic-pulse 1.4s ease-in-out infinite; }
+    @keyframes nomic-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
   </style>
 </head>
 <body>
@@ -166,6 +168,19 @@
           previewTimer = setTimeout(() => { preview = null; showState(); }, 5000);
           return `previewing ${payload}`;
         });
+        // Voicebot reading and changing its own settings (the same rules as Preferences).
+        activeRoom.registerRpcMethod('zana.settings', async () => JSON.stringify(await invoke('voicebot_self_settings')));
+        activeRoom.registerRpcMethod('zana.set_setting', async ({ payload }) => {
+          const { name, value } = JSON.parse(payload);
+          try {
+            const change = await invoke('set_voicebot_setting', { name, value: String(value) });
+            if (name === 'mic_check_minutes') micCheckMinutes = Number(value) || micCheckMinutes;
+            if (change.restart) pendingRestart = true; // after this reply, so the confirmation is heard
+            return change.message;
+          } catch (e) {
+            return `Not changed: ${e}`;
+          }
+        });
         activeRoom.registerRpcMethod('zana.set_wake_word', async ({ payload }) => {
           await invoke('set_voicebot_wake_word', { wakeWord: payload });
           return payload ? `wake word set to ${payload}` : 'wake word removed';
@@ -204,19 +219,53 @@
       showState();
     }
 
+    // Mic check: no sound at all from the microphone (no track, or exact digital silence) for
+    // micCheckMinutes turns the orb into a pulsing red "No Microphone". A quiet room still has
+    // a little noise, so silence between sentences never trips it.
+    let micCheckMinutes = 2;
+    let lastMicSignal = Date.now();
+    let micSilent = false;
+    let micMeter = null;
+    function micLevel() {
+      const pub = room && room.localParticipant.getTrackPublication(LK.Track.Source.Microphone);
+      const track = pub && pub.track && pub.track.mediaStreamTrack;
+      if (!track || track.readyState !== 'live') return 0;
+      if (!micMeter || micMeter.track !== track) {
+        try { micMeter && micMeter.ctx.close(); } catch (_) { /* already closed */ }
+        const ctx = new AudioContext();
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 1024;
+        ctx.createMediaStreamSource(new MediaStream([track])).connect(analyser);
+        micMeter = { ctx, analyser, track, buf: new Float32Array(analyser.fftSize) };
+      }
+      if (micMeter.ctx.state !== 'running') { micMeter.ctx.resume().catch(() => {}); return 1; } // can't measure: assume fine
+      micMeter.analyser.getFloatTimeDomainData(micMeter.buf);
+      let peak = 0;
+      for (const v of micMeter.buf) peak = Math.max(peak, Math.abs(v));
+      return peak;
+    }
+    setInterval(() => {
+      if (!room || muted || dictating || micLevel() > 0) lastMicSignal = Date.now();
+      const silent = Date.now() - lastMicSignal > micCheckMinutes * 60000;
+      if (silent !== micSilent) { micSilent = silent; showState(); }
+    }, 1000);
+    invoke('get_voicebot_config').then((cfg) => { micCheckMinutes = cfg.mic_check_minutes || micCheckMinutes; }).catch(() => {});
+
     // Zana calls this while its own dictation records, so the agent ignores it.
     window.zanaDictation = (active) => { dictating = active; applyMic(); };
 
     function visualState() {
       return Orb.resolveState({
         connected: !!room, muted, dictating, asleep, voicePrint, preview, agentOrbState, agentState,
-        userSpeaking: !!(room && room.localParticipant && room.localParticipant.isSpeaking),
+        userSpeaking: !!(room && room.localParticipant && room.localParticipant.isSpeaking), micSilent,
       });
     }
 
     function showState() {
       if (preview) return setStatus(Orb.styleForState(visualState()).label);
       if (dictating) return setStatus('Paused', 'Zana is dictating');
+      if (visualState() === 'nomic') return setStatus('No Microphone', `No sound from the microphone for ${micCheckMinutes} minutes: check System Settings, Privacy and Security, Microphone, for Zana`);
+      if (pendingRestart && agentState === 'listening') { pendingRestart = false; setTimeout(newConversation, 800); }
       if (muted) return setStatus('Muted', 'Click the orb to unmute');
       if (asleep) return setStatus('Sleeping', wakeWord ? `Say "${wakeWord}" to wake it` : '');
       if (voicePrint) return setStatus('Voice Print', `Keep talking: ${Math.min(voicePrint.seconds, voicePrint.needed).toFixed(0)} of ${voicePrint.needed} seconds`);
@@ -226,6 +275,7 @@
       setStatus(Orb.styleForState(visualState()).label);
     }
 
+    let pendingRestart = false; // Voicebot changed a setting that applies in a fresh conversation
     let restarting = false; // a model and a voice change can both ask for a new conversation at once
     async function newConversation() {
       if (restarting) return;
@@ -286,9 +336,11 @@
     }
     function auraTick() {
       if (aura) {
-        const sleeping = asleep && !preview;
+        const state = visualState();
+        const sleeping = asleep && !preview && state !== 'nomic';
         document.body.classList.toggle('asleep', sleeping);
-        const style = Orb.styleForState(visualState());
+        document.body.classList.toggle('nomic', state === 'nomic');
+        const style = Orb.styleForState(state);
         aura.setState(style.auraState);
         aura.setColor(sleeping ? ASLEEP_COLOR : style.color);
         let voice = 0;

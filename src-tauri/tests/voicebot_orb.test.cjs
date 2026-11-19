@@ -51,6 +51,16 @@ test('privacy and preview overlays override the retained state without mutating 
   assert.equal(orb.styleForState('voiceprint').color, '#FF3B30');
 });
 
+test('a silent microphone pulses red, even asleep, but not when muted on purpose', () => {
+  const active = { connected: true, agentOrbState: 'listening', micSilent: true };
+  assert.equal(orb.resolveState(active), 'nomic');
+  assert.equal(orb.resolveState({ ...active, asleep: true }), 'nomic');
+  assert.equal(orb.resolveState({ ...active, muted: true }), 'idle');
+  assert.equal(orb.resolveState({ ...active, connected: false }), 'idle');
+  assert.equal(orb.resolveState({ ...active, micSilent: false }), 'listening');
+  assert.equal(orb.styleForState('nomic').pulse, true);
+});
+
 test('legacy or invalid snapshots fall back safely to LiveKit agent and local speech state', () => {
   const connected = { connected: true };
   assert.equal(orb.resolveState({ ...connected, agentState: 'speaking' }), 'talking');
@@ -185,6 +195,7 @@ function makeUi(agent, options = {}) {
       return id;
     },
     clearTimeout: (id) => timers.delete(id),
+    setInterval: () => 0, // the mic check's once-a-second meter; its logic is covered by resolveState
     TextDecoder,
     console,
   };
