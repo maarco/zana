@@ -534,6 +534,7 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
     let supervisor = read_repo_file("src-tauri/src/voicebot.rs");
 
     for id in [
+        "voicebot-orb-design",
         "voicebot-fillers-toggle",
         "voicebot-filler-phrases",
         "voicebot-filler-days",
@@ -573,6 +574,11 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
     ] {
         assert!(main_rs.contains(command), "main.rs must register {command}");
     }
+    assert!(
+        orb.contains("orb-designs.js")
+            && read_repo_file("src-ui/orb-designs.js").contains("window.ZanaOrbDesigns"),
+        "the orb must load its designs"
+    );
     for rpc in [
         "zana.paste",
         "zana.screen",

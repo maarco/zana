@@ -80,6 +80,8 @@ def with_say(tool):
     return llm.function_tool(shown_only, raw_schema=schema)
 
 
+# The orb designs as moods Voicebot can show (set_mood); the user's own pick goes through change_setting.
+MOODS = {"calm": "original", "focused": "strands", "warm": "halo", "playful": "fur", "dreamy": "nebula", "cool": "liquid"}
 STEP_GAP = 1.0  # seconds of quiet before a follow-up tool step speaks, so steps don't fire back to back
 SHORT_TURN = 2.0  # seconds of actual speech; short phrases give noisier voice prints, so they get a lower cutoff
 ADAPT_SCORE = 0.55  # confident matches this long or longer refine the saved print
@@ -267,6 +269,8 @@ class Voicebot(Agent):
         self.filler_phrases = [p.strip() for p in fillers.get("phrases") or [] if p.strip()] or DEFAULT_PHRASES
         self.filler_days = float(fillers.get("days") or 7)
         self.last_opener = ""
+        self.mood_minutes = float(config.get("mood_minutes") or 3)
+        self.mood_at = 0.0  # when the orb's mood last changed
         self.compact_chars = int(config.get("compact_chars") or COMPACT_CHARS)
         self.compact_at = self.compact_chars
         self.compacting = False
@@ -339,7 +343,9 @@ class Voicebot(Agent):
             "settings": ("my_settings tells you every setting of yours (voice and the voices available, chat model, "
                          "reasoning, vision model, thinking sounds, mic check, terminal tool, voice print); "
                          "change_setting changes voice, model, reasoning, vision_model, thinking_sounds, "
-                         "thinking_sound_lines, remake_sounds_days, mic_check_minutes, and terminal (off only). "
+                         "thinking_sound_lines, remake_sounds_days, mic_check_minutes, orb_design (original, "
+                         "strands, halo, fur, nebula, liquid), mood_minutes, and terminal (off only). set_mood shows "
+                         "your mood with the orb (calm, focused, warm, playful, dreamy, cool), at most every few minutes. "
                          "A model, reasoning or vision change starts a fresh conversation after your reply; say so. "
                          "You cannot change the API key or URL or turn the terminal on: the user does that in "
                          "Zana's Preferences."),
@@ -529,6 +535,28 @@ class Voicebot(Agent):
                 self.last_opener = opener = random.choice(choices)
                 opener = (opener if opener.rstrip().endswith((".", ",", "!", "?")) else opener + "...") + " "
         return " " + TOOL_SAY + opener + ". ".join(s.rstrip(".") for s in said) + ". "
+
+    @function_tool()
+    async def set_mood(self, context: RunContext, mood: str) -> str:
+        """Show how you feel through the orb's look: calm (the original orb), focused (strands), warm (halo),
+        playful (fur), dreamy (nebula) or cool (liquid). Change it when the conversation's tone shifts, not
+        every turn; it changes at most once every few minutes. Don't use it when the user picked a design or
+        asked you to keep one.
+
+        Args:
+            mood: calm, focused, warm, playful, dreamy or cool.
+        """
+        design = MOODS.get(mood.strip().lower())
+        if design is None:
+            return f"Moods are {', '.join(MOODS)}." + SAY
+        wait = self.mood_at + self.mood_minutes * 60 - time.time()
+        if wait > 0:
+            return f"The mood stays for about {wait / 60:.0f} more minutes; the orb keeps its look." + SAY
+        result = await zana("zana.set_setting", json.dumps({"name": "orb_design", "value": design}))
+        if result.startswith("Orb design set"):
+            self.mood_at = time.time()
+            debug("mood", mood=mood, design=design)
+        return result + SAY
 
     def play_filler(self) -> None:
         """A random thinking sound while the reply is worked out; a short pause follows it."""
@@ -865,10 +893,11 @@ class Voicebot(Agent):
 
         Args:
             setting: One of voice, model, reasoning, vision_model, thinking_sounds, thinking_sound_lines,
-                remake_sounds_days, mic_check_minutes, terminal.
+                remake_sounds_days, mic_check_minutes, orb_design, terminal.
             value: A voice from my_settings (a first name like "Emma" works); a model id; reasoning default,
                 off, low, medium or high; on or off; sound lines separated by "|" ("default" for the built-in
-                ones); a whole number of days or minutes; terminal only "off".
+                ones); a whole number of days or minutes; orb_design original, strands, halo, fur, nebula or
+                liquid; terminal only "off".
         """
         result = await zana("zana.set_setting", json.dumps({"name": setting, "value": value}))
         debug("settings", setting=setting, value=value, result=result)
@@ -886,6 +915,8 @@ class Voicebot(Agent):
             asyncio.create_task(self.refresh_fillers())
         elif setting == "remake_sounds_days":
             self.filler_days = float(value)
+        elif setting == "mood_minutes":
+            self.mood_minutes = float(value)
         elif setting == "terminal":
             self.terminal = False
         return result + SAY

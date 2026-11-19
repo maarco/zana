@@ -8,6 +8,13 @@ copied unmodified from the npm package `livekit-client@2.23.0`.
 Copyright LiveKit, Inc. Licensed under the Apache License, Version 2.0:
 https://www.apache.org/licenses/LICENSE-2.0
 
+## three.js r186 (0.186.1)
+
+`src-ui/vendor/three.module.js` and `src-ui/vendor/three.core.js` are the
+three.js build files, copied unmodified from the npm package `three@0.186.1`.
+Copyright 2010-2026 Three.js Authors, MIT License. They render the Fur,
+Nebula and Liquid orb designs.
+
 ## Aura visualizer shader
 
 `src-ui/vendor/aura.js` contains the fragment shader of LiveKit's Agents UI

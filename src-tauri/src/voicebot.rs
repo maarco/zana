@@ -95,6 +95,7 @@ pub fn write_agent_config(settings: &crate::state::Settings) -> std::io::Result<
         }),
     );
     config.insert("voice".into(), settings.voicebot_voice.trim().into());
+    config.insert("mood_minutes".into(), settings.voicebot_mood_minutes.into());
     config.insert(
         "fillers".into(),
         serde_json::json!({

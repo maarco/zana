@@ -451,6 +451,27 @@ async def mode_chain():
             print(f"{ev['t'] - t0:6.1f}s", ev["kind"], str(ev.get("text") or ev.get("args"))[:110])
 
 
+async def mode_orb():
+    """Set a Voicebot setting through the orb (the path Voicebot's change_setting takes), then show a
+    state for five seconds: e2e_probe.py orb orb_design fur talking"""
+    lk = api.LiveKitAPI(HTTP, KEY, SECRET)
+    target = None
+    for r in (await lk.room.list_rooms(api.ListRoomsRequest())).rooms:
+        ps = (await lk.room.list_participants(api.ListParticipantsRequest(room=r.name))).participants
+        if any(p.identity == "zana-user" for p in ps):
+            target = r.name
+    await lk.aclose()
+    room = rtc.Room()
+    await room.connect(URL, token(target, "probe-orb"))
+    setting, value, state = sys.argv[2], sys.argv[3], (sys.argv[4] if len(sys.argv) > 4 else "")
+    print(await room.local_participant.perform_rpc(destination_identity="zana-user", method="zana.set_setting",
+                                                   payload=json.dumps({"name": setting, "value": value}), response_timeout=10))
+    if state:
+        print(await room.local_participant.perform_rpc(destination_identity="zana-user", method="zana.preview_state",
+                                                       payload=state, response_timeout=10))
+    await room.disconnect()
+
+
 async def mode_preview():
     """Ask the real orb to show a state for five seconds (argv[2], e.g. listening or speaking)."""
     lk = api.LiveKitAPI(HTTP, KEY, SECRET)
@@ -470,4 +491,4 @@ async def mode_preview():
 asyncio.run({"zana": mode_zana, "voiceprint": mode_voiceprint, "selfedit": mode_selfedit,
              "preview": mode_preview, "jobs": mode_jobs, "memory": mode_memory,
              "modelerror": mode_modelerror, "sayline": mode_sayline,
-             "chain": mode_chain}.get(MODE, mode_agent)())
+             "chain": mode_chain, "orb": mode_orb}.get(MODE, mode_agent)())
