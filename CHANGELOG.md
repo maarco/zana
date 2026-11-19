@@ -6,6 +6,19 @@ This project follows SemVer once public releases begin.
 
 ## Unreleased
 
+## 0.1.5
+
+- Fixed: Voicebot never answered in 0.1.4; its conversation crashed as it
+  started.
+- Orb designs: Strands, Halo, Fur, Nebula and Liquid next to the original,
+  picked in Preferences > Voicebot > Orb. Voicebot can also show its mood
+  through the orb (calm, focused, warm, playful, dreamy, cool), at most every
+  few minutes.
+- The orb pulses red when there is no working microphone for a few minutes.
+- Voicebot knows its own settings and can change its voice, model, reasoning,
+  thinking sounds, orb and more when you ask; it cannot change the API key or
+  turn its terminal access on.
+
 ## 0.1.4
 
 - Zana is now Voicebot, a hands-free voice agent with a floating orb, in place
