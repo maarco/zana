@@ -964,7 +964,8 @@ server.setup_fnc = prewarm
 
 @server.rtc_session()
 async def entrypoint(ctx: agents.JobContext):
-    orb = OrbState(ctx.room.local_participant.set_attributes)
+    # The room connects in session.start below; look the participant up only when publishing.
+    orb = OrbState(lambda attributes: ctx.room.local_participant.set_attributes(attributes))
     ctx.add_shutdown_callback(orb.close)
 
     def publish(kind, **data):
