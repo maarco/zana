@@ -261,10 +261,15 @@
       const silent = Date.now() - lastMicSignal > micCheckMinutes * 60000;
       if (silent !== micSilent) { micSilent = silent; showState(); }
     }, 1000);
-    invoke('get_voicebot_config').then((cfg) => {
-      micCheckMinutes = cfg.mic_check_minutes || micCheckMinutes;
-      orbDesign = cfg.orb_design || orbDesign;
-    }).catch(() => {});
+    // Settings changed elsewhere (Preferences, or Voicebot itself) reach the orb within seconds.
+    function syncSettings() {
+      invoke('voicebot_self_settings').then((cfg) => {
+        micCheckMinutes = cfg.mic_check_minutes || micCheckMinutes;
+        orbDesign = cfg.orb_design || orbDesign;
+      }).catch(() => {});
+    }
+    syncSettings();
+    setInterval(syncSettings, 3000);
     // Your voice level while you talk (the designs move with it); 0 when it can't be measured.
     function micVisual() {
       if (!micMeter || micMeter.ctx.state !== 'running') return 0;
