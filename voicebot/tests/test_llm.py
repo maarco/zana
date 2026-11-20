@@ -10,7 +10,7 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 try:
-    from livekit.agents import Agent  # noqa: F401 - only to see whether the Voicebot venv is in use
+    from livekit.agents import NOT_GIVEN
 except ModuleNotFoundError as exc:
     if exc.name != "livekit":
         raise
@@ -33,17 +33,25 @@ def tearDownModule():
 
 @unittest.skipIf(DEPENDENCY_ERROR, f"needs the Voicebot venv: {DEPENDENCY_ERROR}")
 class ReplyCapTest(unittest.TestCase):
-    def cap(self, base_url):
+    def cap(self, base_url, vision=False, env=None):
         with open(os.path.join(TEST_HOME.name, "config.json"), "w") as f:
             json.dump({"llm": {"model": "some/model", "base_url": base_url, "api_key": "k"}}, f)
-        return agent_module.make_llm()._opts.max_completion_tokens
+        with patch.dict(os.environ, env or {}):
+            return agent_module.make_llm(vision=vision)._opts.max_completion_tokens
 
     def test_openrouter_replies_are_capped(self):
-        self.assertEqual(self.cap("https://openrouter.ai/api/v1"), agent_module.MAX_REPLY_TOKENS)
+        for url in ("https://openrouter.ai/api/v1", "https://OpenRouter.ai/api/v1"):
+            self.assertEqual(self.cap(url), agent_module.MAX_REPLY_TOKENS, url)
 
     def test_other_providers_get_no_cap(self):
-        self.assertNotIsInstance(self.cap("https://api.openai.com/v1"), int)
+        self.assertIs(self.cap("https://api.openai.com/v1"), NOT_GIVEN)
 
+    def test_the_vision_model_follows_its_own_url(self):
+        self.assertEqual(self.cap("https://api.openai.com/v1", vision=True,
+                                  env={"VISION_BASE_URL": "https://openrouter.ai/api/v1"}),
+                         agent_module.MAX_REPLY_TOKENS)
+        self.assertIs(self.cap("https://openrouter.ai/api/v1", vision=True,
+                               env={"VISION_BASE_URL": "https://api.openai.com/v1"}), NOT_GIVEN)
 
 if __name__ == "__main__":
     unittest.main()
