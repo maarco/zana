@@ -16,7 +16,12 @@ STATE = "update.json"  # in the Voicebot folder: the version already offered, an
 
 
 class UpdateError(Exception):
-    """Why an update can't go ahead, in words Voicebot can say."""
+    """Why an update can't go ahead, in fixed words Voicebot can say. `detail` (tool output, which can echo
+    names from the download or the release) is only logged, never given to the model."""
+
+    def __init__(self, message: str, detail: str = "") -> None:
+        super().__init__(message)
+        self.detail = detail
 
 
 def newer(latest: str, current: str) -> bool:
@@ -43,9 +48,9 @@ def run(*args: str, timeout: float = 120) -> str:
     try:
         out = subprocess.run(args, capture_output=True, text=True, timeout=timeout, check=False)
     except subprocess.TimeoutExpired:
-        raise UpdateError(f"{args[0]} took too long") from None
+        raise UpdateError(f"{Path(args[0]).name} took too long") from None
     if out.returncode:
-        raise UpdateError(f"{args[0]} failed: {(out.stderr or out.stdout).strip()[:300]}")
+        raise UpdateError(f"{Path(args[0]).name} failed", detail=(out.stderr or out.stdout).strip()[:500])
     return out.stdout + out.stderr
 
 
@@ -79,7 +84,7 @@ def check(code_dir: str) -> dict:
                                  "-H", "Accept: application/vnd.github+json",
                                  f"https://api.github.com/repos/{REPO}/releases/latest"))
     except (UpdateError, ValueError) as exc:
-        raise UpdateError(f"GitHub didn't answer ({exc})") from None
+        raise UpdateError("GitHub didn't answer", detail=getattr(exc, "detail", "") or str(exc)) from None
     found = parse_release(release)
     return {"app": str(app), "current": current, **found, "newer": newer(found["version"], current)}
 
@@ -148,6 +153,11 @@ def stage(found: dict, home: str) -> Path:
 
 def detach(mount: Path) -> None:
     subprocess.run(["hdiutil", "detach", str(mount), "-force"], capture_output=True, timeout=60, check=False)
+
+
+def may_install(state: dict, version: str, last_heard: float) -> bool:
+    """Only a version the user was told about, and only once they have spoken since (their yes)."""
+    return state.get("offered") == version and last_heard > float(state.get("offered_at") or 0)
 
 
 def load_state(home: str) -> dict:
@@ -274,7 +284,7 @@ def restart(app: Path, quit=quit_app, launch=open_app, alive=running, settle: fl
         time.sleep(settle)
         if not alive(app):
             raise UpdateError("the new Zana didn't stay open")
-    except UpdateError as exc:
+    except Exception as exc:  # noqa: BLE001 - whatever went wrong, the old app goes back
         print(time.strftime("%Y-%m-%d %H:%M:%S"), f"{exc}; putting the old Zana back", flush=True)
         roll_back(app)
         launch(app)

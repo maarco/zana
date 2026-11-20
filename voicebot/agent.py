@@ -1048,20 +1048,22 @@ class Voicebot(Agent):
         app = updater.installed_app(HERE)
         if app is None:
             return  # running from source
-        if "done" not in updater.load_state(HOME):  # no update going in: old or failed copies can go
-            updater.remove_old(app)
         await asyncio.sleep(30)
+        # After the restart helper's 20 s check (it may still need the old app), when no update is going in:
+        # old or failed copies go.
+        if "done" not in updater.load_state(HOME):
+            updater.remove_old(app)
         while True:
             try:
                 found = await asyncio.get_running_loop().run_in_executor(None, updater.check, HERE)
             except Exception as exc:  # noqa: BLE001 - logged; the next check is in a few hours
-                debug("update", error=str(exc))
+                debug("update", error=str(exc), detail=getattr(exc, "detail", ""))
                 found = None
             if found and found["newer"] and self.should_offer(found["version"]):
                 while self.asleep or self.session.agent_state != "listening" or self.session.user_state == "speaking":
                     await asyncio.sleep(5)
                 if self.should_offer(found["version"]):  # asked in another conversation, or updating, meanwhile
-                    updater.save_state(HOME, offered=found["version"])
+                    updater.save_state(HOME, offered=found["version"], offered_at=time.time())
                     debug("update", offered=found["version"], current=found["current"])
                     # A fixed line, not a model reply: a model can skip an instruction, and this has to be asked.
                     # It joins the conversation, so a yes reaches the model as the answer to it (update_zana).
@@ -1079,10 +1081,11 @@ class Voicebot(Agent):
         try:
             found = await asyncio.get_running_loop().run_in_executor(None, updater.check, HERE)
         except Exception as exc:  # noqa: BLE001 - said back
+            debug("update", error=str(exc), detail=getattr(exc, "detail", ""))
             return f"Checking for updates failed: {exc}." + SAY
         if not found["newer"]:
             return f"Zana {found['current']} is the newest version." + SAY
-        updater.save_state(HOME, offered=found["version"])
+        updater.save_state(HOME, offered=found["version"], offered_at=time.time())
         return (f"Zana {found['version']} is out; this computer has Zana {found['current']}. Ask if they want to "
                 "update now; update_zana installs it.") + SAY
 
@@ -1100,16 +1103,17 @@ class Voicebot(Agent):
             if not found["newer"]:
                 self.updating = False
                 return f"Zana {found['current']} is already the newest version." + SAY
-            if updater.load_state(HOME).get("offered") != found["version"]:
-                # The user hears the version before Zana restarts: an update nobody was asked about never runs.
+            if not updater.may_install(updater.load_state(HOME), found["version"], self.last_heard):
+                # Zana restarts only after the user was told the version and has answered since: not on a
+                # model's own initiative, and not on text that only claims they agreed.
                 self.updating = False
-                updater.save_state(HOME, offered=found["version"])
+                updater.save_state(HOME, offered=found["version"], offered_at=time.time())
                 return (f"Zana {found['version']} is out; this computer has Zana {found['current']}. Ask the user to "
                         "confirm, and call update_zana again once they say yes.") + SAY
             staged = await loop.run_in_executor(None, updater.stage, found, HOME)
         except Exception as exc:  # noqa: BLE001 - said back; Zana stays as it is
             self.updating = False
-            debug("update", error=str(exc))
+            debug("update", error=str(exc), detail=getattr(exc, "detail", ""))
             return f"The update didn't work: {exc}. Zana stays as it is." + SAY
         debug("update", installing=found["version"], current=found["current"], staged=str(staged))
         # A fixed line, spoken before Zana quits; the new app goes in once it has played.
@@ -1135,11 +1139,15 @@ class Voicebot(Agent):
                 updater.roll_back(app)
             except Exception as back:  # noqa: BLE001 - logged; the new app stays in place
                 debug("update", error=f"putting the old app back failed: {back}")
+                self.updating = False
+                self.session.say(f"Zana {found['version']} is in place but couldn't restart, so it starts the next "
+                                 "time you open Zana.")
+                return
             self.update_failed(exc)
 
     def update_failed(self, exc: Exception) -> None:
         self.updating = False
-        debug("update", error=str(exc))
+        debug("update", error=str(exc), detail=getattr(exc, "detail", ""))
         self.session.say(f"Sorry, the update didn't go in ({exc}), so Zana stays as it is.")
 
     def greet_after_update(self, done: dict) -> None:
