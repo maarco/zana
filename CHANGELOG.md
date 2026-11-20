@@ -8,18 +8,27 @@ This project follows SemVer once public releases begin.
 
 ## 0.1.6
 
-- Voicebot keeps Zana up to date. It checks GitHub for a newer release soon
-  after it starts and every 6 hours, and asks once per version. On a yes it
+- Voicebot keeps Zana up to date. It checks GitHub about 30 seconds after it
+  starts and every 6 hours after that, and asks once per version. On a yes it
   downloads the release, checks its signature and notarization, swaps the app
-  in, restarts Zana and comes back saying the new version. If anything fails,
-  the old app stays. Install 0.1.6 by hand once; later releases come through
+  in and restarts Zana, then says the new version. If the download or a check
+  fails, Zana stays as it is; if the new version doesn't start, the old one
+  goes back. Zana has to be in a folder you can write to, such as
+  Applications. Install 0.1.6 by hand once; later releases come through
   Voicebot.
-- With a voice print set up, only your voice interrupts Voicebot. A TV or
-  other people no longer stop a reply or cut a tool step short, and speech
-  that was never checked against your voice print is not answered. Say "let
-  anyone interrupt you" to switch back.
-- Fixed: Voicebot's set lines, such as the voice print prompts and goodbye,
-  were cut off after their first sentence.
+- With a voice print set up, only your voice interrupts Voicebot: a TV or
+  other people no longer stop a reply or cut a tool step short. This starts
+  with the first conversation after the voice print is set up. To let anyone
+  interrupt again, ask Voicebot to let anyone interrupt it; that also starts
+  with the next conversation.
+- Fixed: with a voice print set up, speech that could not be checked against
+  it was answered anyway, so a TV line could get a reply. Such speech is now
+  answered only within 3 seconds of your voice being recognized.
+- Fixed: Voicebot's scripted lines were cut short. The voice print prompt
+  stopped after its first sentence, and the goodbye lost its opening
+  "Goodbye.".
+- Fixed: lines Voicebot says while it works no longer get an extra period
+  after a ! or ?.
 
 ## 0.1.5
 
