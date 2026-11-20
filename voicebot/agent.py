@@ -1040,13 +1040,16 @@ class Voicebot(Agent):
     async def watch_updates(self) -> None:
         """Look for a newer Zana soon after starting, then every few hours. Each new version is offered once,
         when Voicebot is awake and the conversation is quiet; update_zana installs it."""
-        if updater.installed_app(HERE) is None:
+        app = updater.installed_app(HERE)
+        if app is None:
             return  # running from source
+        if "done" not in updater.load_state(HOME):  # no update going in: old or failed copies can go
+            updater.remove_old(app)
         await asyncio.sleep(30)
         while True:
             try:
                 found = await asyncio.get_running_loop().run_in_executor(None, updater.check, HERE)
-            except updater.UpdateError as exc:
+            except Exception as exc:  # noqa: BLE001 - logged; the next check is in a few hours
                 debug("update", error=str(exc))
                 found = None
             if found and found["newer"] and self.should_offer(found["version"]):
@@ -1069,10 +1072,11 @@ class Voicebot(Agent):
         """Check whether a newer version of Zana, the app you run in, is out."""
         try:
             found = await asyncio.get_running_loop().run_in_executor(None, updater.check, HERE)
-        except updater.UpdateError as exc:
+        except Exception as exc:  # noqa: BLE001 - said back
             return f"Checking for updates failed: {exc}." + SAY
         if not found["newer"]:
             return f"Zana {found['current']} is the newest version." + SAY
+        updater.save_state(HOME, offered=found["version"])
         return (f"Zana {found['version']} is out; this computer has Zana {found['current']}. Ask if they want to "
                 "update now; update_zana installs it.") + SAY
 
@@ -1090,29 +1094,47 @@ class Voicebot(Agent):
             if not found["newer"]:
                 self.updating = False
                 return f"Zana {found['current']} is already the newest version." + SAY
+            if updater.load_state(HOME).get("offered") != found["version"]:
+                # The user hears the version before Zana restarts: an update nobody was asked about never runs.
+                self.updating = False
+                updater.save_state(HOME, offered=found["version"])
+                return (f"Zana {found['version']} is out; this computer has Zana {found['current']}. Ask the user to "
+                        "confirm, and call update_zana again once they say yes.") + SAY
             staged = await loop.run_in_executor(None, updater.stage, found, HOME)
-        except updater.UpdateError as exc:
+        except Exception as exc:  # noqa: BLE001 - said back; Zana stays as it is
             self.updating = False
             debug("update", error=str(exc))
             return f"The update didn't work: {exc}. Zana stays as it is." + SAY
         debug("update", installing=found["version"], current=found["current"], staged=str(staged))
         # A fixed line, spoken before Zana quits; the new app goes in once it has played.
-        line = context.session.say("The update checks out. Restarting now; I'll be right back.")
+        line = context.session.say("The update checks out, so I'm restarting now and I'll be right back.",
+                                   allow_interruptions=False)
         line.add_done_callback(lambda _: self.finish_update(found, staged))
         return llm.ToolResult(f"Zana {found['version']} is checked and goes in as soon as you finish your line; "
                               "Zana then restarts with you in it.", reply_required=False)
 
     def finish_update(self, found: dict, staged) -> None:
         """Put the checked app in place and restart Zana with it; a failure is said instead, and Zana stays."""
+        app = Path(found["app"])
         try:
-            updater.install(Path(found["app"]), staged)
-        except updater.UpdateError as exc:
-            self.updating = False
-            debug("update", error=str(exc))
-            self.session.say(f"Sorry, the update didn't go in: {exc}. Zana stays as it is.")
+            updater.install(app, staged)  # puts the old app back itself when it fails
+        except Exception as exc:  # noqa: BLE001 - said back
+            self.update_failed(exc)
             return
-        updater.save_state(HOME, done={"from": found["current"], "to": found["version"]})
-        updater.start_restart(Path(found["app"]), HOME)
+        try:
+            updater.save_state(HOME, done={"from": found["current"], "to": found["version"], "t": time.time()})
+            updater.start_restart(app, HOME)
+        except Exception as exc:  # noqa: BLE001 - the old app goes back; said back
+            try:
+                updater.roll_back(app)
+            except Exception as back:  # noqa: BLE001 - logged; the new app stays in place
+                debug("update", error=f"putting the old app back failed: {back}")
+            self.update_failed(exc)
+
+    def update_failed(self, exc: Exception) -> None:
+        self.updating = False
+        debug("update", error=str(exc))
+        self.session.say(f"Sorry, the update didn't go in ({exc}), so Zana stays as it is.")
 
     def greet_after_update(self, done: dict) -> None:
         """First words after an update restart: back, on the version now running. The user was talking to you
@@ -1120,8 +1142,6 @@ class Voicebot(Agent):
         self.asleep, self.last_heard = False, time.time()
         app = updater.installed_app(HERE)
         now = updater.version(app) if app else "?"
-        if app:
-            updater.remove_old(app)
         debug("update", updated=now, wanted=done.get("to"), previous=done.get("from"))
         if now == done.get("to"):
             note = (f"Zana just restarted after updating from {done.get('from')} to {now} (confirmed; no need to "

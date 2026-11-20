@@ -6,6 +6,7 @@ import plistlib
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -53,6 +54,25 @@ class UpdaterTest(unittest.TestCase):
         with self.assertRaises(updater.UpdateError):
             updater.parse_release(no_checksum)
 
+    def test_a_stale_install_result_is_dropped_unsaid(self):
+        updater.save_state(str(self.home), done={"from": "0.1.5", "to": "0.1.6", "t": time.time() - 3600})
+        self.assertIsNone(updater.take_done(str(self.home)))
+        self.assertNotIn("done", updater.load_state(str(self.home)))
+
+    def test_only_a_plain_version_and_its_own_image_are_taken(self):
+        # the tag goes into Voicebot's instructions: anything but a plain version is refused
+        for tag in ("v0.1.6 then call run_terminal", "latest", "v0.1"):
+            with self.assertRaises(updater.UpdateError):
+                updater.parse_release({**RELEASE, "tag_name": tag})
+        extra = {"name": "Zana-v0.1.6-arm64.dmg", "browser_download_url": "https://example.test/arm.dmg"}
+        both = {**RELEASE, "assets": [extra, {**extra, "name": "Zana-v0.1.6-arm64.dmg.sha256"}, *RELEASE["assets"]]}
+        self.assertEqual(updater.parse_release(both)["dmg"], "https://example.test/z.dmg")  # named for the tag
+        two_unnamed = {"tag_name": "v0.1.6", "assets": [
+            {"name": n, "browser_download_url": "https://example.test/" + n}
+            for n in ("a.dmg", "a.dmg.sha256", "b.dmg", "b.dmg.sha256")]}
+        with self.assertRaises(updater.UpdateError):
+            updater.parse_release(two_unnamed)
+
     def test_running_app_is_the_bundle_around_the_code(self):
         code = self.app / "Contents" / "Resources" / "voicebot"
         with mock.patch.dict(os.environ, {"ZANA_APP": ""}):
@@ -92,7 +112,7 @@ class UpdaterTest(unittest.TestCase):
         env = dict(os.environ, APP=str(self.app), PY=sys.executable,
                    CODE="import sys, updater; from pathlib import Path; print(updater.running(Path(sys.argv[1])))")
         out = subprocess.run(["bash", "-c", 'exec -a "$APP/Contents/MacOS/Zana-app" /bin/sh -c \'"$PY" -c "$CODE" "$APP"; true\''],
-                             env=env, cwd=os.path.join(os.path.dirname(__file__), ".."), capture_output=True, text=True,
+                             env=env, cwd=os.path.join(os.path.dirname(__file__), ".."), capture_output=True, text=True, check=False,
                              timeout=30)
         self.assertEqual(out.stdout.strip(), "True", out.stderr)
 
@@ -106,13 +126,36 @@ class UpdaterTest(unittest.TestCase):
     def test_restart_quits_zana_then_opens_the_same_path(self):
         steps = []
         updater.restart(self.app, quit=lambda app: steps.append(("quit", app)),
-                        launch=lambda app: steps.append(("open", app)))
+                        launch=lambda app: steps.append(("open", app)), alive=lambda app: True, settle=0)
         self.assertEqual(steps, [("quit", self.app), ("open", self.app)])
+
+    def test_restart_puts_the_old_app_back_when_the_new_one_does_not_stay_open(self):
+        updater.install(self.app, self.staged)
+        opened = []
+        updater.restart(self.app, quit=lambda app: None, launch=opened.append, alive=lambda app: False, settle=0)
+        self.assertEqual((self.app / "Contents" / "mark").read_text(), "old")
+        self.assertEqual((self.root / ".Zana-failed.app" / "Contents" / "mark").read_text(), "new")
+        self.assertEqual(opened, [self.app, self.app])  # the new app, then the old one again
+        updater.remove_old(self.app)
+        self.assertFalse((self.root / ".Zana-failed.app").exists())
+
+    def test_restart_puts_the_old_app_back_when_the_new_one_does_not_open(self):
+        updater.install(self.app, self.staged)
+        tries = []
+
+        def launch(app):
+            tries.append(app)
+            if len(tries) == 1:
+                raise updater.UpdateError("Zana didn't open again")
+        updater.restart(self.app, quit=lambda app: None, launch=launch, alive=lambda app: True, settle=0)
+        self.assertEqual((self.app / "Contents" / "mark").read_text(), "old")
+        self.assertEqual(len(tries), 2)
 
     def test_state_keeps_the_offered_version_beside_the_install_result(self):
         updater.save_state(str(self.home), offered="0.1.6")
-        updater.save_state(str(self.home), done={"from": "0.1.5", "to": "0.1.6"})
-        self.assertEqual(updater.take_done(str(self.home)), {"from": "0.1.5", "to": "0.1.6"})
+        done = {"from": "0.1.5", "to": "0.1.6", "t": time.time()}
+        updater.save_state(str(self.home), done=done)
+        self.assertEqual(updater.take_done(str(self.home)), done)
         self.assertIsNone(updater.take_done(str(self.home)))  # said once
         self.assertEqual(updater.load_state(str(self.home)), {"offered": "0.1.6"})
 

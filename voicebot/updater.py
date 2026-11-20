@@ -51,11 +51,21 @@ def run(*args: str, timeout: float = 120) -> str:
 
 def parse_release(release: dict) -> dict:
     """The version of a GitHub release and the links to its disk image and that image's checksum."""
-    assets = {a["name"]: a["browser_download_url"] for a in release.get("assets") or []}
-    dmg = next((name for name in assets if name.endswith(".dmg")), None)
+    try:
+        assets = {str(a["name"]): str(a["browser_download_url"]) for a in release.get("assets") or []}
+        version = str(release["tag_name"]).lstrip("vV")
+    except (AttributeError, KeyError, TypeError):
+        raise UpdateError("GitHub's answer about the newest release didn't make sense") from None
+    # Only a plain version leaves this function: it goes into Voicebot's instructions, so no other text from
+    # the release (names, notes) ever reaches the model.
+    if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+        raise UpdateError("GitHub's newest release doesn't have a plain version number")
+    images = [name for name in assets if name.endswith(".dmg")]
+    dmg = f"Zana-v{version}-universal.dmg" if f"Zana-v{version}-universal.dmg" in images else \
+        (images[0] if len(images) == 1 else None)
     if not dmg or f"{dmg}.sha256" not in assets:
-        raise UpdateError(f"release {release.get('tag_name')} has no disk image with a checksum")
-    return {"version": str(release["tag_name"]).lstrip("vV"), "dmg": assets[dmg], "sha256": assets[f"{dmg}.sha256"]}
+        raise UpdateError(f"release {version} has no single disk image with a checksum")
+    return {"version": version, "dmg": assets[dmg], "sha256": assets[f"{dmg}.sha256"]}
 
 
 def check(code_dir: str) -> dict:
@@ -65,7 +75,8 @@ def check(code_dir: str) -> dict:
         raise UpdateError("this copy of Zana runs from source, so it doesn't update itself")
     current = version(app)
     try:
-        release = json.loads(run("curl", "-fsSL", "-m", "20", "-H", "Accept: application/vnd.github+json",
+        release = json.loads(run("curl", "-fsSL", "--proto", "=https", "-m", "20",
+                                 "-H", "Accept: application/vnd.github+json",
                                  f"https://api.github.com/repos/{REPO}/releases/latest"))
     except (UpdateError, ValueError) as exc:
         raise UpdateError(f"GitHub didn't answer ({exc})") from None
@@ -82,14 +93,20 @@ def team_id(app: Path) -> str:
 
 def verify(app: Path, team: str, bundle_id: str, want: str) -> None:
     """The same developer's signature (an Apple-issued certificate for the running app's team), accepted by
-    Gatekeeper (notarized), and the app and version the release says."""
-    run("codesign", "--verify", "--deep", "--strict", "--test-requirement",
-        f'=anchor apple generic and certificate leaf[subject.OU] = "{team}"', str(app))
-    run("spctl", "--assess", "--type", "execute", str(app))
+    Gatekeeper (notarized), and the app and version the release says. The messages are fixed: the tools' own
+    output names files inside the download, which must not reach the model."""
+    try:
+        run("codesign", "--verify", "--deep", "--strict", "--test-requirement",
+            f'=anchor apple generic and certificate leaf[subject.OU] = "{team}"', str(app))
+    except UpdateError:
+        raise UpdateError("the download isn't signed by Zana's developer") from None
+    try:
+        run("spctl", "--assess", "--type", "execute", str(app))
+    except UpdateError:
+        raise UpdateError("macOS doesn't accept the download (it isn't notarized)") from None
     plist = info(app)
     if plist.get("CFBundleIdentifier") != bundle_id or plist.get("CFBundleShortVersionString") != want:
-        raise UpdateError(f"the downloaded app is {plist.get('CFBundleIdentifier')} "
-                          f"{plist.get('CFBundleShortVersionString')}, not Zana {want}")
+        raise UpdateError(f"the download isn't Zana {want}")
 
 
 def stage(found: dict, home: str) -> Path:
@@ -100,31 +117,37 @@ def stage(found: dict, home: str) -> Path:
         raise UpdateError(f"Zana's folder, {app.parent}, can't be written; move Zana to Applications first")
     team, bundle_id = team_id(app), info(app)["CFBundleIdentifier"]
     work = Path(home) / "update"
-    shutil.rmtree(work, ignore_errors=True)
-    work.mkdir(parents=True)
     dmg, mount = work / "Zana.dmg", work / "disk"
-    run("curl", "-fsSL", "-m", "600", "-o", str(dmg), found["dmg"], timeout=660)
-    want = run("curl", "-fsSL", "-m", "30", found["sha256"]).split()[0].lower()
+    detach(mount)  # left mounted by an update that crashed
+    shutil.rmtree(work, ignore_errors=True)
+    work.mkdir(parents=True, exist_ok=True)
+    run("curl", "-fsSL", "--proto", "=https", "--max-filesize", "1000000000", "-m", "600", "-o", str(dmg),
+        found["dmg"], timeout=660)
+    want = (run("curl", "-fsSL", "--proto", "=https", "-m", "30", found["sha256"]).split() or [""])[0].lower()
     with open(dmg, "rb") as f:
         if hashlib.file_digest(f, "sha256").hexdigest() != want:
             raise UpdateError("the download doesn't match its checksum")
-    run("hdiutil", "attach", "-nobrowse", "-readonly", "-noautoopen", "-mountpoint", str(mount), str(dmg))
     staged = app.with_name(f".{app.stem}-update.app")
+    shutil.rmtree(staged, ignore_errors=True)
     try:
-        apps = sorted(mount.glob("*.app"))
-        if not apps:
-            raise UpdateError("the disk image has no app in it")
-        shutil.rmtree(staged, ignore_errors=True)
-        run("ditto", str(apps[0]), str(staged))
-    finally:
-        subprocess.run(["hdiutil", "detach", str(mount), "-force"], capture_output=True, timeout=60, check=False)
-        dmg.unlink(missing_ok=True)
-    try:
+        run("hdiutil", "attach", "-nobrowse", "-readonly", "-noautoopen", "-mountpoint", str(mount), str(dmg))
+        try:
+            apps = sorted(mount.glob("*.app"))
+            if not apps:
+                raise UpdateError("the disk image has no app in it")
+            run("ditto", str(apps[0]), str(staged))
+        finally:
+            detach(mount)
+            dmg.unlink(missing_ok=True)
         verify(staged, team, bundle_id, found["version"])
-    except UpdateError:
-        shutil.rmtree(staged, ignore_errors=True)
+    except BaseException:
+        shutil.rmtree(staged, ignore_errors=True)  # a partial or rejected copy never stays next to Zana
         raise
     return staged
+
+
+def detach(mount: Path) -> None:
+    subprocess.run(["hdiutil", "detach", str(mount), "-force"], capture_output=True, timeout=60, check=False)
 
 
 def load_state(home: str) -> dict:
@@ -145,13 +168,14 @@ def save_state(home: str, **changes) -> None:
     write_state(home, {**load_state(home), **changes})
 
 
-def take_done(home: str) -> dict | None:
-    """The update Zana just restarted for ({"from", "to"}), once: the restarted Voicebot says it."""
+def take_done(home: str, fresh: float = 900) -> dict | None:
+    """The update Zana just restarted for ({"from", "to", "t"}), once: the restarted Voicebot says it. One older
+    than a quarter hour (the restart never happened) is dropped unsaid."""
     state = load_state(home)
     done = state.pop("done", None)
     if done is not None:
         write_state(home, state)
-    return done
+    return done if done and time.time() - float(done.get("t") or 0) < fresh else None
 
 
 def version(app: Path) -> str:
@@ -179,8 +203,19 @@ def install(app: Path, staged: Path) -> None:
 
 
 def remove_old(app: Path) -> None:
-    """The old app install() set aside; the restarted Voicebot removes it."""
-    shutil.rmtree(app.with_name(f".{app.stem}-old.app"), ignore_errors=True)
+    """The old app install() set aside (and a new one that failed to open); the restarted Voicebot removes them."""
+    for leftover in (f".{app.stem}-old.app", f".{app.stem}-failed.app"):
+        shutil.rmtree(app.with_name(leftover), ignore_errors=True)
+
+
+def roll_back(app: Path) -> None:
+    """Put the old app install() set aside back in place; the new one moves aside as failed."""
+    aside, failed = app.with_name(f".{app.stem}-old.app"), app.with_name(f".{app.stem}-failed.app")
+    if not aside.is_dir():
+        raise UpdateError("the old app is gone")
+    shutil.rmtree(failed, ignore_errors=True)
+    os.rename(app, failed)
+    os.rename(aside, app)
 
 
 def running(app: Path) -> bool:
@@ -228,12 +263,21 @@ def open_app(app: Path, tries: int = 10) -> None:
     raise UpdateError("Zana didn't open again")
 
 
-def restart(app: Path, quit=quit_app, launch=open_app) -> None:
-    """Quit Zana and open it again from the same path, now the new app."""
+def restart(app: Path, quit=quit_app, launch=open_app, alive=running, settle: float = 20) -> None:
+    """Quit Zana and open it again from the same path, now the new app. If the new app doesn't open, or
+    doesn't stay open for a few seconds, the old app goes back and opens instead."""
     print(time.strftime("%Y-%m-%d %H:%M:%S"), f"restarting {app}", flush=True)
     quit(app)
     print(time.strftime("%Y-%m-%d %H:%M:%S"), "Zana quit", flush=True)
-    launch(app)
+    try:
+        launch(app)
+        time.sleep(settle)
+        if not alive(app):
+            raise UpdateError("the new Zana didn't stay open")
+    except UpdateError as exc:
+        print(time.strftime("%Y-%m-%d %H:%M:%S"), f"{exc}; putting the old Zana back", flush=True)
+        roll_back(app)
+        launch(app)
     print(time.strftime("%Y-%m-%d %H:%M:%S"), "Zana opened", flush=True)
 
 
