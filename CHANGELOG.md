@@ -8,26 +8,26 @@ This project follows SemVer once public releases begin.
 
 ## 0.1.6
 
-- Voicebot keeps Zana up to date. It checks GitHub about 30 seconds after it
-  starts and every 6 hours after that, and asks once per version. On a yes it
-  downloads the release, checks its signature and notarization, swaps the app
-  in and restarts Zana, then says the new version. If the download or a check
-  fails, Zana stays as it is; if the new version doesn't start, the old one
-  goes back. Zana has to be in a folder you can write to, such as
-  Applications. Install 0.1.6 by hand once; later releases come through
-  Voicebot.
-- With a voice print set up, only your voice interrupts Voicebot: a TV or
-  other people no longer stop a reply or cut a tool step short. This starts
-  with the first conversation after the voice print is set up. To let anyone
-  interrupt again, ask Voicebot to let anyone interrupt it; that also starts
-  with the next conversation.
-- Fixed: with a voice print set up, speech that could not be checked against
-  it was answered anyway, so a TV line could get a reply. Such speech is now
-  answered only within 3 seconds of your voice being recognized.
-- Fixed: Voicebot's scripted lines were cut short. The voice print prompt
-  stopped after its first sentence, and the goodbye lost its opening
-  "Goodbye.".
-- Fixed: lines Voicebot says while it works no longer get an extra period
+- Voicebot tells you when a new Zana release is out and installs it when you
+  say yes. It checks GitHub about 30 seconds into each conversation and every
+  6 hours after that, and asks once per version. On a yes it downloads the
+  release, checks its signature and notarization, swaps the app in and
+  restarts Zana, then says the new version. A failed download or check leaves
+  Zana as it is. Install 0.1.6 by hand once; later releases come through
+  Voicebot, as long as Zana is in a folder you can write to, such as
+  Applications.
+- With a voice print set up, other voices no longer interrupt Voicebot: a TV
+  or other people can't stop a reply or cut a tool step short; your voice
+  still can. This starts with the first conversation after the voice print is
+  set up. To let anyone interrupt again, ask Voicebot to let anyone interrupt
+  it; that also starts with the next conversation.
+- Fixed: with a voice print set up, speech too short to check against it was
+  answered anyway, so a TV line could get a reply. Now it is answered only if
+  the voice print matched your voice in the 3 seconds before it.
+- Fixed: Voicebot's built-in lines (written by the app, not the model) were
+  cut short. The voice print prompt stopped after its first sentence, and the
+  goodbye lost its opening "Goodbye.".
+- Fixed: the spoken description of a tool step no longer gets an extra period
   after a ! or ?.
 
 ## 0.1.5
