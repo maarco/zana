@@ -36,7 +36,7 @@ def tearDownModule():
 
 class FakeSpeech:
     def __init__(self):
-        self.interrupted, self.finished = False, False
+        self.interrupted, self.finished, self.allow_interruptions = False, False, False
 
     def done(self):
         return self.finished
@@ -56,13 +56,17 @@ class FakeTap:
     """Each look adds 0.2 s of speech; after `ends_after` looks the speaker stops."""
 
     def __init__(self, session, ends_after):
-        self.session, self.ends_after, self.looks = session, ends_after, 0
+        self.session, self.ends_after, self.looks, self.taken = session, ends_after, 0, 0
 
     def latest(self):
         self.looks += 1
         if self.looks >= self.ends_after:
             self.session.user_state = "listening"
         return np.zeros(int(self.looks * 0.2 * agent_module.RATE), np.float32)
+
+    def take(self):
+        self.taken += 1
+        return np.zeros(0, np.float32)
 
 
 class FakePrint:
@@ -86,6 +90,7 @@ class BargeInTest(unittest.TestCase):
                 self.voice_gated, self.barging, self.updating = True, False, False
                 self.threshold, self.short_threshold = 0.4, 0.28
                 self.tap, self.voiceprint = FakeTap(fake, ends_after), FakePrint(score, enrolled)
+                self.last_voice = (0.0, False)
         return Bot(), fake
 
     def run_check(self, bot):
@@ -95,8 +100,27 @@ class BargeInTest(unittest.TestCase):
 
     def test_the_enrolled_voice_interrupts(self):
         bot, session = self.bot(score=0.6)
+        reply = session.current_speech
         self.run_check(bot)
         self.assertEqual(session.interrupts, [True])
+        self.assertTrue(reply.allow_interruptions)  # so the user's turn is taken while the reply winds down
+        self.assertTrue(bot.last_voice[1])
+
+    def test_a_reply_that_changes_while_scoring_is_left_alone(self):
+        bot, session = self.bot(score=0.9)
+
+        def score_and_switch(audio):
+            session.current_speech = FakeSpeech()  # reply A ended, reply B (to this very turn) began
+            return 0.9, None, len(audio) / agent_module.RATE
+        bot.voiceprint.score_and_embedding = score_and_switch
+        self.run_check(bot)
+        self.assertEqual(session.interrupts, [])
+
+    def test_ignored_audio_is_let_go_while_the_reply_goes_on(self):
+        bot, _ = self.bot(score=0.1, ends_after=6)
+        self.run_check(bot)
+        self.assertEqual(bot.tap.taken, 1)
+        self.assertFalse(bot.last_voice[1])
 
     def test_another_voice_never_interrupts_and_voicebot_keeps_going(self):
         bot, session = self.bot(score=0.1, ends_after=6)

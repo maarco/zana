@@ -40,7 +40,7 @@ from jobs import Jobs
 from orb_state import OrbState
 from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls,
                        repeats, split_say, topics, wants_redo, wants_voiceprint)
-from voiceprint import RATE, VoicePrint, VoiceTap, to_mono_16k
+from voiceprint import RATE, VoicePrint, VoiceTap, speech_seconds, to_mono_16k
 from speech import TOOL_SAY, join_sentences, one_sentence, speakable_stream
 import updater
 
@@ -90,7 +90,7 @@ ADAPT_SCORE = 0.55  # confident matches this long or longer refine the saved pri
 COMPACT_CHARS = 12000  # conversation size (besides the instructions) that triggers compaction
 KEEP_TURNS = 3  # recent turns kept word for word when compacting
 ENROLL_SECONDS = 8
-BARGE_IN_SECONDS = 0.6  # speech heard (with the tap's pre-roll) before it is checked against the voice print
+BARGE_IN_SECONDS = 0.5  # seconds of actual speech before it is checked against the voice print
 UPDATE_HOURS = 6  # how often Voicebot looks for a newer Zana
 
 log = logging.getLogger("voicebot")
@@ -542,24 +542,31 @@ class Voicebot(Agent):
             asyncio.create_task(self.check_barge_in())
 
     async def check_barge_in(self) -> None:
-        """Score the speech against the voice print once BARGE_IN_SECONDS of it is in, and again as more comes
-        (up to SHORT_TURN seconds): a match interrupts Voicebot, as any voice would have before. Other voices
-        never do. Voicebot keeps talking or working, and their turn is dropped unanswered."""
-        loop, checked = asyncio.get_running_loop(), 0.0
+        """Score the speech against the voice print once BARGE_IN_SECONDS of it is in (or when it ends, if
+        shorter), and again as more comes, up to SHORT_TURN seconds: a match interrupts Voicebot, as any voice
+        would have before. Other voices never do: Voicebot keeps going, their turn is dropped unanswered, and
+        their audio is let go so it doesn't blur the next voice check."""
+        loop, checked, verdict = asyncio.get_running_loop(), 0.0, None
         try:
             while self.replying():
                 talking = self.session.user_state == "speaking"
                 audio = self.tap.latest()
-                heard = len(audio) / RATE
-                if heard >= BARGE_IN_SECONDS and (heard - checked >= 0.4 or not talking):
-                    checked = heard
+                spoken = speech_seconds(audio)
+                if (spoken >= BARGE_IN_SECONDS and spoken - checked >= 0.4) or \
+                        (not talking and spoken > checked and len(audio) >= MIN_VOICE_CHECK):
+                    checked, reply = spoken, self.session.current_speech
                     if not self.voiceprint.enrolled:  # cleared since this conversation began: anyone interrupts
-                        score, seconds = 1.0, heard
+                        score, seconds = 1.0, spoken
                     else:
                         score, _, seconds = await loop.run_in_executor(
                             None, self.voiceprint.score_and_embedding, audio)
-                    if score >= self.cutoff(seconds):
+                    if self.session.current_speech is not reply or not self.replying():
+                        return  # that reply ended while scoring; the turn goes the normal way
+                    verdict = score >= self.cutoff(seconds)
+                    self.last_voice = (time.time(), verdict)
+                    if verdict:
                         debug("interrupt", voice_match=round(score, 2), seconds=round(seconds, 1))
+                        reply.allow_interruptions = True  # the user's turn is then taken while the reply winds down
                         self.session.interrupt(force=True)
                         return
                     if seconds >= SHORT_TURN:
@@ -567,7 +574,8 @@ class Voicebot(Agent):
                 if not talking:
                     break
                 await asyncio.sleep(0.1)
-            if checked:
+            if verdict is False and self.replying():
+                self.tap.take()  # its turn is dropped while the reply plays; its audio goes with it
                 debug("interrupt", action="ignored (not your voice)", seconds=round(checked, 1))
         except RuntimeError:
             pass  # the conversation is closing
@@ -990,6 +998,7 @@ class Voicebot(Agent):
             if choice not in ("voice", "anyone"):
                 return 'interrupt is "voice" (only the enrolled voice) or "anyone".' + SAY
             write_config(interrupt=choice)
+            self.interrupt = choice
             debug("settings", setting="interrupt", value=choice)
             who = "only your voice" if choice == "voice" else "anyone"
             return (f"Saved: {who} can interrupt you, from the next conversation (double-click the orb for a new "
