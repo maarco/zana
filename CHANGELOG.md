@@ -6,6 +6,21 @@ This project follows SemVer once public releases begin.
 
 ## Unreleased
 
+## 0.1.6
+
+- Voicebot keeps Zana up to date. It checks GitHub for a newer release soon
+  after it starts and every 6 hours, and asks once per version. On a yes it
+  downloads the release, checks its signature and notarization, swaps the app
+  in, restarts Zana and comes back saying the new version. If anything fails,
+  the old app stays. Install 0.1.6 by hand once; later releases come through
+  Voicebot.
+- With a voice print set up, only your voice interrupts Voicebot. A TV or
+  other people no longer stop a reply or cut a tool step short, and speech
+  that was never checked against your voice print is not answered. Say "let
+  anyone interrupt you" to switch back.
+- Fixed: Voicebot's set lines, such as the voice print prompts and goodbye,
+  were cut off after their first sentence.
+
 ## 0.1.5
 
 - Fixed: Voicebot never answered in 0.1.4; its conversation crashed as it
