@@ -291,6 +291,7 @@ class Voicebot(Agent):
         self.interrupt = "anyone" if str(config.get("interrupt") or "").strip().lower() == "anyone" else "voice"
         self.voice_gated = False  # set by entrypoint when this conversation's interruptions are voice-checked
         self.barging = False
+        self.last_voice = (0.0, False)  # when the last turn was voice-checked, and whether it was the user
 
     # ---------- listening: always record, answer only when awake ----------
 
@@ -487,6 +488,7 @@ class Voicebot(Agent):
             score, embedding, seconds = await asyncio.get_running_loop().run_in_executor(
                 None, self.voiceprint.score_and_embedding, audio)
             cutoff = self.cutoff(seconds)
+            self.last_voice = (time.time(), score >= cutoff)
             if score < cutoff:
                 TRANSCRIPT.record("Other", heard)
                 debug("heard", text=heard, action=f"ignored (not your voice, match {score:.2f} < {cutoff:.2f}, "
@@ -494,6 +496,10 @@ class Voicebot(Agent):
                 raise StopResponse()
             if score >= ADAPT_SCORE and seconds >= SHORT_TURN:
                 await asyncio.get_running_loop().run_in_executor(None, self.voiceprint.adapt, embedding)
+        elif self.voiceprint.enrolled and not self.own_turn_without_audio():
+            TRANSCRIPT.record("Other", heard)
+            debug("heard", text=heard, action="ignored (too little audio of its own to check the voice)")
+            raise StopResponse()
         extra = self.gate(heard, score)
         if extra is not None and is_goodbye(heard):
             await self.sign_off()
@@ -508,6 +514,13 @@ class Voicebot(Agent):
         self.play_filler()
         if extra:
             new_message.content.append(extra)
+
+    def own_turn_without_audio(self) -> bool:
+        """A turn with too little audio of its own to check: two turns ended together (a TV's dialogue often
+        does) and the one before took the audio of both. It counts as the user's only when that audio was
+        checked as theirs a moment ago; otherwise it isn't answered (it used to be, unchecked)."""
+        when, theirs = self.last_voice
+        return theirs and time.time() - when < 3
 
     def cutoff(self, seconds: float) -> float:
         """The voice print score a turn with this many seconds of speech needs (short ones are noisier)."""

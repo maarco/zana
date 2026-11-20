@@ -128,5 +128,48 @@ class BargeInTest(unittest.TestCase):
         self.assertEqual(session.interrupts, [])
 
 
+class FakeTurnTap:
+    def __init__(self, seconds):
+        self.audio = np.zeros(int(seconds * agent_module.RATE), np.float32)
+
+    def take(self):
+        return self.audio
+
+
+@unittest.skipIf(DEPENDENCY_ERROR is not None, f"Voicebot dependencies unavailable: {DEPENDENCY_ERROR}")
+class TurnWithoutAudioTest(unittest.TestCase):
+    """Two turns ending together: the first took the audio of both, the second has none of its own."""
+
+    def turn(self, last_voice):
+        from livekit.agents import StopResponse, llm
+
+        class Bot(agent_module.Voicebot):
+            def __init__(self):
+                Agent.__init__(self, instructions="test")
+                self.enrolling, self.voiceprint, self.tap = False, FakePrint(score=0.9), FakeTurnTap(0.2)
+                self.wake_word, self.asleep, self.wake_timeout, self.last_heard = "", False, 120, 0.0
+                self.fillers_on, self.terminal, self.mcp_tools, self.name = False, False, [], "Voicebot"
+                self.threshold, self.short_threshold, self.last_voice = 0.4, 0.28, last_voice
+        bot = Bot()
+        message = llm.ChatMessage(role="user", content=["Call her. Tell her to come back."])
+        try:
+            asyncio.run(bot.on_user_turn_completed(llm.ChatContext.empty(), message))
+        except StopResponse:
+            return "ignored"
+        return "answered"
+
+    def test_ignored_when_the_audio_it_lost_was_another_voice(self):
+        import time
+        self.assertEqual(self.turn((time.time() - 0.5, False)), "ignored")
+
+    def test_ignored_when_nothing_was_checked_lately(self):
+        self.assertEqual(self.turn((0.0, False)), "ignored")
+
+    def test_answered_when_the_audio_it_lost_was_the_users_a_moment_ago(self):
+        import time
+        self.assertEqual(self.turn((time.time() - 0.5, True)), "answered")
+        self.assertEqual(self.turn((time.time() - 10, True)), "ignored")
+
+
 if __name__ == "__main__":
     unittest.main()
