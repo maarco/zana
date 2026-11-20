@@ -63,6 +63,18 @@ class SpeakableTest(unittest.TestCase):
         said = asyncio.run(collect(one_sentence, [" " + TOOL_SAY + "Checking the skills ", "folder real quick "]))
         self.assertEqual(" ".join(said.split()), "Checking the skills folder real quick")
 
+    def test_a_fixed_line_marked_TOOL_SAY_is_spoken_in_full(self):
+        line = "Going into voice print mode. Talk naturally for about eight seconds."
+        said = asyncio.run(collect(one_sentence, [TOOL_SAY + line]))
+        self.assertEqual(" ".join(said.split()), line)
+        # the marker also keeps a line whose first sentence would otherwise be dropped as a short opener
+        said = asyncio.run(collect(one_sentence, [TOOL_SAY + "Goodbye. Say Zana when you need me."]))
+        self.assertEqual(" ".join(said.split()), "Goodbye. Say Zana when you need me.")
+
+    def test_an_unmarked_fixed_line_is_clipped_to_its_first_sentence(self):
+        said = asyncio.run(collect(one_sentence, ["Going into voice print mode. Talk naturally for about eight seconds."]))
+        self.assertEqual(" ".join(said.split()), "Going into voice print mode.")
+
     def test_step_descriptions_end_in_exactly_one_stop(self):
         self.assertEqual(join_sentences(["Checking your calendar!", "Reading the log", "Done.", "Ready? ", " "]),
                          "Checking your calendar! Reading the log. Done. Ready?")
