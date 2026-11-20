@@ -79,6 +79,44 @@ class VoiceTapTest(unittest.TestCase):
         self.assertLess(len(audio), RATE + int(0.2 * RATE))
         self.assertEqual(len(tap.take()), 0)
 
+    def test_latest_is_the_segment_being_spoken_or_the_one_that_just_ended(self):
+        tap = VoiceTap(preroll_seconds=0.01)
+        self.assertEqual(len(tap.latest()), 0)
+        tap.start()
+        tap.push(np.ones(RATE // 2, np.float32))
+        self.assertGreaterEqual(len(tap.latest()), RATE // 2)
+        tap.end()
+        self.assertGreaterEqual(len(tap.latest()), RATE // 2)  # still there after the speaker stops
+
+    def test_pending_until_the_turn_takes_the_audio(self):
+        tap = VoiceTap(preroll_seconds=0.01)
+        self.assertFalse(tap.pending())
+        tap.start()
+        self.assertTrue(tap.pending())
+        tap.push(np.ones(RATE // 10, np.float32))
+        tap.end()
+        self.assertTrue(tap.pending())  # heard, turn not taken yet
+        tap.take()
+        self.assertFalse(tap.pending())
+
+    def test_a_segment_nobody_took_is_dropped_when_new_speech_starts_later(self):
+        now = [0.0]
+        tap = VoiceTap(preroll_seconds=0.01, stale_seconds=4, clock=lambda: now[0])
+        tap.start()
+        tap.push(np.ones(RATE, np.float32))  # an utterance whose turn was dropped (Voicebot kept talking)
+        tap.end()
+        now[0] = 2.0
+        tap.start()  # within the same turn: kept
+        tap.end()
+        self.assertGreaterEqual(len(tap.take()), RATE)
+        tap.start()
+        tap.push(np.ones(RATE, np.float32))
+        tap.end()
+        now[0] = 9.0
+        tap.start()  # a new turn, long after: the old audio doesn't blur its voice check
+        tap.push(np.ones(RATE // 4, np.float32))
+        self.assertLess(len(tap.take()), RATE // 2)
+
     def test_take_includes_a_segment_still_in_progress_and_caps_length(self):
         tap = VoiceTap(max_seconds=2)
         tap.start()

@@ -61,6 +61,12 @@ OPENROUTER_API_KEY=... OPENROUTER_MODEL=...   # only used when Preferences > Mod
   from then on Voicebot only answers your voice (SpeechBrain ECAPA, run locally;
   only a 192-number voice signature is saved, never audio). Other voices still
   go to the transcript, marked "Other". Clear it in Preferences.
+- **Only your voice interrupts**: with a voice print set up, other voices (a TV,
+  people in the room) no longer stop Voicebot mid-reply or mid-tool-step; your
+  voice does, checked after about 0.6 s of speech. "Let anyone interrupt you"
+  (`change_setting interrupt anyone`) switches back to any voice, and
+  `interrupt voice` turns it on again; either applies from the next
+  conversation.
 - **Goodbye**: "goodbye", "stop listening" or "that's all" puts it to sleep
   (wake word set) or turns the mic off.
 - **One sentence at a time**: replies are cut to one sentence (a short opener

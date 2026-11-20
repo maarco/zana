@@ -90,6 +90,7 @@ ADAPT_SCORE = 0.55  # confident matches this long or longer refine the saved pri
 COMPACT_CHARS = 12000  # conversation size (besides the instructions) that triggers compaction
 KEEP_TURNS = 3  # recent turns kept word for word when compacting
 ENROLL_SECONDS = 8
+BARGE_IN_SECONDS = 0.6  # speech heard (with the tap's pre-roll) before it is checked against the voice print
 UPDATE_HOURS = 6  # how often Voicebot looks for a newer Zana
 
 log = logging.getLogger("voicebot")
@@ -285,6 +286,11 @@ class Voicebot(Agent):
         self.mcp_tools: list = []
         self.updating = False
         self.watch: asyncio.Task | None = None  # watch_updates
+        # Who can interrupt: "voice" (only the enrolled voice, once one is set up) or "anyone" (any speech,
+        # livekit's own rule). Saved in config.json by change_setting; applies per conversation.
+        self.interrupt = "anyone" if str(config.get("interrupt") or "").strip().lower() == "anyone" else "voice"
+        self.voice_gated = False  # set by entrypoint when this conversation's interruptions are voice-checked
+        self.barging = False
 
     # ---------- listening: always record, answer only when awake ----------
 
@@ -349,7 +355,8 @@ class Voicebot(Agent):
                          "reasoning, vision model, thinking sounds, mic check, terminal tool, voice print); "
                          "change_setting changes voice, model, reasoning, vision_model, thinking_sounds, "
                          "thinking_sound_lines, remake_sounds_days, mic_check_minutes, orb_design (original, "
-                         "strands, halo, fur, nebula, liquid), mood_minutes, and terminal (off only). set_mood shows "
+                         "strands, halo, fur, nebula, liquid), mood_minutes, interrupt (voice: only the enrolled "
+                         "voice can interrupt you, or anyone), and terminal (off only). set_mood shows "
                          "your mood with the orb (calm, focused, warm, playful, dreamy, cool), at most every few minutes. "
                          "A model, reasoning or vision change starts a fresh conversation after your reply; say so. "
                          "You cannot change the API key or URL or turn the terminal on: the user does that in "
@@ -479,7 +486,7 @@ class Voicebot(Agent):
         if self.voiceprint.enrolled and len(audio) >= MIN_VOICE_CHECK:
             score, embedding, seconds = await asyncio.get_running_loop().run_in_executor(
                 None, self.voiceprint.score_and_embedding, audio)
-            cutoff = self.short_threshold if seconds < SHORT_TURN else self.threshold
+            cutoff = self.cutoff(seconds)
             if score < cutoff:
                 TRANSCRIPT.record("Other", heard)
                 debug("heard", text=heard, action=f"ignored (not your voice, match {score:.2f} < {cutoff:.2f}, "
@@ -501,6 +508,58 @@ class Voicebot(Agent):
         self.play_filler()
         if extra:
             new_message.content.append(extra)
+
+    def cutoff(self, seconds: float) -> float:
+        """The voice print score a turn with this many seconds of speech needs (short ones are noisier)."""
+        return self.short_threshold if seconds < SHORT_TURN else self.threshold
+
+    # ---------- interruptions: only the enrolled voice ----------
+
+    def replying(self) -> bool:
+        """A reply is under way: being written, speaking, or between tool steps (the state can read
+        "listening" while the model writes, after the thinking sound)."""
+        speech = self.session.current_speech
+        return speech is not None and not speech.done() and not speech.interrupted
+
+    def maybe_barge_in(self) -> None:
+        """Someone is talking while a reply is under way. Only the enrolled voice interrupts it: this
+        conversation's built-in interruptions are off (entrypoint), check_barge_in decides."""
+        if self.voice_gated and not self.barging and not self.updating and self.replying():
+            self.barging = True
+            asyncio.create_task(self.check_barge_in())
+
+    async def check_barge_in(self) -> None:
+        """Score the speech against the voice print once BARGE_IN_SECONDS of it is in, and again as more comes
+        (up to SHORT_TURN seconds): a match interrupts Voicebot, as any voice would have before. Other voices
+        never do. Voicebot keeps talking or working, and their turn is dropped unanswered."""
+        loop, checked = asyncio.get_running_loop(), 0.0
+        try:
+            while self.replying():
+                talking = self.session.user_state == "speaking"
+                audio = self.tap.latest()
+                heard = len(audio) / RATE
+                if heard >= BARGE_IN_SECONDS and (heard - checked >= 0.4 or not talking):
+                    checked = heard
+                    if not self.voiceprint.enrolled:  # cleared since this conversation began: anyone interrupts
+                        score, seconds = 1.0, heard
+                    else:
+                        score, _, seconds = await loop.run_in_executor(
+                            None, self.voiceprint.score_and_embedding, audio)
+                    if score >= self.cutoff(seconds):
+                        debug("interrupt", voice_match=round(score, 2), seconds=round(seconds, 1))
+                        self.session.interrupt(force=True)
+                        return
+                    if seconds >= SHORT_TURN:
+                        break
+                if not talking:
+                    break
+                await asyncio.sleep(0.1)
+            if checked:
+                debug("interrupt", action="ignored (not your voice)", seconds=round(checked, 1))
+        except RuntimeError:
+            pass  # the conversation is closing
+        finally:
+            self.barging = False
 
     # ---------- thinking sounds ----------
 
@@ -575,7 +634,8 @@ class Voicebot(Agent):
             return
         path, phrase = picked
         try:
-            self.session.say(phrase, audio=filler_audio(path), allow_interruptions=True, add_to_chat_ctx=False)
+            self.session.say(phrase, audio=filler_audio(path), allow_interruptions=not self.voice_gated,
+                             add_to_chat_ctx=False)
             debug("filler", text=phrase)
         except RuntimeError:
             pass  # the conversation is closing
@@ -894,6 +954,8 @@ class Voicebot(Agent):
             settings = json.loads(raw)
         except ValueError:
             return raw + SAY
+        settings["interrupt"] = (f"{self.interrupt} (who can interrupt you: voice = only the enrolled voice, "
+                                 f"anyone = any speech; now: {'voice checked' if self.voice_gated else 'anyone'})")
         return "\n".join(f"{k}: {v}" for k, v in settings.items()) + SAY
 
     @function_tool()
@@ -903,12 +965,23 @@ class Voicebot(Agent):
 
         Args:
             setting: One of voice, model, reasoning, vision_model, thinking_sounds, thinking_sound_lines,
-                remake_sounds_days, mic_check_minutes, orb_design, terminal.
+                remake_sounds_days, mic_check_minutes, orb_design, terminal, interrupt.
             value: A voice from my_settings (a first name like "Emma" works); a model id; reasoning default,
                 off, low, medium or high; on or off; sound lines separated by "|" ("default" for the built-in
                 ones); a whole number of days or minutes; orb_design original, strands, halo, fur, nebula or
-                liquid; terminal only "off".
+                liquid; terminal only "off"; interrupt "voice" (only the user's enrolled voice can interrupt
+                you) or "anyone".
         """
+        if setting.strip().lower() == "interrupt":  # Voicebot's own setting, in config.json
+            choice = value.strip().lower()
+            if choice not in ("voice", "anyone"):
+                return 'interrupt is "voice" (only the enrolled voice) or "anyone".' + SAY
+            write_config(interrupt=choice)
+            debug("settings", setting="interrupt", value=choice)
+            who = "only your voice" if choice == "voice" else "anyone"
+            return (f"Saved: {who} can interrupt you, from the next conversation (double-click the orb for a new "
+                    "one now)." + ("" if self.voiceprint.enrolled or choice == "anyone" else
+                                    " Until a voice print is set up, anyone can.")) + SAY
         result = await zana("zana.set_setting", json.dumps({"name": setting, "value": value}))
         debug("settings", setting=setting, value=value, result=result)
         if result.startswith(("Not changed", "Zana didn't answer", "Zana isn't")):
@@ -1188,6 +1261,13 @@ async def entrypoint(ctx: agents.JobContext):
 
     agent = Voicebot(read_json("config.json"), publish)
     await agent.load_mcp()
+    # With a voice print set up, only that voice interrupts (maybe_barge_in): the built-in rule, where any speech
+    # pauses Voicebot and cuts the reply and its remaining tool steps, is off, and audio heard while Voicebot
+    # talks still reaches speech-to-text. "interrupt": "anyone" in config.json keeps the built-in rule.
+    agent.voice_gated = agent.interrupt == "voice" and agent.voiceprint.enrolled
+    interruption = {"mode": "vad"}
+    if agent.voice_gated:
+        interruption.update(enabled=False, discard_audio_if_uninterruptible=False)
     transforms = ["filter_markdown", "filter_emoji", speakable_stream]
     if os.getenv("VOICEBOT_ONE_SENTENCE", "1") != "0":
         transforms.append(one_sentence)
@@ -1210,7 +1290,7 @@ async def entrypoint(ctx: agents.JobContext):
         # local speech models can stall when the computer is busy; speak late rather than drop the reply
         conn_options=SessionConnectOptions(stt_conn_options=APIConnectOptions(timeout=45),
                                            tts_conn_options=APIConnectOptions(timeout=45)),
-        turn_handling={"turn_detection": inference.TurnDetector(version="v1-mini"), "interruption": {"mode": "vad"}},
+        turn_handling={"turn_detection": inference.TurnDetector(version="v1-mini"), "interruption": interruption},
     )
 
     @session.on("tool_execution_updated")
@@ -1271,6 +1351,7 @@ async def entrypoint(ctx: agents.JobContext):
         orb.user_changed(state)
         if state == "speaking":
             agent.tap.start()
+            agent.maybe_barge_in()
         else:
             agent.tap.end()
 
@@ -1279,6 +1360,8 @@ async def entrypoint(ctx: agents.JobContext):
         state = str(getattr(ev, "new_state", ""))
         orb.agent_changed(state)
         debug("state", state=state)
+        if state in ("thinking", "speaking") and agent.tap.pending():
+            agent.maybe_barge_in()  # a reply starts while the user's words are still being heard or turned in
         if state == "listening":
             agent.maybe_compact()
 
@@ -1301,7 +1384,8 @@ async def entrypoint(ctx: agents.JobContext):
             return
         notes = agent.feature_notes(ev.text)
         async with sess._claim_user_turn():
-            await sess.interrupt()
+            # typed text is the user's own: it stops Voicebot even when speech can't (voice-checked interruptions)
+            await sess.interrupt(force=agent.voice_gated)
             agent.play_filler()
             if notes:
                 sess.generate_reply(user_input=ev.text + extra,
@@ -1313,7 +1397,8 @@ async def entrypoint(ctx: agents.JobContext):
              agent.wake_word, agent.terminal, len(agent.tools))
     debug("session", voiceprint="on" if agent.voiceprint.enrolled else "not set up", room=ctx.room.name, model=session.llm.model if hasattr(session.llm, "model") else "?",
           vision_model=os.getenv("VISION_MODEL") or "(same as chat model)", wake_word=agent.wake_word,
-          terminal=agent.terminal, tools=sorted(t.id for t in agent.tools))
+          terminal=agent.terminal, interrupt="your voice" if agent.voice_gated else "anyone",
+          tools=sorted(t.id for t in agent.tools))
     await session.start(room=ctx.room, agent=agent, room_options=room_io.RoomOptions(
         text_input=room_io.TextInputOptions(text_input_cb=on_text)))
     orb.start()
