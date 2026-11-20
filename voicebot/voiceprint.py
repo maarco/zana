@@ -6,6 +6,7 @@ compares it with the saved one. Only the embedding (192 numbers) is stored, as
 `voiceprint.npy` in the Voicebot folder; audio is never saved.
 """
 import os
+import time
 from collections import deque
 from math import gcd
 
@@ -54,15 +55,20 @@ def windows(audio: np.ndarray, most: int = 3) -> np.ndarray:
 
 class VoiceTap:
     """Collects the audio of each speech segment (marked by the session's VAD states). Only the newest
-    `max_seconds` are ever kept, also while speech never pauses (a TV or music in the room)."""
+    `max_seconds` are ever kept, also while speech never pauses (a TV or music in the room). Segments that
+    ended more than `stale_seconds` before new speech starts belong to a turn nobody took (one dropped
+    while Voicebot kept talking) and are let go, so they don't blur the next turn's voice check."""
 
-    def __init__(self, max_seconds: float = 12.0, preroll_seconds: float = 0.3):
+    def __init__(self, max_seconds: float = 12.0, preroll_seconds: float = 0.3, stale_seconds: float = 4.0,
+                 clock=time.monotonic):
         self.max = int(max_seconds * RATE)
         self.preroll = deque(maxlen=max(1, int(preroll_seconds * RATE / 160)))  # ~10 ms chunks
+        self.stale = stale_seconds  # longer than the turn detector's 3 s endpointing wait
+        self.clock = clock
         self.speaking = False
         self.segment: deque[np.ndarray] = deque()
         self.segment_len = 0
-        self.done: deque[np.ndarray] = deque()
+        self.done: deque[tuple[float, np.ndarray]] = deque()  # (when it ended, audio)
 
     def push(self, pcm: np.ndarray) -> None:
         if self.speaking:
@@ -75,6 +81,9 @@ class VoiceTap:
 
     def start(self) -> None:
         if not self.speaking:
+            now = self.clock()
+            while self.done and now - self.done[0][0] > self.stale:
+                self.done.popleft()
             self.speaking = True
             self.segment = deque(self.preroll)
             self.segment_len = sum(len(c) for c in self.segment)
@@ -83,15 +92,25 @@ class VoiceTap:
         if self.speaking:
             self.speaking = False
             if self.segment:
-                self.done.append(np.concatenate(self.segment))
-                while sum(len(d) for d in self.done) > self.max and len(self.done) > 1:
+                self.done.append((self.clock(), np.concatenate(self.segment)))
+                while sum(len(d) for _, d in self.done) > self.max and len(self.done) > 1:
                     self.done.popleft()
             self.segment = deque()
             self.segment_len = 0
 
+    def pending(self) -> bool:
+        """Speech is being heard, or was heard and not yet taken for a turn."""
+        return self.speaking or bool(self.done)
+
+    def latest(self) -> np.ndarray:
+        """The segment being spoken now, or the one that just ended (for checking who is talking)."""
+        if self.speaking and self.segment:
+            return np.concatenate(self.segment)
+        return self.done[-1][1] if self.done else np.zeros(0, dtype=np.float32)
+
     def take(self) -> np.ndarray:
         """Everything spoken since the last take (newest `max_seconds`)."""
-        parts = list(self.done) + ([np.concatenate(self.segment)] if self.segment else [])
+        parts = [d for _, d in self.done] + ([np.concatenate(self.segment)] if self.segment else [])
         self.done = deque()
         if self.speaking:
             self.segment = deque()
