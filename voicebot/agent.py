@@ -355,12 +355,17 @@ class Voicebot(Agent):
             debug("context", topics=topics(heard))
         return "\n".join(notes)
 
+    def say_all(self, text: str, **kwargs) -> None:
+        """Speak a line written by the app, not the model, in full: TOOL_SAY marks it so the
+        one-sentence cap never cuts it (the transcript and the "said" log strip the marker)."""
+        self.session.say(TOOL_SAY + text, **kwargs)
+
     def answer_voiceprint_request(self, heard: str) -> bool:
         """Handle "enroll my voice" in code. True when handled."""
         if not wants_voiceprint(heard):
             return False
         if self.voiceprint.enrolled and not wants_redo(heard):
-            self.session.say("Your voice print is already set up. Say redo my voice print to record a new one.")
+            self.say_all("Your voice print is already set up. Say redo my voice print to record a new one.")
             debug("voiceprint", action="already set up")
             return True
         self.start_enrollment()
@@ -373,7 +378,7 @@ class Voicebot(Agent):
         debug("voiceprint", action="started")
         self.publish("voiceprint", action="started", seconds=0, needed=ENROLL_SECONDS)
         replacing = "Replacing your voice print. " if self.voiceprint.enrolled else ""
-        self.session.say(f"{replacing}Going into voice print mode. Talk naturally for about {ENROLL_SECONDS} seconds.")
+        self.say_all(f"{replacing}Going into voice print mode. Talk naturally for about {ENROLL_SECONDS} seconds.")
 
     async def collect_enrollment(self, audio) -> None:
         self.enroll_audio.append(audio)
@@ -388,7 +393,7 @@ class Voicebot(Agent):
         await asyncio.get_running_loop().run_in_executor(None, self.voiceprint.enroll, recorded)
         debug("voiceprint", action="enrolled", seconds=round(len(recorded) / RATE, 1))
         self.publish("voiceprint", action="enrolled", seconds=round(len(recorded) / RATE, 1), needed=ENROLL_SECONDS)
-        self.session.say("Voice print saved. From now on I only answer your voice.")
+        self.say_all("Voice print saved. From now on I only answer your voice.")
 
     def gate(self, heard: str, score: float | None = None) -> str | None:
         """Record what was heard; return what the model should get, or None while asleep."""
@@ -953,10 +958,10 @@ class Voicebot(Agent):
         debug("goodbye", wake_word=self.wake_word)
         if self.wake_word:
             self.go_to_sleep()
-            self.session.say(f"Goodbye. Say {self.wake_word} when you need me.")
+            self.say_all(f"Goodbye. Say {self.wake_word} when you need me.")
         else:
             await zana("zana.mute")
-            self.session.say("Goodbye. Click the orb when you need me.")
+            self.say_all("Goodbye. Click the orb when you need me.")
 
     @function_tool()
     async def stop_listening(self, context: RunContext) -> str:
