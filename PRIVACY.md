@@ -55,7 +55,9 @@ By default, Zana does not send audio or transcript content to third-party
 services. Network activity can include:
 
 - Downloading Whisper models on first run (from Hugging Face)
-- Checking for app updates (optional, from GitHub)
+- Checking for app updates (from GitHub's public release list: Preferences shows
+  an update, and Voicebot looks soon after it starts and every 6 hours, asks
+  before installing, and downloads the release's disk image from GitHub)
 - Sending transcript, clipboard/profile context, or screenshot context to your
   configured rewrite provider when optional rewrite is enabled
 - Voicebot Mode (off by default, macOS): sending what you say after the wake
