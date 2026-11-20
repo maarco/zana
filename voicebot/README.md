@@ -91,6 +91,13 @@ OPENROUTER_API_KEY=... OPENROUTER_MODEL=...   # only used when Preferences > Mod
 - **Debug window**: every step live: what it heard (and whether it ignored it),
   what it said, each tool call with arguments and output, wake and sleep,
   model and errors.
+- **Updates**: soon after it starts and every 6 hours, Voicebot looks for a newer
+  release on GitHub and asks once per version whether to update (or say "update
+  Zana"). `update_zana` downloads the release's disk image, checks its checksum,
+  that it is signed by the same developer as the running app and notarized, and
+  its version, then quits Zana, swaps the app in place and opens it again; Voicebot
+  comes back and says the version. Any failure keeps the old app. The result is
+  in `update.json` and `logs/update.log`.
 
 ## Tests
 

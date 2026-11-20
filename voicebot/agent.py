@@ -23,6 +23,7 @@ import random
 import re
 import threading
 import time
+from pathlib import Path
 
 from dotenv import load_dotenv
 from livekit import agents, rtc
@@ -41,6 +42,7 @@ from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_good
                        repeats, split_say, topics, wants_redo, wants_voiceprint)
 from voiceprint import RATE, VoicePrint, VoiceTap, to_mono_16k
 from speech import TOOL_SAY, join_sentences, one_sentence, speakable_stream
+import updater
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HOME = os.path.expanduser(os.getenv("VOICEBOT_HOME", os.path.join(HERE, ".home")))
@@ -88,6 +90,7 @@ ADAPT_SCORE = 0.55  # confident matches this long or longer refine the saved pri
 COMPACT_CHARS = 12000  # conversation size (besides the instructions) that triggers compaction
 KEEP_TURNS = 3  # recent turns kept word for word when compacting
 ENROLL_SECONDS = 8
+UPDATE_HOURS = 6  # how often Voicebot looks for a newer Zana
 
 log = logging.getLogger("voicebot")
 
@@ -280,6 +283,8 @@ class Voicebot(Agent):
         self.base_tools = list(self.tools)
         self.mcp_servers_live: list = []
         self.mcp_tools: list = []
+        self.updating = False
+        self.watch: asyncio.Task | None = None  # watch_updates
 
     # ---------- listening: always record, answer only when awake ----------
 
@@ -1030,6 +1035,102 @@ class Voicebot(Agent):
         """List terminal jobs from this conversation with their status."""
         return ("\n".join(j.summary(lines=0) for j in JOBS.jobs.values()) or "No terminal jobs.") + SAY
 
+    # ---------- Zana updates ----------
+
+    async def watch_updates(self) -> None:
+        """Look for a newer Zana soon after starting, then every few hours. Each new version is offered once,
+        when Voicebot is awake and the conversation is quiet; update_zana installs it."""
+        if updater.installed_app(HERE) is None:
+            return  # running from source
+        await asyncio.sleep(30)
+        while True:
+            try:
+                found = await asyncio.get_running_loop().run_in_executor(None, updater.check, HERE)
+            except updater.UpdateError as exc:
+                debug("update", error=str(exc))
+                found = None
+            if found and found["newer"] and self.should_offer(found["version"]):
+                while self.asleep or self.session.agent_state != "listening" or self.session.user_state == "speaking":
+                    await asyncio.sleep(5)
+                if self.should_offer(found["version"]):  # asked in another conversation, or updating, meanwhile
+                    updater.save_state(HOME, offered=found["version"])
+                    debug("update", offered=found["version"], current=found["current"])
+                    self.session.generate_reply(instructions=(
+                        f"Zana {found['version']} is out; this computer has Zana {found['current']}. Ask the user in "
+                        "one short sentence if they want to update now. If they say yes, call update_zana."))
+            await asyncio.sleep(UPDATE_HOURS * 3600)
+
+    def should_offer(self, version: str) -> bool:
+        """Once per version, across conversations, and not while an update is going in."""
+        return not self.updating and updater.load_state(HOME).get("offered") != version
+
+    @function_tool()
+    async def check_for_update(self, context: RunContext) -> str:
+        """Check whether a newer version of Zana, the app you run in, is out."""
+        try:
+            found = await asyncio.get_running_loop().run_in_executor(None, updater.check, HERE)
+        except updater.UpdateError as exc:
+            return f"Checking for updates failed: {exc}." + SAY
+        if not found["newer"]:
+            return f"Zana {found['current']} is the newest version." + SAY
+        return (f"Zana {found['version']} is out; this computer has Zana {found['current']}. Ask if they want to "
+                "update now; update_zana installs it.") + SAY
+
+    @function_tool()
+    async def update_zana(self, context: RunContext):
+        """Update Zana to its newest version: download it, check its signature, then restart Zana with it. You
+        restart too, and you're back by yourself in about a minute. Only when the user asked for the update or
+        said yes to it."""
+        if self.updating:
+            return "The update is already under way." + SAY
+        self.updating = True
+        loop = asyncio.get_running_loop()
+        try:
+            found = await loop.run_in_executor(None, updater.check, HERE)
+            if not found["newer"]:
+                self.updating = False
+                return f"Zana {found['current']} is already the newest version." + SAY
+            staged = await loop.run_in_executor(None, updater.stage, found, HOME)
+        except updater.UpdateError as exc:
+            self.updating = False
+            debug("update", error=str(exc))
+            return f"The update didn't work: {exc}. Zana stays as it is." + SAY
+        debug("update", installing=found["version"], current=found["current"], staged=str(staged))
+        # A fixed line, spoken before Zana quits; the new app goes in once it has played.
+        line = context.session.say("The update checks out. Restarting now; I'll be right back.")
+        line.add_done_callback(lambda _: self.finish_update(found, staged))
+        return llm.ToolResult(f"Zana {found['version']} is checked and goes in as soon as you finish your line; "
+                              "Zana then restarts with you in it.", reply_required=False)
+
+    def finish_update(self, found: dict, staged) -> None:
+        """Put the checked app in place and restart Zana with it; a failure is said instead, and Zana stays."""
+        try:
+            updater.install(Path(found["app"]), staged)
+        except updater.UpdateError as exc:
+            self.updating = False
+            debug("update", error=str(exc))
+            self.session.say(f"Sorry, the update didn't go in: {exc}. Zana stays as it is.")
+            return
+        updater.save_state(HOME, done={"from": found["current"], "to": found["version"]})
+        updater.start_restart(Path(found["app"]), HOME)
+
+    def greet_after_update(self, done: dict) -> None:
+        """First words after an update restart: back, on the version now running. The user was talking to you
+        a moment ago, so you start awake."""
+        self.asleep, self.last_heard = False, time.time()
+        app = updater.installed_app(HERE)
+        now = updater.version(app) if app else "?"
+        if app:
+            updater.remove_old(app)
+        debug("update", updated=now, wanted=done.get("to"), previous=done.get("from"))
+        if now == done.get("to"):
+            note = (f"Zana just restarted after updating from {done.get('from')} to {now} (confirmed; no need to "
+                    f"check). Tell the user in one short sentence that you're back, on Zana {now}.")
+        else:
+            note = (f"Zana just restarted to update to {done.get('to')}, but it is still Zana {now}. Tell the user "
+                    "in one short sentence that the update didn't take.")
+        self.session.generate_reply(instructions=note)
+
 
 JOBS = Jobs(HOME, TERMINAL_TIMEOUT)
 
@@ -1153,6 +1254,8 @@ async def entrypoint(ctx: agents.JobContext):
     @session.on("close")
     def _on_close(_ev):
         JOBS.stop_all()
+        if agent.watch:
+            agent.watch.cancel()
         asyncio.create_task(orb.close())
 
     async def on_text(sess: AgentSession, ev) -> None:
@@ -1183,9 +1286,12 @@ async def entrypoint(ctx: agents.JobContext):
     await session.start(room=ctx.room, agent=agent, room_options=room_io.RoomOptions(
         text_input=room_io.TextInputOptions(text_input_cb=on_text)))
     orb.start()
+    if done := updater.take_done(HOME):
+        agent.greet_after_update(done)
     if agent.asleep:
         publish("sleep", asleep=True, wake_word=agent.wake_word)
     asyncio.create_task(agent.refresh_fillers())
+    agent.watch = asyncio.create_task(agent.watch_updates())
 
 
 if __name__ == "__main__":
