@@ -1063,9 +1063,10 @@ class Voicebot(Agent):
                 if self.should_offer(found["version"]):  # asked in another conversation, or updating, meanwhile
                     updater.save_state(HOME, offered=found["version"])
                     debug("update", offered=found["version"], current=found["current"])
-                    self.session.generate_reply(instructions=(
-                        f"Zana {found['version']} is out; this computer has Zana {found['current']}. Ask the user in "
-                        "one short sentence if they want to update now. If they say yes, call update_zana."))
+                    # A fixed line, not a model reply: a model can skip an instruction, and this has to be asked.
+                    # It joins the conversation, so a yes reaches the model as the answer to it (update_zana).
+                    self.say_all(f"Zana {found['version']} is out, and this Mac has {found['current']}. "
+                                 "Want me to update it now?")
             await asyncio.sleep(UPDATE_HOURS * 3600)
 
     def should_offer(self, version: str) -> bool:
@@ -1149,12 +1150,9 @@ class Voicebot(Agent):
         now = updater.version(app) if app else "?"
         debug("update", updated=now, wanted=done.get("to"), previous=done.get("from"))
         if now == done.get("to"):
-            note = (f"Zana just restarted after updating from {done.get('from')} to {now} (confirmed; no need to "
-                    f"check). Tell the user in one short sentence that you're back, on Zana {now}.")
+            self.say_all(f"I'm back, and Zana is now {now}.")
         else:
-            note = (f"Zana just restarted to update to {done.get('to')}, but it is still Zana {now}. Tell the user "
-                    "in one short sentence that the update didn't take.")
-        self.session.generate_reply(instructions=note)
+            self.say_all(f"Zana restarted, but it's still {now}, so the update didn't take.")
 
 
 JOBS = Jobs(HOME, TERMINAL_TIMEOUT)
