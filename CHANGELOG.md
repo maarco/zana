@@ -21,6 +21,9 @@ This project follows SemVer once public releases begin.
   still can. This starts with the first conversation after the voice print is
   set up. To let anyone interrupt again, ask Voicebot to let anyone interrupt
   it; that also starts with the next conversation.
+- Fixed: with an OpenRouter model, a low balance made every reply fail with
+  "My chat model failed", because each request held credit for the model's
+  whole output length. Replies now ask for at most 8,192 tokens.
 - Fixed: with a voice print set up, speech too short to check against it was
   answered anyway, so a TV line could get a reply. Now it is answered only if
   the voice print matched your voice in the 3 seconds before it.

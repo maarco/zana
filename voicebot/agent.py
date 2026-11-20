@@ -92,6 +92,7 @@ KEEP_TURNS = 3  # recent turns kept word for word when compacting
 ENROLL_SECONDS = 8
 BARGE_IN_SECONDS = 0.5  # seconds of actual speech before it is checked against the voice print
 UPDATE_HOURS = 6  # how often Voicebot looks for a newer Zana
+MAX_REPLY_TOKENS = 8192  # the longest reply asked of OpenRouter, which holds credit for it (#50)
 
 log = logging.getLogger("voicebot")
 
@@ -181,7 +182,10 @@ def make_llm(vision: bool = False):
         model = vision_model or os.getenv("VISION_MODEL", model)
         base_url = os.getenv("VISION_BASE_URL", base_url)
         api_key = os.getenv("VISION_API_KEY", api_key)
-    return openai.LLM(model=model, base_url=base_url, api_key=api_key,
+    # OpenRouter refuses a request its balance can't cover at the longest reply allowed, which is the model's
+    # whole output length unless capped. Other providers hold no credit, and some reject unknown fields.
+    cap = {"max_completion_tokens": MAX_REPLY_TOKENS} if "openrouter.ai" in base_url else {}
+    return openai.LLM(model=model, base_url=base_url, api_key=api_key, **cap,
                       **({"extra_body": extra_body} if extra_body else {}))
 
 
