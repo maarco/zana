@@ -226,6 +226,22 @@ fn set_model_persists_selected_model() {
 }
 
 #[test]
+fn mac_bundle_description_matches_tauri_metadata() {
+    let config: Value = serde_json::from_str(&read_repo_file("src-tauri/tauri.conf.json")).unwrap();
+    let description = config
+        .pointer("/bundle/longDescription")
+        .and_then(Value::as_str)
+        .unwrap();
+    let plist = read_repo_file("src-tauri/Info.plist");
+    assert!(
+        plist.contains(&format!(
+            "<key>app.zana.Description</key>\n    <string>{description}</string>"
+        )),
+        "macOS bundle description must match the Tauri long description"
+    );
+}
+
+#[test]
 fn mac_bundle_identity_and_signing_are_stable() {
     let tauri_config: Value =
         serde_json::from_str(&read_repo_file("src-tauri/tauri.conf.json")).unwrap();
