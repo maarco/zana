@@ -181,6 +181,37 @@ class SensoryMemoryTest(unittest.TestCase):
         self.assertIn("sensory", topics("remember this sound as the dryer buzzer"))
         self.assertIn("sensory", topics("consolidate your sensory memory"))
 
+    def test_automatic_passive_capture_teach_and_auto_recognition(self):
+        from sensory_memory import parse_teach_intent
+
+        self.assertEqual(parse_teach_intent("that sound was the dryer buzzer"), ("audio", "dryer buzzer"))
+        self.assertEqual(parse_teach_intent("Remember that sound as my kettle whistle."), ("audio", "kettle whistle"))
+        self.assertEqual(parse_teach_intent("remember this screen as trading dashboard"), ("screen", "trading dashboard"))
+        self.assertIsNone(parse_teach_intent("what was that sound?"))
+
+        with tempfile.TemporaryDirectory() as home:
+            mem = SensoryMemory(home, dim=64, seed=0)
+            # 1. Unfamiliar non-speech room sound happens at t=100 while user is NOT speaking.
+            obs1 = mem.observe_ambient(audio=_tone(340.0), is_speech=False, now=100.0)
+            self.assertTrue(obs1["event"])
+            self.assertIsNone(obs1["recognized"])
+            # User asks 5s later -> automatic context honestly says unfamiliar.
+            ctx_unk = mem.context_for_turn("what was that sound?", now=105.0)
+            self.assertIn("unfamiliar", ctx_unk.lower())
+
+            # 2. User talks (is_speech=True) -> must NOT overwrite the cached room sound!
+            mem.observe_ambient(audio=_tone(1200.0), is_speech=True, now=106.0)
+            cached = mem.recent_audio_event(max_age=60.0, now=107.0)
+            self.assertIsNotNone(cached)
+            mem.remember("dryer buzzer", audio_vec=cached)
+
+            # 3. Same sound happens again later (noisy) -> auto-recognized without any tool call!
+            obs2 = mem.observe_ambient(audio=_tone(340.0, noise=0.04, seed=3), is_speech=False, now=150.0)
+            self.assertIsNotNone(obs2["recognized"])
+            self.assertEqual(obs2["recognized"]["label"], "dryer buzzer")
+            ctx_hit = mem.context_for_turn("what was that?", now=154.0)
+            self.assertIn("dryer buzzer", ctx_hit)
+
 
 if __name__ == "__main__":
     unittest.main()

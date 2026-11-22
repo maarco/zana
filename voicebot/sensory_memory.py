@@ -432,6 +432,9 @@ class SensoryMemory:
         self.labels: dict[str, np.ndarray] = {}
         self.label_meta: dict[str, dict[str, Any]] = {}
         self.sleep_logs: list[dict[str, Any]] = []
+        # Live short-term sensory perception cache (vectors only, never raw audio/images).
+        self.last_surprising_audio: tuple[float, np.ndarray] | None = None
+        self.last_recognized: dict[str, Any] | None = None
 
         self._bg_t = self.text.encode("ambient room silence")
         if os.path.isfile(self.npz_path) and os.path.isfile(self.meta_path):
@@ -453,12 +456,61 @@ class SensoryMemory:
             return self.audio.encode(audio)
         return self.audio.silence_vec.copy()
 
-    def observe_ambient(self, audio: np.ndarray | None = None, image: np.ndarray | None = None) -> dict[str, float]:
-        """Passive live tick through the surprise gate (keeps background room familiar)."""
+    def _is_audible(self, audio: np.ndarray | None) -> bool:
+        if audio is None or len(audio) == 0:
+            return False
+        rms = float(np.sqrt(np.mean(np.square(audio))))
+        return rms >= self.audio.silence_rms * 0.5
+
+    def observe_ambient(
+        self,
+        audio: np.ndarray | None = None,
+        image: np.ndarray | None = None,
+        is_speech: bool = False,
+        now: float | None = None,
+    ) -> dict[str, Any]:
+        """Passive live tick through the surprise gate.
+
+        Quiet/familiar room audio keeps the ambient baseline warm with gate ~0.
+        Audible non-speech sounds are automatically checked against memory
+        (auto-recognition) and cached as a 64-D vector so the user can ask
+        "what was that?" or say "that was the dryer" seconds later without
+        their own voice overwriting the sound.
+        """
+        ts = time.time() if now is None else now
+        audible = self._is_audible(audio)
         av = self._encode_audio(audio)
         vv = self._encode_vision(image=image)
+
         with self._lock:
-            return self.fast.observe([vv, av, self._bg_t])
+            recognized = None
+            if audible and not is_speech:
+                # Distinct from silence anchor -> real non-speech room event.
+                sim_silence = float(np.dot(av, self.audio.silence_vec))
+                if sim_silence < 0.85:
+                    self.last_surprising_audio = (ts, av.copy())
+                    if self.labels:
+                        _, _, pt = self._predict_locked([None, av, None])
+                        matches = self._top_labels_locked(pt, k=1)
+                        if matches and matches[0]["cos"] >= self.confidence_floor:
+                            recognized = {"t": ts, "cue": "audio", **matches[0]}
+                            self.last_recognized = recognized
+                        else:
+                            self.last_recognized = {"t": ts, "cue": "audio", "familiar": False}
+                    # Do NOT overwrite fast weights with "ambient room silence" during an actual room sound!
+                    return {"surprise": 1.0 - max(0.0, sim_silence), "gate": 0.0, "event": True, "recognized": recognized}
+
+            info = self.fast.observe([vv, av, self._bg_t])
+            return {**info, "event": False, "recognized": recognized}
+
+    def recent_audio_event(self, max_age: float = 60.0, now: float | None = None) -> np.ndarray | None:
+        """Return the cached 64-D vector of the latest non-speech room sound if fresh."""
+        ts = time.time() if now is None else now
+        with self._lock:
+            if self.last_surprising_audio is None:
+                return None
+            when, vec = self.last_surprising_audio
+            return vec.copy() if (ts - when) <= max_age else None
 
     def remember(
         self,
@@ -466,19 +518,21 @@ class SensoryMemory:
         audio: np.ndarray | None = None,
         image: np.ndarray | None = None,
         image_path: str | None = None,
+        audio_vec: np.ndarray | None = None,
+        vision_vec: np.ndarray | None = None,
         repeats: int = 3,
     ) -> dict[str, Any]:
-        """Bind current room sound and/or screen snapshot to a human concept label."""
+        """Bind room sound and/or screen snapshot (or cached 64-D vectors) to a concept label."""
         clean_label = " ".join(label.strip().split())
         if not clean_label:
             raise ValueError("Label must be non-empty.")
 
-        vv = self._encode_vision(image=image, image_path=image_path)
-        av = self._encode_audio(audio=audio)
+        vv = _unit(vision_vec) if vision_vec is not None else self._encode_vision(image=image, image_path=image_path)
+        av = _unit(audio_vec) if audio_vec is not None else self._encode_audio(audio=audio)
         tv = self.text.encode(clean_label)
 
-        has_vision = (image is not None) or bool(image_path and os.path.isfile(image_path))
-        has_audio = bool(audio is not None and len(audio) > 0 and float(np.sqrt(np.mean(np.square(audio)))) >= self.audio.silence_rms * 0.5)
+        has_vision = (vision_vec is not None) or (image is not None) or bool(image_path and os.path.isfile(image_path))
+        has_audio = (audio_vec is not None) or self._is_audible(audio)
 
         with self._lock:
             self.labels[clean_label] = tv
@@ -507,6 +561,33 @@ class SensoryMemory:
                 "buffer_size": len(self.episode_buffer),
                 "total_labels": len(self.labels),
             }
+
+    def context_for_turn(self, heard: str, max_age: float = 60.0, now: float | None = None) -> str:
+        """Automatic perception note injected into the turn context (zero tool call needed).
+
+        Surfaces any recently recognized room sound automatically, or reports an
+        honest 'unfamiliar' note when the user asks about a recent sound.
+        """
+        ts = time.time() if now is None else now
+        low = heard.lower()
+        asking_sound = any(p in low for p in (
+            "what was that", "what is that sound", "what's that sound", "hear that",
+            "that sound", "that noise", "recognize that", "was that the",
+        ))
+        with self._lock:
+            rec = self.last_recognized
+            if rec is not None and (ts - rec["t"]) <= max_age:
+                age = max(1, int(round(ts - rec["t"])))
+                if rec.get("familiar", True) and "label" in rec:
+                    return (f"Automatic sensory perception ({age}s ago): recent room sound matched "
+                            f'"{rec["label"]}" (confidence {rec["cos"]}). Use this directly if relevant.')
+                if asking_sound:
+                    return (f"Automatic sensory perception ({age}s ago): heard a room sound, but it did not "
+                            "match any learned sensory memory (unfamiliar). Tell the user honestly you do not recognize it.")
+            elif asking_sound:
+                return ("Automatic sensory perception: no recognized room sound in memory right now "
+                        "(unfamiliar). Tell the user honestly you do not recognize it.")
+        return ""
 
     def _predict_locked(self, modalities: list[np.ndarray | None]) -> list[np.ndarray]:
         fast_out = self.fast.predict(modalities)
@@ -762,3 +843,38 @@ class SensoryMemory:
             self.cortex_trained = bool(meta.get("cortex_trained", False))
             self.label_meta = dict(meta.get("label_meta", {}))
             self.sleep_logs = list(meta.get("sleep_logs", []))
+
+
+_TEACH_AUDIO_PATTERNS = (
+    re.compile(r"\bremember\s+(?:that|this)\s+(?:sound|noise)\s+as\s+(?:the\s+|a\s+|an\s+|my\s+)?(.+?)[.!?]*$", re.I),
+    re.compile(r"\b(?:call|name|label)\s+(?:that|this)\s+(?:sound|noise)\s+(?:the\s+|a\s+|an\s+|my\s+)?(.+?)[.!?]*$", re.I),
+    re.compile(r"\b(?:that|this)\s+(?:sound|noise)\s+(?:is|was)\s+(?:the\s+|a\s+|an\s+|my\s+)?(.+?)[.!?]*$", re.I),
+)
+_TEACH_SCREEN_PATTERNS = (
+    re.compile(r"\bremember\s+(?:this|my)\s+screen\s+as\s+(?:the\s+|a\s+|an\s+|my\s+)?(.+?)[.!?]*$", re.I),
+    re.compile(r"\b(?:call|name|label)\s+(?:this|my)\s+screen\s+(?:the\s+|a\s+|an\s+|my\s+)?(.+?)[.!?]*$", re.I),
+)
+
+
+def parse_teach_intent(text: str) -> tuple[str, str] | None:
+    """Detect natural spoken sensory-teaching phrases so binding runs automatically
+    before the LLM replies (without needing a prompt rule or manual tool call).
+
+    Returns ("audio" | "screen", label) or None.
+    """
+    cleaned = " ".join(text.strip().split())
+    if not cleaned or len(cleaned) > 160 or cleaned.endswith("?"):
+        return None
+    for pat in _TEACH_AUDIO_PATTERNS:
+        m = pat.search(cleaned)
+        if m:
+            label = m.group(1).strip(" .!?,\"'")
+            if 1 <= len(label.split()) <= 8:
+                return ("audio", label)
+    for pat in _TEACH_SCREEN_PATTERNS:
+        m = pat.search(cleaned)
+        if m:
+            label = m.group(1).strip(" .!?,\"'")
+            if 1 <= len(label.split()) <= 8:
+                return ("screen", label)
+    return None

@@ -41,7 +41,7 @@ from orb_state import OrbState
 from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls,
                        repeats, split_say, topics, wants_redo, wants_voiceprint)
 from voiceprint import RATE, VoicePrint, VoiceTap, speech_seconds, to_mono_16k
-from sensory_memory import AudioRingTap, SensoryMemory
+from sensory_memory import AudioRingTap, SensoryMemory, parse_teach_intent
 from speech import TOOL_SAY, join_sentences, one_sentence, speakable_stream
 import updater
 
@@ -329,14 +329,21 @@ class Voicebot(Agent):
             debug("error", source="voiceprint", error=f"voice print model failed to load: {exc}")
 
     async def stt_node(self, audio, model_settings):
-        """Pass the mic audio to speech-to-text, keeping a copy for the voice print and sensory memory."""
+        """Pass the mic audio to speech-to-text, keeping a copy for the voice print and automatic sensory memory."""
         async def tapped():
             async for frame in audio:
                 try:
                     pcm = to_mono_16k(frame.data, frame.sample_rate, frame.num_channels)
                     self.tap.push(pcm)
                     if self.sensory_tap.push(pcm):
-                        self.sensory.observe_ambient(audio=self.sensory_tap.latest(1.0))
+                        obs = self.sensory.observe_ambient(
+                            audio=self.sensory_tap.latest(1.5),
+                            is_speech=self.tap.speaking,
+                        )
+                        if obs.get("recognized"):
+                            rec = obs["recognized"]
+                            debug("sensory", action="auto_recognized", label=rec["label"], cos=rec["cos"])
+                            self.publish("sensory", action="recognized", label=rec["label"], cos=rec["cos"])
                 except Exception:  # noqa: BLE001 - never break speech-to-text over the tap
                     pass
                 yield frame
@@ -543,13 +550,53 @@ class Voicebot(Agent):
         if extra is not None and self.answer_voiceprint_request(heard):
             raise StopResponse()
         notes = self.feature_notes(heard) if extra is not None else ""
-        if notes:
-            turn_ctx.add_message(role="system", content="Context for this turn (live state and how-to):\n" + notes)
+        sensory_note = await self.auto_sensory_turn(heard) if extra is not None else ""
+        combined_notes = "\n".join(p for p in (notes, sensory_note) if p)
+        if combined_notes:
+            turn_ctx.add_message(role="system", content="Context for this turn (live state and how-to):\n" + combined_notes)
         if extra is None:
             raise StopResponse()
         self.play_filler()
         if extra:
             new_message.content.append(extra)
+
+    async def auto_sensory_turn(self, heard: str) -> str:
+        """Automatic sensory perception & binding before the LLM replies (zero tool call needed).
+
+        1. If the user naturally named a recent room sound or screen ("that sound was the dryer"),
+           binds the cached pre-speech room sound or current screenshot immediately in code.
+        2. Otherwise surfaces any recently auto-recognized sound (or honest unfamiliar note)
+           directly into this turn's context.
+        """
+        sensory = getattr(self, "sensory", None)
+        if sensory is None:
+            return ""
+        taught = parse_teach_intent(heard)
+        if taught is not None:
+            kind, label = taught
+            try:
+                if kind == "audio":
+                    audio_vec = sensory.recent_audio_event(max_age=60.0)
+                    raw_audio = None if audio_vec is not None else self.sensory_tap.latest(3.0)
+                    res = await asyncio.get_running_loop().run_in_executor(
+                        None, lambda: sensory.remember(label, audio=raw_audio, audio_vec=audio_vec))
+                else:
+                    shot_path = None
+                    try:
+                        raw_path = await zana("zana.screenshot")
+                        if os.path.isfile(raw_path):
+                            shot_path = raw_path
+                    except Exception:  # noqa: BLE001 - test stubs have no live room
+                        pass
+                    res = await asyncio.get_running_loop().run_in_executor(
+                        None, lambda: sensory.remember(label, image_path=shot_path))
+                debug("sensory", action="auto_remember", kind=kind, **res)
+                self.publish("sensory", action="remembered", label=res["label"], kind=kind)
+                return (f'Automatic sensory memory: already bound the recent {kind} to "{res["label"]}" '
+                        f'(total {res["total_labels"]} concepts). Confirm briefly in one sentence; no tool call needed.')
+            except Exception as exc:  # noqa: BLE001 - never block the turn
+                debug("error", source="sensory_auto_remember", error=str(exc)[:300])
+        return sensory.context_for_turn(heard)
 
     def own_turn_without_audio(self) -> bool:
         """A turn with too little audio of its own to check: two turns ended together (a TV's dialogue often
@@ -789,7 +836,8 @@ class Voicebot(Agent):
             include_audio: Bind the last few seconds of live microphone audio (default True).
             include_screen: Bind a fresh screenshot of the current screen (default True).
         """
-        audio = self.sensory_tap.latest(3.0) if include_audio else None
+        audio_vec = self.sensory.recent_audio_event(max_age=60.0) if include_audio else None
+        audio = None if audio_vec is not None else (self.sensory_tap.latest(3.0) if include_audio else None)
         shot_path = None
         if include_screen:
             raw_path = await zana("zana.screenshot")
@@ -797,7 +845,7 @@ class Voicebot(Agent):
                 shot_path = raw_path
         try:
             res = await asyncio.get_running_loop().run_in_executor(
-                None, lambda: self.sensory.remember(label, audio=audio, image_path=shot_path))
+                None, lambda: self.sensory.remember(label, audio=audio, audio_vec=audio_vec, image_path=shot_path))
         except Exception as exc:  # noqa: BLE001 - spoken back
             return f"Could not save sensory memory: {exc}." + SAY
         debug("sensory", action="remember", **res)
@@ -1515,6 +1563,8 @@ async def entrypoint(ctx: agents.JobContext):
         JOBS.stop_all()
         if agent.watch:
             agent.watch.cancel()
+        if agent.sensory.episode_buffer:
+            asyncio.create_task(agent._consolidate_on_sleep())
         asyncio.create_task(orb.close())
 
     async def on_text(sess: AgentSession, ev) -> None:
@@ -1528,13 +1578,15 @@ async def entrypoint(ctx: agents.JobContext):
         if agent.answer_voiceprint_request(ev.text):
             return
         notes = agent.feature_notes(ev.text)
+        sensory_note = await agent.auto_sensory_turn(ev.text)
+        combined = "\n".join(p for p in (notes, sensory_note) if p)
         async with sess._claim_user_turn():
             # typed text is the user's own: it stops Voicebot even when speech can't (voice-checked interruptions)
             await sess.interrupt(force=agent.voice_gated)
             agent.play_filler()
-            if notes:
+            if combined:
                 sess.generate_reply(user_input=ev.text + extra,
-                                    instructions="Context for this turn (live state and how-to):\n" + notes)
+                                    instructions="Context for this turn (live state and how-to):\n" + combined)
             else:
                 sess.generate_reply(user_input=ev.text + extra)
 
