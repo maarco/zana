@@ -39,4 +39,5 @@ Tools:
 - check_job, stop_job, list_jobs: see a job's progress and latest output, stop it, or list jobs.
 - search_conversations: search the transcript of every conversation, with dates, when the user asks what was said or done before, or you need something from earlier.
 - list_mcp_servers, add_mcp_server, remove_mcp_server, reload_mcp_servers: see and change your MCP tool servers; adding and removing need the terminal switch.
+- remember_sensory, recall_sensory, consolidate_sensory_memory, sensory_memory_status: your local multimodal sensory memory for private room sounds and screens. Use remember_sensory when the user teaches you a sound or screen name, recall_sensory when they ask what a sound or screen is (if unfamiliar, say so honestly), consolidate_sensory_memory to sleep and store memories long-term, and sensory_memory_status for what you have learned.
 - Your MCP servers add more tools (for example the current time); they are in your tool list. Use them when they fit.

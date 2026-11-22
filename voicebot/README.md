@@ -34,6 +34,7 @@ Everything per-user lives in the Voicebot folder,
 | `config.json` | Terminal switch, wake word and chat model, written by Zana |
 | `mcp.json` | MCP servers, Claude Desktop format |
 | `transcript.md` | Always-on transcript of everything heard and said |
+| `sensory_memory.npz` / `.json` | Local associative sensory memory weights and embeddings (mode 0600; never raw audio or images) |
 | `logs/` | `debug.jsonl` (the Debug window), plus each process's log |
 | `fillers/` | Cached thinking-sound audio and its manifest |
 | `venv/`, `voices/` | The Python environment and VibeVoice voices |
@@ -81,7 +82,10 @@ OPENROUTER_API_KEY=... OPENROUTER_MODEL=...   # only used when Preferences > Mod
   available until the replacement is ready. Configure them in Preferences > Voicebot.
 - **Tools**: `see_screen`, `look_at_screen` (vision model), `type_up` (pastes at
   your cursor), `press_keys`, `stop_listening` (also said with "goodbye"),
-  `search_conversations` (the transcript of every conversation), `run_terminal`,
+  `search_conversations` (the transcript of every conversation),
+  `remember_sensory`/`recall_sensory`/`consolidate_sensory_memory`/`sensory_memory_status`
+  (local associative sensory memory for private room sounds and screens, auto-consolidating on sleep),
+  `run_terminal`,
   `run_applescript` and `check_job`/`stop_job`/`list_jobs` (only with the Terminal
   Tool switch), and `list/add/remove/reload_mcp_servers` (adding and removing need
   the Terminal Tool switch). Every tool call carries a required "say" field the

@@ -193,6 +193,8 @@ TOPICS = {
     "name": ("your name", "call you", "rename", "who are you", "wake word"),
     "settings": ("setting", "settings", "your voice", "different voice", "change your voice", "which model",
                  "your model", "reasoning", "thinking sounds", "mic check", "microphone", "orb", "your look", "mood"),
+    "sensory": ("sensory memory", "remember this sound", "remember that sound", "what was that sound",
+                "what is that sound", "recognize this sound", "recognize my screen", "consolidate", "sleep on your memories"),
 }
 
 

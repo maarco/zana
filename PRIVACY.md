@@ -72,7 +72,10 @@ services. Network activity can include:
 Voicebot keeps an always-on transcript of everything it hears, in
 `~/Library/Application Support/Zana/voicebot/transcript.md`, including speech
 it does not answer. Nothing it hears reaches a model until you say the wake
-word (if you set one). Its optional Terminal Tool and the MCP servers you add
+word (if you set one). Optional local sensory memory (`sensory_memory.npz` and
+`sensory_memory.json`, mode `0600`) stores only compact 64-number embeddings and
+associative weights on your Mac—never raw microphone audio or screenshots. Its
+optional Terminal Tool and the MCP servers you add
 can run programs on your Mac; text on your screen can try to steer the model,
 so turn them on only if you accept that.
 

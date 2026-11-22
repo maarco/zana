@@ -606,6 +606,7 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
         "fillers.py",
         "orb_state.py",
         "voiceprint.py",
+        "sensory_memory.py",
         "updater.py",
         "system_prompt.default.md",
         "requirements.txt",

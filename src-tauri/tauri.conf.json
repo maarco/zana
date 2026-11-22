@@ -18,6 +18,7 @@
       "../voicebot/fillers.py": "voicebot/fillers.py",
       "../voicebot/orb_state.py": "voicebot/orb_state.py",
       "../voicebot/voiceprint.py": "voicebot/voiceprint.py",
+      "../voicebot/sensory_memory.py": "voicebot/sensory_memory.py",
       "../voicebot/updater.py": "voicebot/updater.py",
       "../voicebot/system_prompt.default.md": "voicebot/system_prompt.default.md",
       "../voicebot/requirements.txt": "voicebot/requirements.txt",

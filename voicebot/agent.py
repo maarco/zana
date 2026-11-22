@@ -41,6 +41,7 @@ from orb_state import OrbState
 from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls,
                        repeats, split_say, topics, wants_redo, wants_voiceprint)
 from voiceprint import RATE, VoicePrint, VoiceTap, speech_seconds, to_mono_16k
+from sensory_memory import AudioRingTap, SensoryMemory
 from speech import TOOL_SAY, join_sentences, one_sentence, speakable_stream
 import updater
 
@@ -269,6 +270,8 @@ class Voicebot(Agent):
         self.last_heard = 0.0
         self.publish = publish
         self.tap = VoiceTap()
+        self.sensory_tap = AudioRingTap()
+        self.sensory = SensoryMemory(HOME)
         self.voiceprint = VoicePrint(HOME)
         self.threshold = float(config.get("voiceprint_threshold") or 0.4)
         self.short_threshold = float(config.get("voiceprint_short_threshold") or 0.28)
@@ -304,6 +307,20 @@ class Voicebot(Agent):
         self.asleep = True
         TRANSCRIPT.mark_read()
         self.publish("sleep", asleep=True, wake_word=self.wake_word)
+        sensory = getattr(self, "sensory", None)
+        if sensory is not None and sensory.episode_buffer:
+            try:
+                asyncio.get_running_loop().create_task(self._consolidate_on_sleep())
+            except RuntimeError:
+                pass
+
+    async def _consolidate_on_sleep(self) -> None:
+        try:
+            rep = await asyncio.get_running_loop().run_in_executor(None, self.sensory.sleep)
+            debug("sensory", action="auto_sleep", committed=rep.committed, reason=rep.reason,
+                  new=rep.new_concepts, replay=rep.replay_size)
+        except Exception as exc:  # noqa: BLE001 - never break sleep over consolidation
+            debug("error", source="sensory_memory", error=str(exc)[:300])
 
     def _warm_voiceprint(self) -> None:
         try:
@@ -312,11 +329,14 @@ class Voicebot(Agent):
             debug("error", source="voiceprint", error=f"voice print model failed to load: {exc}")
 
     async def stt_node(self, audio, model_settings):
-        """Pass the mic audio to speech-to-text, keeping a copy for the voice print."""
+        """Pass the mic audio to speech-to-text, keeping a copy for the voice print and sensory memory."""
         async def tapped():
             async for frame in audio:
                 try:
-                    self.tap.push(to_mono_16k(frame.data, frame.sample_rate, frame.num_channels))
+                    pcm = to_mono_16k(frame.data, frame.sample_rate, frame.num_channels)
+                    self.tap.push(pcm)
+                    if self.sensory_tap.push(pcm):
+                        self.sensory.observe_ambient(audio=self.sensory_tap.latest(1.0))
                 except Exception:  # noqa: BLE001 - never break speech-to-text over the tap
                     pass
                 yield frame
@@ -367,9 +387,21 @@ class Voicebot(Agent):
                          "You cannot change the API key or URL or turn the terminal on: the user does that in "
                          "Zana's Preferences."),
         }
-        notes = [guides[t] for t in topics(heard) if t in guides]
+        matched = topics(heard)
+        if "sensory" in matched:
+            sensory = getattr(self, "sensory", None)
+            if sensory is not None:
+                st = sensory.status()
+                guides["sensory"] = (
+                    f"Local sensory memory: {st['total_labels']} learned concepts, "
+                    f"{st['consolidated']} consolidated, {st['buffer_size']} waiting for sleep. "
+                    "Use remember_sensory to bind the latest room sound and/or screen to a name, "
+                    "recall_sensory to identify a recent sound or screen, consolidate_sensory_memory to sleep "
+                    "and consolidate with automatic rollback protection, and sensory_memory_status for counts."
+                )
+        notes = [guides[t] for t in matched if t in guides]
         if notes:
-            debug("context", topics=topics(heard))
+            debug("context", topics=matched)
         return "\n".join(notes)
 
     def say_all(self, text: str, **kwargs) -> None:
@@ -742,6 +774,93 @@ class Voicebot(Agent):
         if not found:
             return f'Nothing in the transcript has "{words}".' + SAY
         return "Transcript lines, oldest first:\n" + clean("\n".join(found), 4000) + SAY
+
+    # ---------- local multimodal associative sensory memory ----------
+
+    @function_tool()
+    async def remember_sensory(self, context: RunContext, label: str, include_audio: bool = True,
+                               include_screen: bool = True) -> str:
+        """Remember the latest room sound and/or current screen snapshot under a label in local associative
+        sensory memory. Use when the user says things like "remember that sound as the dryer buzzer" or
+        "remember this screen as my trading dashboard". Only compact embeddings are saved locally.
+
+        Args:
+            label: The human name for this sound, screen, or moment (e.g. "dryer buzzer").
+            include_audio: Bind the last few seconds of live microphone audio (default True).
+            include_screen: Bind a fresh screenshot of the current screen (default True).
+        """
+        audio = self.sensory_tap.latest(3.0) if include_audio else None
+        shot_path = None
+        if include_screen:
+            raw_path = await zana("zana.screenshot")
+            if os.path.isfile(raw_path):
+                shot_path = raw_path
+        try:
+            res = await asyncio.get_running_loop().run_in_executor(
+                None, lambda: self.sensory.remember(label, audio=audio, image_path=shot_path))
+        except Exception as exc:  # noqa: BLE001 - spoken back
+            return f"Could not save sensory memory: {exc}." + SAY
+        debug("sensory", action="remember", **res)
+        bound = " and ".join(
+            [p for p, ok in (("sound", res["has_audio"]), ("screen", res["has_vision"])) if ok]
+        ) or "label only"
+        return (f"Remembered {res['label']} using {bound} "
+                f"(surprise {res['mean_surprise']}, {res['total_labels']} concepts stored).") + SAY
+
+    @function_tool()
+    async def recall_sensory(self, context: RunContext, cue: str = "auto", query: str = "") -> str:
+        """Check local associative sensory memory to identify a recent room sound, the current screen,
+        or a spoken concept label. Use when the user asks "what was that sound?", "do you recognize
+        what is on my screen?", or asks what you remember about a learned sound or view. If familiar is
+        false, tell the user honestly that you do not recognize it.
+
+        Args:
+            cue: One of "audio", "screen", "text", or "auto".
+            query: Optional text phrase when cue is "text".
+        """
+        audio = self.sensory_tap.latest(3.0) if cue in ("auto", "audio", "sound", "mic") else None
+        shot_path = None
+        if cue in ("auto", "screen", "vision", "screenshot") and not query.strip():
+            raw_path = await zana("zana.screenshot")
+            if os.path.isfile(raw_path):
+                shot_path = raw_path
+        try:
+            res = await asyncio.get_running_loop().run_in_executor(
+                None, lambda: self.sensory.recall(cue=cue, query=query, audio=audio, image_path=shot_path))
+        except Exception as exc:  # noqa: BLE001 - spoken back
+            return f"Sensory recall failed: {exc}." + SAY
+        debug("sensory", action="recall", **res)
+        if not res.get("familiar"):
+            reason = res.get("reason") or "confidence was too low"
+            top = res["matches"][0] if res.get("matches") else None
+            extra = f" Closest weak guess was {top['label']} at {top['cos']}." if top else ""
+            return f"Unfamiliar ({reason}).{extra} Tell the user honestly you do not recognize it." + SAY
+        best = res["matches"][0]
+        return f"Recognized as {best['label']} from {res['cue']} (similarity {best['cos']})." + SAY
+
+    @function_tool()
+    async def consolidate_sensory_memory(self, context: RunContext) -> str:
+        """Run offline sleep consolidation on local sensory memories, moving recent fast-weight episodes
+        into long-term storage with automatic regression-quiz rollback if old memories would degrade."""
+        try:
+            rep = await asyncio.get_running_loop().run_in_executor(None, self.sensory.sleep)
+        except Exception as exc:  # noqa: BLE001 - spoken back
+            return f"Sensory consolidation failed: {exc}." + SAY
+        debug("sensory", action="sleep", committed=rep.committed, reason=rep.reason,
+              quiz_before=round(rep.quiz_before, 3), quiz_after=round(rep.quiz_after, 3),
+              new=rep.new_concepts, replay=rep.replay_size)
+        if not rep.committed:
+            return f"Sensory consolidation did not commit: {rep.reason}." + SAY
+        return (f"Consolidated {rep.new_concepts} sensory concept(s) into long-term memory "
+                f"(quiz stayed at {rep.quiz_after:.2f}).") + SAY
+
+    @function_tool()
+    async def sensory_memory_status(self, context: RunContext) -> str:
+        """Report how many local sensory concepts are stored, their names, and how many await sleep."""
+        st = self.sensory.status()
+        names = ", ".join(st["labels"][:12]) or "none yet"
+        return (f"{st['total_labels']} sensory concepts ({names}); {st['consolidated']} consolidated, "
+                f"{st['buffer_size']} waiting for sleep.") + SAY
 
     # ---------- MCP servers ----------
 
