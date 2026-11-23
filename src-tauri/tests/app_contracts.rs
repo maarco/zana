@@ -226,6 +226,44 @@ fn set_model_persists_selected_model() {
 }
 
 #[test]
+fn mac_bundle_description_matches_tauri_metadata() {
+    let config: Value = serde_json::from_str(&read_repo_file("src-tauri/tauri.conf.json")).unwrap();
+    let description = config
+        .pointer("/bundle/longDescription")
+        .and_then(Value::as_str)
+        .unwrap();
+    let plist = read_repo_file("src-tauri/Info.plist");
+    assert!(
+        plist.contains(&format!(
+            "<key>app.zana.Description</key>\n    <string>{description}</string>"
+        )),
+        "macOS bundle description must match the Tauri long description"
+    );
+}
+
+#[test]
+fn bundle_descriptions_describe_voicebot_without_device_only_claims() {
+    let config: Value = serde_json::from_str(&read_repo_file("src-tauri/tauri.conf.json")).unwrap();
+    let short_description = config
+        .pointer("/bundle/shortDescription")
+        .and_then(Value::as_str)
+        .unwrap()
+        .to_lowercase();
+    let long_description = config
+        .pointer("/bundle/longDescription")
+        .and_then(Value::as_str)
+        .unwrap()
+        .to_lowercase();
+
+    assert!(short_description.contains("voice agent"));
+    assert!(long_description.contains("voice agent"));
+    for description in [&short_description, &long_description] {
+        assert!(!description.contains("whisper"));
+        assert!(!description.contains("never leaves your device"));
+    }
+}
+
+#[test]
 fn mac_bundle_identity_and_signing_are_stable() {
     let tauri_config: Value =
         serde_json::from_str(&read_repo_file("src-tauri/tauri.conf.json")).unwrap();

@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>app.zana.Description</key>
+    <string>Zana is a hands-free voice agent that listens, responds, and uses tools to help you work on your desktop.</string>
     <key>CFBundleDisplayName</key>
     <string>Zana</string>
     <key>NSAccessibilityUsageDescription</key>
