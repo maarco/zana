@@ -100,6 +100,25 @@ class PromptGuidanceTest(unittest.TestCase):
         self.assertTrue(state["delivered"])
         self.assertEqual(prompt_guidance.take_legacy_prompt_offer(self.home, old_prompt), "")
 
+    def test_state_write_failure_still_offers_and_allows_transcript_proven_consent(self):
+        blocked_home = Path(self.temp.name) / "blocked-home"
+        blocked_home.write_text("blocks directory creation", encoding="utf-8")
+        prompt = prompt_guidance.LEGACY_TOOL_GUIDANCE + "\nKeep my note.\n"
+
+        offer = prompt_guidance.take_legacy_prompt_offer(blocked_home, prompt)
+        self.assertTrue(offer)
+
+        transcript = (
+            "[2026-11-24 10:00:00] Voicebot: Would you like me to remove the old tool guidance "
+            "from your personal prompt?\n[2026-11-24 10:00:01] User: Yes\n"
+        )
+        unchanged, changed, _ = prompt_guidance.remove_legacy_guidance_after_consent(
+            blocked_home, prompt, "Yes", transcript
+        )
+        self.assertTrue(changed)
+        self.assertNotIn("see_screen: the app and window", unchanged)
+        self.assertIn("Keep my note.", unchanged)
+
     def test_no_legacy_guidance_means_no_offer_or_state_write(self):
         self.assertEqual(prompt_guidance.take_legacy_prompt_offer(self.home, "Only my personal rules."), "")
         self.assertFalse((self.home / prompt_guidance.MIGRATION_STATE_FILENAME).exists())
