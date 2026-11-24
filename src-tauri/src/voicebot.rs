@@ -25,6 +25,20 @@ const STOCK_VOICES: [&str; 7] = [
     "en-Mike_man",
     "in-Samuel_man",
 ];
+#[cfg(unix)]
+const APPLE_SILICON_ARCH: &str = "aarch64";
+#[cfg(unix)]
+const APPLE_SILICON_REQUIRED: &str = "Voicebot needs a Mac with Apple silicon";
+
+#[cfg(unix)]
+fn require_apple_silicon(arch: &str) -> Result<(), &'static str> {
+    if arch == APPLE_SILICON_ARCH {
+        Ok(())
+    } else {
+        Err(APPLE_SILICON_REQUIRED)
+    }
+}
+
 /// Files the bundle ships (tauri.conf.json bundle.resources maps the same list).
 /// tool_guidance.md is app-owned; Python reads it from this code directory and
 /// never copies it into the user's editable system_prompt.md.
@@ -481,6 +495,18 @@ fn run(_code: &Path) -> Result<(), String> {
 /// Build or refresh the venv when the pinned requirements change.
 #[cfg(unix)]
 fn bootstrap(code: &Path, home: &Path, logs: &Path) -> Result<PathBuf, String> {
+    bootstrap_for_arch(code, home, logs, std::env::consts::ARCH)
+}
+
+#[cfg(unix)]
+fn bootstrap_for_arch(
+    code: &Path,
+    home: &Path,
+    logs: &Path,
+    arch: &str,
+) -> Result<PathBuf, String> {
+    require_apple_silicon(arch).map_err(|message| message.to_string())?;
+
     let venv = home.join("venv");
     let python = venv.join("bin/python");
     let marker = venv.join(".zana-requirements");
@@ -752,6 +778,48 @@ fn dead_child() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn bootstrap_arch_check_accepts_only_apple_silicon() {
+        assert_eq!(require_apple_silicon("aarch64"), Ok(()));
+        for unsupported in ["x86_64", "arm64", "riscv64"] {
+            assert_eq!(
+                require_apple_silicon(unsupported),
+                Err(APPLE_SILICON_REQUIRED)
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bootstrap_rejects_unsupported_arch_even_with_a_valid_venv() {
+        let temp = tempfile::tempdir().unwrap();
+        let code = temp.path().join("code");
+        let home = temp.path().join("home");
+        let venv = home.join("venv");
+        let python = venv.join("bin").join("python");
+        let reqs = b"package==1.0\n";
+        let nodeps = b"other-package==2.0\n";
+
+        std::fs::create_dir_all(&code).unwrap();
+        std::fs::create_dir_all(python.parent().unwrap()).unwrap();
+        std::fs::write(code.join("requirements.txt"), reqs).unwrap();
+        std::fs::write(code.join("requirements-nodeps.txt"), nodeps).unwrap();
+        std::fs::write(&python, "existing interpreter").unwrap();
+        let marker = format!(
+            "{:x}",
+            Sha256::new()
+                .chain_update(reqs)
+                .chain_update(nodeps)
+                .finalize()
+        );
+        std::fs::write(venv.join(".zana-requirements"), marker).unwrap();
+
+        let error =
+            bootstrap_for_arch(&code, &home, &temp.path().join("logs"), "x86_64").unwrap_err();
+        assert_eq!(error, APPLE_SILICON_REQUIRED);
+    }
 
     #[cfg(unix)]
     #[test]

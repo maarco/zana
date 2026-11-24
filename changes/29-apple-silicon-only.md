@@ -1,0 +1,1 @@
+Make macOS releases Apple-silicon-only. The release workflow and local build/signing scripts now build and verify the arm64 app, and startup rejects unsupported architectures before reusing an existing Voicebot environment.
