@@ -44,6 +44,13 @@ class PromptGuidanceTest(unittest.TestCase):
         with prompt_path.open("r", encoding="utf-8", newline="") as stream:
             self.assertEqual(stream.read(), old_prompt)
 
+    def test_unreadable_personal_prompt_falls_back_to_shipped_default(self):
+        (self.home / "system_prompt.md").mkdir()
+        default_prompt = (self.resources / "system_prompt.default.md").read_text(encoding="utf-8")
+        self.assertEqual(
+            prompt_guidance.load_personal_prompt(self.home, self.resources), default_prompt
+        )
+
     def test_app_guidance_survives_later_personal_prompt_edits(self):
         prompt_path = self.write_personal_prompt("First personal preference.\r\n")
         first = self.build()
