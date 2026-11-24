@@ -96,7 +96,7 @@ class TranscriptTest(unittest.TestCase):
             t.record("User", long_reply)
             tail = t.tail_lines(2)
             self.assertIn("Voicebot: Would you like me to remove the old tool guidance?", tail)
-            self.assertIn("User: " + long_reply, tail)
+            self.assertTrue(tail.endswith("User: " + long_reply.strip()))
 
     def test_unread_is_capped_to_the_newest_text(self):
         with tempfile.TemporaryDirectory() as home:
