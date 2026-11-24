@@ -55,12 +55,12 @@ _MIGRATION_OFFER_PHRASE = "remove the old tool guidance from your personal promp
 
 
 def load_personal_prompt(home: str | Path, resource_dir: str | Path) -> str:
-    """Read the personal file exactly; only a missing file falls back to the shipped seed."""
+    """Read the personal file exactly; read errors fall back to the shipped seed."""
     home_prompt = Path(home) / PROMPT_FILENAME
     try:
         with home_prompt.open("r", encoding="utf-8", newline="") as stream:
             return stream.read()
-    except FileNotFoundError:
+    except OSError:
         default_prompt = Path(resource_dir) / "system_prompt.default.md"
         with default_prompt.open("r", encoding="utf-8", newline="") as stream:
             return stream.read()
