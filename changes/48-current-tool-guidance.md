@@ -1,0 +1,1 @@
+Keep Voicebot tool guidance current in an app-owned, versioned file loaded before the user's personal prompt. Existing personal prompts remain untouched unless the user explicitly accepts a one-time cleanup; only unchanged stock tool-guidance lines are removed.

@@ -637,6 +637,8 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
     // Every file the supervisor needs ships in the bundle.
     for file in [
         "agent.py",
+        "prompt_guidance.py",
+        "tool_guidance.md",
         "voice_server.py",
         "speech.py",
         "listening.py",

@@ -26,7 +26,9 @@ const STOCK_VOICES: [&str; 7] = [
     "in-Samuel_man",
 ];
 /// Files the bundle ships (tauri.conf.json bundle.resources maps the same list).
-pub const CODE_FILES: [&str; 12] = [
+/// tool_guidance.md is app-owned; Python reads it from this code directory and
+/// never copies it into the user's editable system_prompt.md.
+pub const CODE_FILES: [&str; 14] = [
     "agent.py",
     "voice_server.py",
     "speech.py",
@@ -36,6 +38,8 @@ pub const CODE_FILES: [&str; 12] = [
     "orb_state.py",
     "voiceprint.py",
     "updater.py",
+    "prompt_guidance.py",
+    "tool_guidance.md",
     "system_prompt.default.md",
     "requirements.txt",
     "requirements-nodeps.txt",
@@ -57,15 +61,19 @@ pub fn code_dir(resource_dir: Option<PathBuf>) -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("voicebot"))
 }
 
-/// Seed the editable prompt from the shipped default the first time.
-pub fn ensure_prompt(code: &Path) -> std::io::Result<PathBuf> {
-    let home = home_dir();
-    std::fs::create_dir_all(&home)?;
+/// Seed only the user's personal prompt from the shipped default, and only when missing.
+/// App-owned tool guidance stays in the bundled code directory and is assembled by Python.
+fn ensure_prompt_at(home: &Path, code: &Path) -> std::io::Result<PathBuf> {
+    std::fs::create_dir_all(home)?;
     let prompt = home.join("system_prompt.md");
     if !prompt.exists() {
         std::fs::copy(code.join("system_prompt.default.md"), &prompt)?;
     }
     Ok(prompt)
+}
+
+pub fn ensure_prompt(code: &Path) -> std::io::Result<PathBuf> {
+    ensure_prompt_at(&home_dir(), code)
 }
 
 /// Settings the agent reads at the start of every conversation: its switches and the chat
@@ -763,6 +771,39 @@ mod tests {
         );
         assert!(!path.with_extension("tmp").exists());
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn ensure_prompt_seeds_personal_default_once_and_keeps_guidance_bundled() {
+        let unique = format!(
+            "zana-prompt-seed-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let root = std::env::temp_dir().join(unique);
+        let home = root.join("home");
+        let code = root.join("voicebot");
+        std::fs::create_dir_all(&code).unwrap();
+        std::fs::write(code.join("system_prompt.default.md"), "personal default").unwrap();
+        std::fs::write(code.join("tool_guidance.md"), "app-owned guidance").unwrap();
+
+        let prompt = ensure_prompt_at(&home, &code).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&prompt).unwrap(),
+            "personal default"
+        );
+        assert!(!home.join("tool_guidance.md").exists());
+
+        std::fs::write(&prompt, "legacy user prompt, kept verbatim").unwrap();
+        ensure_prompt_at(&home, &code).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&prompt).unwrap(),
+            "legacy user prompt, kept verbatim"
+        );
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
