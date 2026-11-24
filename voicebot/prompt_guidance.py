@@ -51,7 +51,7 @@ _MIGRATION_OFFER = (
     "or an ambiguous reply. That cleanup removes exact stock lines only and preserves every other line. "
     "If they decline, do not offer again."
 )
-_MIGRATION_OFFER_PHRASE = "remove the old tool guidance from your personal prompt"
+_MIGRATION_OFFER_QUESTION = "Would you like me to remove the old tool guidance from your personal prompt?"
 
 
 def load_personal_prompt(home: str | Path, resource_dir: str | Path) -> str:
@@ -176,7 +176,7 @@ def last_voicebot_turn_offered_cleanup(transcript: str) -> bool:
             turns.append((match.group(1), match.group(2)))
     if len(turns) < 2 or turns[-1][0] != "User" or turns[-2][0] != "Voicebot":
         return False
-    return _MIGRATION_OFFER_PHRASE in turns[-2][1].lower()
+    return turns[-2][1].rstrip().casefold().endswith(_MIGRATION_OFFER_QUESTION.casefold())
 
 
 def explicitly_consents_to_cleanup(user_text: str, *, offer_was_immediately_prior: bool = False) -> bool:
