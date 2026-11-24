@@ -25,29 +25,52 @@ import threading
 import time
 from pathlib import Path
 
+import updater
 from dotenv import load_dotenv
+from fillers import DEFAULT_PHRASES, Fillers, chunks_with_gap
+from jobs import Jobs, conversation_end_warning
+from listening import (
+    ToolCallText,
+    Transcript,
+    clean,
+    heard_wake_word,
+    is_goodbye,
+    parse_text_tool_calls,
+    repeats,
+    split_say,
+    topics,
+    wants_redo,
+    wants_voiceprint,
+)
 from livekit import agents, rtc
 from livekit.agents import (
-    Agent, AgentServer, AgentSession, APIConnectOptions, JobProcess, RunContext, StopResponse,
-    function_tool, get_job_context, inference, llm, mcp,
+    Agent,
+    AgentServer,
+    AgentSession,
+    APIConnectOptions,
+    JobProcess,
+    RunContext,
+    StopResponse,
+    function_tool,
+    get_job_context,
+    inference,
+    llm,
+    mcp,
 )
 from livekit.agents.voice import room_io
 from livekit.agents.voice.agent_session import SessionConnectOptions
 from livekit.plugins import openai, silero
-
-from fillers import DEFAULT_PHRASES, Fillers, chunks_with_gap
-from jobs import Jobs, conversation_end_warning
 from orb_state import OrbState
-from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls,
-                       repeats, split_say, topics, wants_redo, wants_voiceprint)
-from voiceprint import RATE, VoicePrint, VoiceTap, speech_seconds, to_mono_16k
-from speech import TOOL_SAY, join_sentences, one_sentence, speakable_stream
 from prompt_guidance import (
-    assemble_instructions, load_app_tool_guidance, load_personal_prompt,
-    has_legacy_tool_guidance, remove_legacy_guidance_after_consent,
+    assemble_instructions,
+    has_legacy_tool_guidance,
+    load_app_tool_guidance,
+    load_personal_prompt,
+    remove_legacy_guidance_after_consent,
     take_legacy_prompt_offer,
 )
-import updater
+from speech import TOOL_SAY, join_sentences, one_sentence, speakable_stream
+from voiceprint import RATE, VoicePrint, VoiceTap, speech_seconds, to_mono_16k
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HOME = os.path.expanduser(os.getenv("VOICEBOT_HOME", os.path.join(HERE, ".home")))
