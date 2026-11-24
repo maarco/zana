@@ -57,7 +57,11 @@ This includes the transcript, prompt, configuration, optional `.env` and MCP
 settings, logs, voice assets, and `screen.jpg` (the most recent screenshot,
 which remains there until replaced or deleted). Zana's other settings and
 application data are also stored locally under `~/Library/Application Support/Zana/`.
-Use Preferences > Voicebot > Open Folder to inspect the Voicebot files.
+Use Preferences > Voicebot > Open Folder to inspect the Voicebot files. The transcript
+is retained until you delete it. Operational history is bounded: `logs/debug.jsonl`
+keeps at most 20 MB, each terminal job log keeps at most 5 MB, and prompt history
+keeps the 20 newest prompt backups. Transcript search reads bounded chunks off the
+agent event loop; it does not truncate the transcript.
 
 On first launch, Zana downloads Python packages, local speech models, and voice
 assets needed to run Voicebot. The app checks GitHub for release information

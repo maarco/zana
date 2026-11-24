@@ -18,6 +18,7 @@
       "../voicebot/speech.py": "voicebot/speech.py",
       "../voicebot/listening.py": "voicebot/listening.py",
       "../voicebot/jobs.py": "voicebot/jobs.py",
+      "../voicebot/retention.py": "voicebot/retention.py",
       "../voicebot/fillers.py": "voicebot/fillers.py",
       "../voicebot/orb_state.py": "voicebot/orb_state.py",
       "../voicebot/voiceprint.py": "voicebot/voiceprint.py",
