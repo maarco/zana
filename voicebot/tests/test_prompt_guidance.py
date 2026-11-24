@@ -45,6 +45,15 @@ class PromptGuidanceTest(unittest.TestCase):
         with prompt_path.open("r", encoding="utf-8", newline="") as stream:
             self.assertEqual(stream.read(), old_prompt)
 
+    def test_production_instruction_builder_uses_app_guidance_and_personal_prompt(self):
+        tree = ast.parse((ROOT / "agent.py").read_text(encoding="utf-8"))
+        builder = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "build_instructions")
+        calls = {node.func.id for node in ast.walk(builder) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)}
+        self.assertTrue(
+            {"assemble_instructions", "load_app_tool_guidance", "load_prompt"} <= calls,
+            "production build_instructions must assemble app guidance with the personal prompt",
+        )
+
     def test_unreadable_personal_prompt_falls_back_to_shipped_default(self):
         (self.home / "system_prompt.md").mkdir()
         default_prompt = (self.resources / "system_prompt.default.md").read_text(encoding="utf-8")
