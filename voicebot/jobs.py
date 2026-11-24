@@ -47,11 +47,18 @@ class Job:
     async def _wait(self) -> None:
         timed_out = False
         try:
-            self.exit_code = await asyncio.wait_for(self.proc.wait(), self.timeout)
-        except asyncio.TimeoutError:
-            self.stop()
-            self.exit_code = await self.proc.wait()
-            timed_out = True
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + self.timeout
+            while self.proc.returncode is None:
+                remaining = deadline - loop.time()
+                if remaining <= 0:
+                    self.stop()
+                    timed_out = True
+                    while self.proc.returncode is None:
+                        await asyncio.sleep(0.01)
+                    break
+                await asyncio.sleep(min(0.01, remaining))
+            self.exit_code = self.proc.returncode
         finally:
             # The shell can exit while a background child still holds its stdout pipe.
             # Finish the job on the shell's exit, while allowing a short drain for final output.
