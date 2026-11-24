@@ -40,7 +40,7 @@ fn require_apple_silicon(arch: &str) -> Result<(), &'static str> {
 }
 
 /// Files the bundle ships (tauri.conf.json bundle.resources maps the same list).
-pub const CODE_FILES: [&str; 13] = [
+pub const CODE_FILES: [&str; 14] = [
     "agent.py",
     "voice_server.py",
     "port_reporting.py",
