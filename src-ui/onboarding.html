@@ -683,6 +683,7 @@
       <div class="ready-bottom">
         <button class="btn-permission" onclick="openVoicebotPreferences()">Open Voicebot Preferences</button>
         <button class="btn-complete" onclick="completeGenesis()">Start Voicebot</button>
+        <div id="completion-error" class="subtitle" role="alert" aria-live="assertive" hidden></div>
         <div class="restart-note">Zana will restart and start Voicebot. Then ask your first question.</div>
       </div>
     </div>
@@ -1174,10 +1175,19 @@
     };
 
     window.completeGenesis = async function() {
+      const errorMessage = document.getElementById('completion-error');
+      errorMessage.hidden = true;
+      errorMessage.textContent = '';
       try {
-        await window.__TAURI__.core.invoke('complete_onboarding_and_restart');
+        const result = await window.__TAURI__.core.invoke('complete_onboarding_and_restart');
+        if (!result || !result.success) {
+          errorMessage.textContent = `Could not start Voicebot: ${result?.error || 'setup could not be completed. Try again.'}`;
+          errorMessage.hidden = false;
+        }
       } catch (e) {
         console.error('[Genesis] Failed to complete:', e);
+        errorMessage.textContent = `Could not start Voicebot: ${e?.message || 'setup could not be completed. Try again.'}`;
+        errorMessage.hidden = false;
       }
     };
 
