@@ -134,6 +134,15 @@ class TranscriptSearchTest(unittest.TestCase):
             self.assertEqual(t.search("zebra"), [])
             self.assertEqual(t.search(""), [])
 
+    def test_search_matches_terms_split_across_bounded_reads(self):
+        with tempfile.TemporaryDirectory() as home:
+            t = Transcript(home)
+            header = "[2026-11-24 00:00:00] User: "
+            padding = "x" * (16 * 1024 - len(header) - 3)
+            with open(t.path, "w") as stream:
+                stream.write(header + padding + "needle\n")
+            self.assertTrue(t.search("needle"))
+
 
 class TranscriptSearchResponsivenessTest(unittest.TestCase):
     def test_search_runs_off_the_event_loop(self):
