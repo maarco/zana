@@ -138,10 +138,10 @@ class TranscriptSearchTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as home:
             t = Transcript(home)
             header = "[2026-11-24 00:00:00] User: "
-            padding = "x" * (16 * 1024 - len(header) - 3)
+            padding = "x" * (16 * 1024 - len(header) - 4) + " "
             with open(t.path, "w") as stream:
                 stream.write(header + padding + "needle\n")
-            self.assertTrue(t.search("needle"))
+            self.assertTrue(any("needle" in line for line in t.search("needle")))
 
 
 class TranscriptSearchResponsivenessTest(unittest.TestCase):
