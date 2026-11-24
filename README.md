@@ -1,21 +1,33 @@
 # Zana
 
-**Voice-to-text transcription powered by local Whisper AI**
+**A hands-free Voicebot for macOS, with local speech recognition and playback**
 
-Zana is a macOS menubar app that provides instant voice transcription using the Fn key. Press Fn to record, release to transcribe and paste - all processed locally by default.
+Zana transcribes speech with Parakeet and speaks replies with VibeVoice locally
+by default. Recognized text and tool results go to the chat model you configure.
+When requested, the front window title or a screenshot can also be sent to your
+configured chat or vision model. Fn-key dictation and Whisper are retired.
+
+Sections below that describe Fn-key dictation, Whisper, the old architecture,
+installation, usage, status, or troubleshooting are historical. Use
+[INSTALL.md](INSTALL.md) for the current Voicebot setup.
 
 ## Features
 
-- **Fn Key Control**: Press and hold Fn to record, release to transcribe
-- **Double-Tap Toggle**: Double-tap Fn to start recording, tap once to stop (hands-free mode)
-- **Floating Orb**: Beautiful animated orb shows recording status
-- **Works Everywhere**: Captures audio in any app, pastes transcription at cursor
-- **Local Processing**: Uses Whisper.cpp - your audio is transcribed on your Mac and never uploaded
-- **Optional AI Rewrite**: Polish transcripts through any OpenAI-compatible provider using editable System and User prompts. Off by default; only your configured provider is contacted, and only when you enable it
-- **Transcript History**: Every transcription is saved locally and browsable in a dedicated Transcriptions window
-- **Preferences Window**: Choose the Whisper model, edit rewrite prompts, and manage settings
-- **Plugin System**: Extend with custom orb styles and audio processors
-- **Fullscreen Support**: Orb appears over fullscreen apps
+- **Voicebot by default**: Hands-free conversation with an optional wake word;
+  leave it empty to have Voicebot answer every recognized turn.
+- **Local speech**: Parakeet speech-to-text and VibeVoice text-to-speech run on
+  your Mac by default. Microphone audio is not sent to the chat model.
+- **Your model provider**: Choose an OpenAI-compatible chat endpoint and model
+  in Preferences > Model; a local model endpoint is also supported.
+- **On-demand screen tools**: Voicebot can read the front app/window title and,
+  when asked, capture a screenshot for the configured vision model.
+- **Computer tools**: Voicebot can paste text and press keys. The optional
+  Terminal Tool is off by default; MCP servers can be configured separately.
+- **Local transcript**: Voicebot saves everything it hears and says in
+  `~/Library/Application Support/Zana/voicebot/transcript.md`, including while a
+  configured wake word has it asleep.
+- **No usage analytics**: Settings stay local; transcript text and tool data
+  are sent only to the model endpoint when used for a request.
 
 ## System Requirements
 
@@ -152,9 +164,10 @@ past transcripts. History never leaves your Mac.
 Zana is now a hands-free voice agent with a floating orb: local Parakeet
 speech-to-text and VibeVoice speech, the chat model you set in Preferences >
 Model, and tools to see your screen, type for you, run commands and use MCP
-servers. Fn dictation and Whisper are retired. Zana installs and supervises
-everything itself; you need `brew install uv livekit`. Details and tests:
-[voicebot/README.md](voicebot/README.md).
+servers. Fn dictation and Whisper are retired. The older Fn/Whisper installation,
+usage and troubleshooting notes in this README are historical, not instructions
+for the current app. Follow [INSTALL.md](INSTALL.md) to set up Voicebot; see
+[voicebot/README.md](voicebot/README.md) for its runtime details.
 
 The Voicebot orb uses Aura and LiveKit activity states: dim idle, green
 listening, pulsing teal thinking, blue talking, and orange working while a tool

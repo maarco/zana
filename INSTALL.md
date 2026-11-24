@@ -1,195 +1,101 @@
-# Zana Installation Guide
+# Install Zana on macOS
 
-Quick guide to get Zana running on your Mac.
+This guide builds the current Zana app from source and sets up its Voicebot.
+The old Fn-key dictation and Whisper workflow is retired.
 
-## Prerequisites
+## Requirements
 
-- macOS 13 Ventura or newer recommended
-- 8GB RAM minimum (16GB recommended)
-- ~2GB free disk space
+- macOS 13 or newer on Apple silicon. Voicebot's local Parakeet speech
+  recognition uses MLX.
+- Xcode Command Line Tools, Homebrew, and a stable Rust toolchain.
+- `uv` and the LiveKit server, installed below.
+- A working OpenAI-compatible chat model endpoint. Hosted providers usually
+  require an API key; local servers may have their own authentication settings.
+  Speech recognition is local, but Voicebot needs a chat model to answer.
+- An internet connection and several gigabytes of free disk space for the first
+  setup. Voicebot installs about 1.5 GB of Python packages, then downloads its
+  local speech models and voices.
 
-## Installation Steps
+## Install prerequisites
 
-### 1. Install Rust
+Install Apple's command-line build tools:
 
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-
-Follow the prompts, then restart your terminal or run:
-```bash
-source $HOME/.cargo/env
-```
-
-Verify installation:
-```bash
-rustc --version
-# Should show: rustc 1.80.0 or newer
-```
-
-### 2. Install Xcode Command Line Tools
-
-```bash
+```sh
 xcode-select --install
 ```
 
-Click "Install" in the popup dialog.
+Install Homebrew from [brew.sh](https://brew.sh), then install the two runtime
+dependencies:
 
-### 3. Clone Zana
+```sh
+brew install uv livekit
+```
 
-```bash
+Install the Rust stable toolchain from [rustup.rs](https://rustup.rs):
+
+```sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+rustup default stable
+```
+
+## Build and start Zana
+
+Clone the repository and start the Tauri app:
+
+```sh
 git clone https://github.com/maarco/zana.git
 cd zana
-```
-
-### 4. Build Zana
-
-**Quick build (debug mode, faster compile):**
-```bash
-cargo build -p Zana-app
-```
-
-**Optimized build (release mode, slower compile but faster runtime):**
-```bash
-cargo build -p Zana-app --release
-```
-
-Build time: 5-15 minutes depending on your Mac.
-
-### 5. Run Zana
-
-**Debug mode:**
-```bash
 cargo run -p Zana-app
 ```
 
-**Release mode:**
-```bash
-cargo run -p Zana-app --release
-```
+On the first launch, Zana creates a Python 3.12 environment, installs Voicebot's
+packages, and downloads the local Parakeet and VibeVoice models and voice assets.
+This can take several minutes. Keep the app open until the Voicebot status is
+Ready. Its files and setup logs are in
+`~/Library/Application Support/Zana/voicebot/`.
 
-### 6. Grant Accessibility Permissions
+## Configure an answering model
 
-When you first run Zana, you'll see this warning in the terminal:
-```
-Accessibility permissions not granted - Fn key monitoring disabled
-Grant access in System Settings > Privacy & Security > Accessibility
-```
+1. Open Preferences and select Model.
+2. Enter an API key if your endpoint requires one, its model ID, and its
+   OpenAI-compatible chat-completions API URL. The initial URL is OpenAI's
+   `https://api.openai.com/v1/chat/completions`; change it if you use another
+   provider or a local server. Zana stores the key in its local settings.
+3. Leave Vision Model empty to reuse the chat model, or enter a vision-capable
+   model ID. The chat model is also used for screenshots when no separate vision
+   model is set.
+4. Click Test AI to verify the connection, then save the preferences.
 
-**To grant access:**
+The default OpenAI endpoint has no API key set, so configure the credentials
+required by your chosen endpoint before expecting an answer. If Test AI fails,
+check the API URL, credentials, model ID, and provider access to that model.
 
-1. Open **System Settings** (⚙️ in Dock or Apple menu > System Settings)
-2. Go to **Privacy & Security** > **Accessibility**
-3. Click the **lock icon** 🔒 at bottom left and enter your password
-4. Find **Zana-app** in the list
-5. Toggle the switch **ON** ✅
-6. **Restart Zana**
+## Allow macOS permissions as needed
 
-### 7. First Transcription
+- Microphone access lets Voicebot listen for speech and transcribe it locally.
+  Allow it when macOS prompts; without it Voicebot cannot hear you.
+- Accessibility access is used by Voicebot's type/paste and press-keys tools.
+  It is not needed just to speak with Voicebot. Grant it only if you want those
+  actions; manage it in System Settings > Privacy & Security > Accessibility.
+- Screen Recording is needed only when Voicebot captures a screenshot after you
+  ask it to look at your screen. It is not needed for voice conversations.
+- macOS may also ask to let Zana control System Events for keyboard actions or
+  reading the frontmost app and window title.
 
-1. Click in any text field (Notes, Messages, etc.)
-2. **Press and hold Fn key** → Orb appears
-3. **Speak** → "Testing one two three"
-4. **Release Fn key** → Text appears at cursor
+## Check the setup
 
-First transcription will take longer (downloads Whisper model ~500MB).
+The wake word is empty by default, which means Voicebot answers each recognized
+turn. In Preferences > Voicebot, you can set a wake word; it will still save
+transcripts while asleep and send the unread text to the model after it wakes.
 
-## Troubleshooting
+After the status shows Ready and Test AI succeeds, say a simple prompt such as
+“Tell me a short joke.” Voicebot should answer aloud. The microphone audio is
+processed locally by default, but recognized text and tool results go to your
+configured chat endpoint. Screen titles and screenshots are shared with the
+configured model only when Voicebot uses those screen tools. See
+[PRIVACY.md](PRIVACY.md) for details.
 
-### Build fails with "linker not found"
-
-**Fix:** Install Xcode Command Line Tools
-```bash
-xcode-select --install
-```
-
-### Build fails with "rustc not found"
-
-**Fix:** Restart terminal after installing Rust, or run:
-```bash
-source $HOME/.cargo/env
-```
-
-### Fn key doesn't work
-
-1. Check accessibility permissions (step 6 above)
-2. Restart Zana
-3. Check if Fn is used for system functions:
-   - System Settings > Keyboard > Dictation
-   - Change "Press Fn Key Twice" to a different shortcut
-
-### "failed to download Whisper model"
-
-**Fix:** Check internet connection, model downloads from Hugging Face:
-```
-https://huggingface.co/ggerganov/whisper.cpp
-```
-
-Models are cached in:
-```
-~/Library/Application Support/Zana/models/
-```
-
-### Audio not recording
-
-1. Grant microphone permissions:
-   - System Settings > Privacy & Security > Microphone
-   - Enable for Zana-app
-2. Check default microphone in:
-   - System Settings > Sound > Input
-
-## Running in Background
-
-To run Zana in the background (keeps running after closing terminal):
-
-```bash
-# Install tmux if not installed
-brew install tmux
-
-# Run in tmux session
-tmux new-session -d -s Zana "cargo run -p Zana-app 2>&1 | tee /tmp/Zana-run.log"
-
-# View logs
-tail -f /tmp/Zana-run.log
-
-# Attach to session
-tmux attach -t Zana
-
-# Detach: Press Ctrl+B, then D
-
-# Stop Zana
-tmux kill-session -t Zana
-```
-
-## Updating Zana
-
-```bash
-cd zana
-git pull
-cargo build -p Zana-app --release
-```
-
-## Uninstalling
-
-```bash
-# Remove your local Zana checkout with Finder or your preferred shell command
-
-# Remove cached models and app data from:
-# ~/Library/Application Support/Zana
-
-# Revoke accessibility permissions
-# System Settings > Privacy & Security > Accessibility > Remove Zana-app
-```
-
-## Next Steps
-
-- Read [README.md](README.md) for full documentation
-- Try double-tap mode: Tap Fn twice quickly, speak, tap once to stop
-- Customize orb: Edit `src-ui/orb_config.json`
-- Explore plugins: Check `plugins/` directory
-
-## Get Help
-
-- **Issues**: GitHub Issues
-- **Discussions**: GitHub Discussions
-- **Support**: use GitHub Issues after the repository is published
+If Voicebot does not finish setup, open Preferences > Voicebot > Open Folder and
+check `logs/install.log`. For permission issues, review System Settings > Privacy
+& Security and make sure the correct Zana app has access.
