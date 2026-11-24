@@ -1,8 +1,11 @@
 """Wake word, always-on transcript and unread mark. Standard library only (run in CI)."""
+import asyncio
 import os
 import sys
 import tempfile
+import time
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls, repeats,
@@ -130,6 +133,53 @@ class TranscriptSearchTest(unittest.TestCase):
             self.assertIn("manager", t.search("pty manager")[0])
             self.assertEqual(t.search("zebra"), [])
             self.assertEqual(t.search(""), [])
+
+
+class TranscriptSearchResponsivenessTest(unittest.TestCase):
+    def test_search_runs_off_the_event_loop(self):
+        with tempfile.TemporaryDirectory() as home:
+            transcript = Transcript(home)
+
+            def slow_search(_words, _limit=12):
+                time.sleep(0.2)
+                return ["found"]
+
+            async def run():
+                started = time.monotonic()
+                with patch.object(transcript, "search", slow_search):
+                    result, heartbeat = await asyncio.gather(
+                        transcript.search_async("query"),
+                        self._heartbeat(started),
+                    )
+                return result, heartbeat
+
+            result, heartbeat = asyncio.run(run())
+            self.assertEqual(result, ["found"])
+            self.assertLess(heartbeat, 0.1)
+
+    @staticmethod
+    async def _heartbeat(started):
+        await asyncio.sleep(0.01)
+        return time.monotonic() - started
+
+    def test_search_on_50mb_transcript_finishes_within_two_seconds(self):
+        with tempfile.TemporaryDirectory() as home:
+            transcript = Transcript(home)
+            line_size = 16 * 1024
+            prefix = "[2026-11-24 00:00:00] User: "
+            ordinary = prefix + "x" * (line_size - len(prefix) - 1) + "\n"
+            final = "[2026-11-24 00:00:00] User: needle at the end\n"
+            repetitions = (50 * 1024 * 1024) // len(ordinary)
+            with open(transcript.path, "w") as f:
+                f.write(ordinary * repetitions)
+                f.write(final)
+            self.assertGreaterEqual(os.path.getsize(transcript.path), 50 * 1024 * 1024)
+
+            started = time.monotonic()
+            result = asyncio.run(transcript.search_async("needle"))
+            elapsed = time.monotonic() - started
+            self.assertTrue(any("needle at the end" in line for line in result))
+            self.assertLess(elapsed, 2.0, f"search took {elapsed:.2f}s")
 
 
 class TextToolCallTest(unittest.TestCase):

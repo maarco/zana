@@ -10,35 +10,56 @@ import signal
 import time
 
 from listening import clean
+from retention import append_bounded
 
 # zsh as a login shell on macOS (the user's PATH and aliases); bash or sh elsewhere, such as CI
 SHELL = next(([path, "-lc"] for path in ("/bin/zsh", "/bin/bash") if os.path.exists(path)), ["/bin/sh", "-c"])
+MAX_JOB_LOG_BYTES = 5 * 1024 * 1024
+LOG_READ_BYTES = 64 * 1024
 
 
 class Job:
     """One terminal command running in its own process group, its output going to a log file."""
 
-    def __init__(self, job_id: int, command: str, proc, log_path: str, log_file, timeout: float):
-        self.id, self.command, self.proc, self.log, self._log_file = job_id, command, proc, log_path, log_file
+    def __init__(self, job_id: int, command: str, proc, log_path: str, timeout: float):
+        self.id, self.command, self.proc, self.log = job_id, command, proc, log_path
         self.timeout = timeout
         self.pid = proc.pid
         self.quiet = False  # stopped on purpose: nobody needs to hear that it ended
         self.started = time.time()
         self.ended: float | None = None
         self.exit_code: int | None = None
+        self._output_task = asyncio.create_task(self._capture_output())
         self.task = asyncio.ensure_future(self._wait())
 
+    async def _capture_output(self) -> None:
+        """Drain the child pipe continuously, keeping only the newest bounded part of its log."""
+        if self.proc.stdout is None:
+            return
+        while chunk := await self.proc.stdout.read(LOG_READ_BYTES):
+            try:
+                append_bounded(self.log, chunk, MAX_JOB_LOG_BYTES)
+            except OSError:
+                # Keep draining even if this disk write fails, so a noisy child cannot deadlock.
+                pass
+
     async def _wait(self) -> None:
+        timed_out = False
         try:
             self.exit_code = await asyncio.wait_for(self.proc.wait(), self.timeout)
         except asyncio.TimeoutError:
             self.stop()
             self.exit_code = await self.proc.wait()
-            with open(self.log, "a") as f:
-                f.write(f"\n[stopped after {self.timeout:.0f} seconds]\n")
+            timed_out = True
         finally:
+            await self._output_task
+            if timed_out:
+                try:
+                    append_bounded(self.log, f"\n[stopped after {self.timeout:.0f} seconds]\n".encode(),
+                                   MAX_JOB_LOG_BYTES)
+                except OSError:
+                    pass
             self.ended = time.time()
-            self._log_file.close()
 
     def stop(self, quiet: bool = False) -> None:
         """Kill the job's whole process group."""
@@ -78,16 +99,16 @@ class Jobs:
         job_id = self.next_id
         self.next_id += 1
         log_path = os.path.join(folder, f"{job_id}.log")
-        log_file = open(log_path, "wb")
+        with open(log_path, "wb"):
+            pass
         try:
             proc = await asyncio.create_subprocess_exec(
                 *SHELL, command, cwd=os.path.expanduser(os.getenv("VOICEBOT_TERMINAL_DIR", "~")),
-                stdout=log_file, stderr=asyncio.subprocess.STDOUT,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
                 start_new_session=True)  # its own process group, so stop() takes pipelines down too
         except OSError as exc:
-            log_file.close()
             return f"Could not start the terminal: {exc}"
-        job = Job(job_id, command, proc, log_path, log_file, self.timeout)
+        job = Job(job_id, command, proc, log_path, self.timeout)
         self.jobs[job_id] = job
         return job
 

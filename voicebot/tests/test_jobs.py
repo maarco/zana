@@ -1,11 +1,14 @@
 """Terminal jobs: output to a file, status, stop. Standard library only (run in CI)."""
 import asyncio
 import os
+import shlex
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+import jobs  # noqa: E402
 from jobs import Jobs  # noqa: E402
 
 
@@ -55,6 +58,19 @@ class JobsTest(unittest.TestCase):
                 job = await Jobs(home, timeout=0.5).start("sleep 30")
                 await asyncio.wait_for(job.task, 5)
                 self.assertIn("stopped after", job.output())
+        asyncio.run(run())
+
+    def test_noisy_job_log_is_capped_and_keeps_its_tail(self):
+        async def run():
+            with tempfile.TemporaryDirectory() as home:
+                script = 'import sys; sys.stdout.write("x" * 20000); sys.stdout.write("TAIL\\n")'
+                command = shlex.join([sys.executable, "-c", script])
+                with patch.object(jobs, "MAX_JOB_LOG_BYTES", 1024):
+                    job = await Jobs(home).start(command)
+                    await asyncio.wait_for(job.task, 5)
+                self.assertLessEqual(os.path.getsize(job.log), 1024)
+                with open(job.log, "rb") as f:
+                    self.assertTrue(f.read().endswith(b"TAIL\n"))
         asyncio.run(run())
 
 

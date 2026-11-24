@@ -641,6 +641,7 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
         "speech.py",
         "listening.py",
         "jobs.py",
+        "retention.py",
         "fillers.py",
         "orb_state.py",
         "voiceprint.py",

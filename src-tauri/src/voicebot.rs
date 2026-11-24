@@ -26,12 +26,13 @@ const STOCK_VOICES: [&str; 7] = [
     "in-Samuel_man",
 ];
 /// Files the bundle ships (tauri.conf.json bundle.resources maps the same list).
-pub const CODE_FILES: [&str; 12] = [
+pub const CODE_FILES: [&str; 13] = [
     "agent.py",
     "voice_server.py",
     "speech.py",
     "listening.py",
     "jobs.py",
+    "retention.py",
     "fillers.py",
     "orb_state.py",
     "voiceprint.py",

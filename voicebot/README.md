@@ -33,10 +33,14 @@ Everything per-user lives in the Voicebot folder,
 | `system_prompt.md` | The system prompt (edit it in Preferences) |
 | `config.json` | Terminal switch, wake word and chat model, written by Zana |
 | `mcp.json` | MCP servers, Claude Desktop format |
-| `transcript.md` | Always-on transcript of everything heard and said |
-| `logs/` | `debug.jsonl` (the Debug window), plus each process's log |
+| `transcript.md` | Always-on transcript of everything heard and said; retained until you delete it |
+| `logs/` | `debug.jsonl` (most recent 20 MB for the Debug window), plus each process's log |
 | `fillers/` | Cached thinking-sound audio and its manifest |
 | `venv/`, `voices/` | The Python environment and VibeVoice voices |
+| `prompt-history/` | The 20 newest saved versions of the system prompt |
+
+Each terminal job log is capped at 5 MB. Searching the transcript scans bounded
+chunks on a worker thread so a large transcript does not delay Voicebot replies.
 
 Preferences > Model sets the chat model (API key, model, OpenAI-compatible API
 URL), its reasoning level and the vision model; Preferences > Voicebot sets the
