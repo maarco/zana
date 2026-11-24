@@ -1,10 +1,10 @@
 """Assemble app-owned Voicebot guidance and the user's personal prompt safely."""
-from collections import Counter
 import json
 import os
 import re
 import tempfile
 import threading
+from collections import Counter
 from pathlib import Path
 
 TOOL_GUIDANCE_VERSION = 1
@@ -44,13 +44,14 @@ Tools:
 
 _MIGRATION_OFFER = (
     "This user's personal system_prompt.md still contains exact lines from the old built-in tool guide. "
-    "Offer once: say that current tool help is now included by the app and ask whether they want only the "
-    "unchanged stock tool-guide lines removed from their personal prompt. Do not edit anything now. "
+    "Offer once: say that current tool help is now included by the app and ask exactly: 'Would you like me to "
+    "remove the old tool guidance from your personal prompt?' Do not edit anything now. "
     "If and only if the user explicitly agrees, call edit_system_prompt with "
     "remove_legacy_tool_guidance=true and empty find/replace. Never infer consent from a question, silence, "
     "or an ambiguous reply. That cleanup removes exact stock lines only and preserves every other line. "
     "If they decline, do not offer again."
 )
+_MIGRATION_OFFER_PHRASE = "remove the old tool guidance from your personal prompt"
 
 
 def load_personal_prompt(home: str | Path, resource_dir: str | Path) -> str:
@@ -158,7 +159,19 @@ def take_legacy_prompt_offer(home: str | Path, personal_prompt: str) -> str:
     return _MIGRATION_OFFER
 
 
-def explicitly_consents_to_cleanup(user_text: str) -> bool:
+def last_voicebot_turn_offered_cleanup(transcript: str) -> bool:
+    """Bind a short affirmative to the immediately preceding spoken cleanup offer."""
+    turns = []
+    for line in transcript.splitlines():
+        match = re.search(r"\]\s+(User|Voicebot|Other):\s*(.*)$", line)
+        if match:
+            turns.append((match.group(1), match.group(2)))
+    if len(turns) < 2 or turns[-1][0] != "User" or turns[-2][0] != "Voicebot":
+        return False
+    return _MIGRATION_OFFER_PHRASE in turns[-2][1].lower()
+
+
+def explicitly_consents_to_cleanup(user_text: str, *, offer_was_immediately_prior: bool = False) -> bool:
     """Accept a direct yes or clear cleanup instruction; negatives and ambiguity fail closed."""
     text = re.sub(r"\s+", " ", user_text.strip().lower())
     if not text or re.search(
@@ -169,7 +182,11 @@ def explicitly_consents_to_cleanup(user_text: str) -> bool:
     ):
         return False
     if re.match(r"^(yes|yeah|yep|sure|okay|ok|please do|go ahead|do it|do that)\b", text):
-        return True
+        explicit_target = bool(
+            re.search(r"\b(remove|delete|clean up|strip)\b", text)
+            and re.search(r"\b(old|legacy|duplicate|tool|guidance|instructions|notes|text|prompt)\b", text)
+        )
+        return offer_was_immediately_prior or explicit_target
     return bool(
         re.match(r"^(please\s+)?(remove|delete|clean up|strip)\b", text)
         and re.search(r"\b(old|legacy|duplicate|tool|guidance|instructions|notes|text|prompt)\b", text)
@@ -191,13 +208,15 @@ def _remove_exact_legacy_lines(prompt: str) -> tuple[str, int]:
 
 
 def remove_legacy_guidance_after_consent(
-    home: str | Path, prompt: str, user_text: str
+    home: str | Path, prompt: str, user_text: str, transcript: str = ""
 ) -> tuple[str, bool, str]:
-    """Clean only after a recorded offer and explicit yes; preserve every non-stock character."""
+    """Clean only after the recorded offer was spoken immediately before consent."""
     state = _read_migration_state(home)
     if state is None or not state.get("offered"):
         return prompt, False, "The one-time cleanup offer is not recorded; the prompt was not changed."
-    if not explicitly_consents_to_cleanup(user_text):
+    if not explicitly_consents_to_cleanup(
+        user_text, offer_was_immediately_prior=last_voicebot_turn_offered_cleanup(transcript)
+    ):
         return prompt, False, "Explicit user consent is required; the prompt was not changed."
     cleaned, removed = _remove_exact_legacy_lines(prompt)
     if not removed:

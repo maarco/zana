@@ -927,7 +927,7 @@ class Voicebot(Agent):
             if find or replace:
                 return "For the legacy cleanup, leave find and replace empty; nothing was changed." + SAY
             new, changed, message = remove_legacy_guidance_after_consent(
-                HOME, old, self.last_user_text
+                HOME, old, self.last_user_text, TRANSCRIPT.tail(3000)
             )
             if not changed:
                 return message + SAY
