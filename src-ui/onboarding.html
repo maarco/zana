@@ -1206,8 +1206,12 @@
     let audioContext = null;
     let analyser = null;
     let audioVisualizationInterval = null;
+    globalThis.audioVisualizationStarting = false;
 
     async function startAudioVisualization() {
+      if (globalThis.audioVisualizationStarting) return;
+      globalThis.audioVisualizationStarting = true;
+
       const denied = document.getElementById('microphone-denied');
       const hint = document.getElementById('voice-hint');
       denied.classList.add('hidden');
@@ -1283,6 +1287,8 @@
         console.warn('[Genesis] Audio not available:', e);
         hint.textContent = 'Microphone access is needed for Voicebot conversations.';
         denied.classList.remove('hidden');
+      } finally {
+        globalThis.audioVisualizationStarting = false;
       }
     }
 
