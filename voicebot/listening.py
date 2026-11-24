@@ -244,7 +244,9 @@ class Transcript:
         newline_count = 0
         try:
             with open(self.path, "rb") as f:
-                while position > 0 and newline_count < count:
+                # Include the newline before the oldest requested line so a long
+                # preceding turn is not returned with its speaker header cut off.
+                while position > 0 and newline_count <= count:
                     size = min(4096, position)
                     position -= size
                     f.seek(position)
