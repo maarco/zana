@@ -40,6 +40,7 @@ class Job:
         self.ended: float | None = None
         self.exit_code: int | None = None
         self._output_task = asyncio.create_task(self._capture_output())
+        self._late_output_task: asyncio.Task | None = None
         self.task = asyncio.ensure_future(self._wait())
 
     async def _capture_output(self) -> None:
@@ -75,13 +76,11 @@ class Job:
             if self._output_task in drained:
                 await self._output_task
             else:
-                process_transport = getattr(self.proc, "_transport", None)
-                get_pipe_transport = getattr(process_transport, "get_pipe_transport", None)
-                pipe_transport = get_pipe_transport(1) if get_pipe_transport else None
-                if pipe_transport is not None:
-                    pipe_transport.close()
                 self._output_task.cancel()
                 await asyncio.gather(self._output_task, return_exceptions=True)
+                # The shell is done, but a background child may still own stdout.
+                # Keep draining it without holding the job's completion open.
+                self._late_output_task = asyncio.create_task(self._capture_output())
             if timed_out:
                 try:
                     append_bounded(self.log, f"\n[stopped after {self.timeout:.0f} seconds]\n".encode(),
@@ -97,6 +96,8 @@ class Job:
             os.killpg(self.pid, signal.SIGKILL)
         except (ProcessLookupError, PermissionError):
             pass
+        if self._late_output_task is not None:
+            self._late_output_task.cancel()
 
     def output(self, lines: int = 80) -> str:
         try:
