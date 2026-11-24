@@ -364,7 +364,9 @@ class Voicebot(Agent):
                          "Zana's Preferences."),
         }
         notes = [guides[t] for t in topics(heard) if t in guides]
-        migration_offer = take_legacy_prompt_offer(HOME, load_prompt())
+        migration_offer = take_legacy_prompt_offer(
+            HOME, load_prompt(), TRANSCRIPT.tail_lines(2)
+        )
         if migration_offer:
             notes.append(migration_offer)
         if notes:

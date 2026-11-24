@@ -145,13 +145,21 @@ def _write_migration_state(home: str | Path, state: dict) -> bool:
         return False
 
 
-def take_legacy_prompt_offer(home: str | Path, personal_prompt: str) -> str:
-    """Reserve and return the offer instruction once; a failed state write means no offer."""
+def take_legacy_prompt_offer(
+    home: str | Path, personal_prompt: str, transcript: str = ""
+) -> str:
+    """Keep offering until the transcript confirms the user heard the offer."""
     if not has_legacy_tool_guidance(personal_prompt):
         return ""
     with _MIGRATION_LOCK:
         state = _read_migration_state(home)
-        if state is None or state.get("offered"):
+        if state is None or state.get("delivered"):
+            return ""
+        if state.get("offered"):
+            if not last_voicebot_turn_offered_cleanup(transcript):
+                return _MIGRATION_OFFER
+            state.update(delivered=True)
+            _write_migration_state(home, state)
             return ""
         state.update(offered=True, version=TOOL_GUIDANCE_VERSION)
         if not _write_migration_state(home, state):
