@@ -65,6 +65,14 @@ class Job:
             drained, _ = await asyncio.wait({self._output_task}, timeout=OUTPUT_DRAIN_GRACE_SECONDS)
             if self._output_task in drained:
                 await self._output_task
+            else:
+                process_transport = getattr(self.proc, "_transport", None)
+                get_pipe_transport = getattr(process_transport, "get_pipe_transport", None)
+                pipe_transport = get_pipe_transport(1) if get_pipe_transport else None
+                if pipe_transport is not None:
+                    pipe_transport.close()
+                self._output_task.cancel()
+                await asyncio.gather(self._output_task, return_exceptions=True)
             if timed_out:
                 try:
                     append_bounded(self.log, f"\n[stopped after {self.timeout:.0f} seconds]\n".encode(),
