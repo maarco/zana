@@ -119,6 +119,8 @@ def _read_migration_state(home: str | Path) -> dict | None:
             state = json.load(stream)
     except FileNotFoundError:
         return {}
+    except NotADirectoryError:
+        return {}
     except (OSError, ValueError):
         return None  # fail closed; never repeat an offer or mutate an unknown state
     return state if isinstance(state, dict) else None
@@ -163,8 +165,7 @@ def take_legacy_prompt_offer(
             _write_migration_state(home, state)
             return ""
         state.update(offered=True, version=TOOL_GUIDANCE_VERSION)
-        if not _write_migration_state(home, state):
-            return ""
+        _write_migration_state(home, state)
     return _MIGRATION_OFFER
 
 
@@ -227,10 +228,11 @@ def remove_legacy_guidance_after_consent(
 ) -> tuple[str, bool, str]:
     """Clean only after the recorded offer was spoken immediately before consent."""
     state = _read_migration_state(home)
-    if state is None or not state.get("offered"):
+    offer_was_immediately_prior = last_voicebot_turn_offered_cleanup(transcript)
+    if (state is None or not state.get("offered")) and not offer_was_immediately_prior:
         return prompt, False, "The one-time cleanup offer is not recorded; the prompt was not changed."
     if not explicitly_consents_to_cleanup(
-        user_text, offer_was_immediately_prior=last_voicebot_turn_offered_cleanup(transcript)
+        user_text, offer_was_immediately_prior=offer_was_immediately_prior
     ):
         return prompt, False, "Explicit user consent is required; the prompt was not changed."
     cleaned, removed = _remove_exact_legacy_lines(prompt)
