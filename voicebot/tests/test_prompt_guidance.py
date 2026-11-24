@@ -92,6 +92,9 @@ class PromptGuidanceTest(unittest.TestCase):
         ):
             self.assertFalse(prompt_guidance.explicitly_consents_to_cleanup(reply), reply)
 
+    def test_bare_yes_is_not_consent_without_a_migration_offer_context(self):
+        self.assertFalse(prompt_guidance.explicitly_consents_to_cleanup("yes"))
+
     def test_explicit_consent_removes_only_exact_stock_lines(self):
         custom_line = "My own tool rule: preserve every original phrase."
         old_prompt = (
