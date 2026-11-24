@@ -170,6 +170,31 @@ class JobsTest(unittest.TestCase):
                     await asyncio.gather(*tasks, return_exceptions=True)
         asyncio.run(run())
 
+    def test_shell_exit_releases_late_output_drain_and_pipe(self):
+        async def run():
+            with tempfile.TemporaryDirectory() as home:
+                job = await Jobs(home, timeout=1).start("sleep 60 &")
+                try:
+                    await asyncio.wait_for(job.task, 2)
+                    late_output_task = job._late_output_task
+                    self.assertIsNotNone(late_output_task)
+                    await asyncio.sleep(1.1)
+                    self.assertTrue(
+                        late_output_task.done(),
+                        "late output drain remains pending after its bounded capture window",
+                    )
+                    output_pipe = job.proc._transport.get_pipe_transport(1)
+                    self.assertTrue(output_pipe.is_closing(), "inherited stdout pipe remains open")
+                finally:
+                    job.stop()
+                    await asyncio.gather(
+                        job.task,
+                        job._output_task,
+                        *(task for task in (job._late_output_task,) if task is not None),
+                        return_exceptions=True,
+                    )
+        asyncio.run(run())
+
 
 if __name__ == "__main__":
     unittest.main()
