@@ -12,6 +12,7 @@
     "resources": {
       "../voicebot/agent.py": "voicebot/agent.py",
       "../voicebot/voice_server.py": "voicebot/voice_server.py",
+      "../voicebot/port_reporting.py": "voicebot/port_reporting.py",
       "../voicebot/speech.py": "voicebot/speech.py",
       "../voicebot/listening.py": "voicebot/listening.py",
       "../voicebot/jobs.py": "voicebot/jobs.py",
