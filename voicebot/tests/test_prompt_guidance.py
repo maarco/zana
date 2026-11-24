@@ -154,6 +154,20 @@ class PromptGuidanceTest(unittest.TestCase):
         self.assertFalse(changed)
         self.assertEqual(unchanged, prompt)
 
+    def test_bare_yes_after_an_example_mention_does_not_authorize_cleanup(self):
+        prompt = "Personal note.\n" + prompt_guidance.LEGACY_TOOL_GUIDANCE + "\nKeep this.\n"
+        prompt_guidance.take_legacy_prompt_offer(self.home, prompt)
+        transcript = (
+            "[2026-11-24 10:00:00] Voicebot: The example offer is: "
+            "Would you like me to remove the old tool guidance from your personal prompt?\n"
+            "[2026-11-24 10:00:01] User: Yes\n"
+        )
+        unchanged, changed, _ = prompt_guidance.remove_legacy_guidance_after_consent(
+            self.home, prompt, "Yes", transcript
+        )
+        self.assertFalse(changed)
+        self.assertEqual(unchanged, prompt)
+
     def test_bare_yes_after_long_cleanup_offer_remains_bound_to_offer(self):
         prompt = "Personal intro.\n" + prompt_guidance.LEGACY_TOOL_GUIDANCE
         prompt_guidance.take_legacy_prompt_offer(self.home, prompt)
