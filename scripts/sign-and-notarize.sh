@@ -22,20 +22,19 @@ TEAM_ID="${APPLE_TEAM_ID:-}"                      # Your 10-character Team ID
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# Find the app bundle
-APP_PATH=""
+# Find the Apple silicon app bundle.
 APP_NAME="Zana"
 EXECUTABLE="Zana-app"
+APP_PATH="$PROJECT_ROOT/target/aarch64-apple-darwin/release/bundle/macos/$APP_NAME.app"
 
-if [ -d "$PROJECT_ROOT/target/universal-apple-darwin/release/bundle/macos/$APP_NAME.app" ]; then
-    APP_PATH="$PROJECT_ROOT/target/universal-apple-darwin/release/bundle/macos/$APP_NAME.app"
-elif [ -d "$PROJECT_ROOT/target/release/bundle/macos/$APP_NAME.app" ]; then
-    APP_PATH="$PROJECT_ROOT/target/release/bundle/macos/$APP_NAME.app"
-elif [ -d "$PROJECT_ROOT/target/aarch64-apple-darwin/release/bundle/macos/$APP_NAME.app" ]; then
-    APP_PATH="$PROJECT_ROOT/target/aarch64-apple-darwin/release/bundle/macos/$APP_NAME.app"
-else
-    echo -e "${RED}Error: Could not find $APP_NAME.app bundle${NC}"
+if [ ! -d "$APP_PATH" ]; then
+    echo -e "${RED}Error: Could not find Apple silicon $APP_NAME.app bundle${NC}"
     echo "Run ./scripts/build-macos.sh first"
+    exit 1
+fi
+
+if ! file "$APP_PATH/Contents/MacOS/$EXECUTABLE" | grep -q 'Mach-O 64-bit executable arm64'; then
+    echo -e "${RED}Error: $APP_NAME.app is not an Apple silicon build${NC}"
     exit 1
 fi
 

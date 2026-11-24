@@ -168,14 +168,14 @@ jobs:
 
 
   build-macos:
-    name: Build macOS universal app
+    name: Build Apple silicon app
     needs: [validate, verify, preflight]
     if: ${{ !failure() && !cancelled() }}
-    runs-on: macos-15-intel
+    runs-on: macos-15
     env:
       SIGNING: ${{ inputs.signing || 'developer-id' }}
       TAG: ${{ needs.validate.outputs.tag }}
-      APP_PATH: target/universal-apple-darwin/release/bundle/macos/Zana.app
+      APP_PATH: target/aarch64-apple-darwin/release/bundle/macos/Zana.app
       WHISPER_DONT_GENERATE_BINDINGS: "1"
     steps:
       - name: Checkout
@@ -187,7 +187,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
+          targets: aarch64-apple-darwin
 
       - name: Configure macOS SDK for bindgen
         run: echo "BINDGEN_EXTRA_CLANG_ARGS=--sysroot=$(xcrun --sdk macosx --show-sdk-path) -Wno-everything" >> "$GITHUB_ENV"
@@ -200,31 +200,13 @@ jobs:
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version "^2" --locked
 
-      - name: Build Apple Silicon app
+      - name: Build Apple silicon app
         run: cargo tauri build --target aarch64-apple-darwin --bundles app -- --locked
 
-      - name: Build Intel app
-        run: cargo tauri build --target x86_64-apple-darwin --bundles app -- --locked
-
-      - name: Create universal app
+      - name: Verify Apple silicon app
         run: |
-          ARM_APP="target/aarch64-apple-darwin/release/bundle/macos/Zana.app"
-          INTEL_APP="target/x86_64-apple-darwin/release/bundle/macos/Zana.app"
-          EXECUTABLE="Zana-app"
-
-          test -d "$ARM_APP"
-          test -d "$INTEL_APP"
-
-          mkdir -p "$(dirname "$APP_PATH")"
-          rm -rf "$APP_PATH"
-          cp -R "$ARM_APP" "$APP_PATH"
-
-          lipo -create \
-            "$ARM_APP/Contents/MacOS/$EXECUTABLE" \
-            "$INTEL_APP/Contents/MacOS/$EXECUTABLE" \
-            -output "$APP_PATH/Contents/MacOS/$EXECUTABLE"
-
-          lipo -info "$APP_PATH/Contents/MacOS/$EXECUTABLE"
+          test -d "$APP_PATH"
+          file "$APP_PATH/Contents/MacOS/Zana-app" | grep -q 'Mach-O 64-bit executable arm64'
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Contents/Info.plist")" = "${TAG#v}"
 
       - name: Import Developer ID certificate
@@ -246,7 +228,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           rm -f "$CERTIFICATE_PATH"
 
-      - name: Sign universal app (Developer ID)
+      - name: Sign Apple silicon app (Developer ID)
         if: (inputs.signing || 'developer-id') == 'developer-id'
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -268,7 +250,7 @@ jobs:
 
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
-      - name: Seal universal app (ad-hoc, unsigned mode)
+      - name: Seal Apple silicon app (ad-hoc, unsigned mode)
         if: (inputs.signing || 'developer-id') == 'unsigned'
         run: |
           # Unsigned arm64 binaries are killed at load; an ad-hoc seal lets the
@@ -278,7 +260,7 @@ jobs:
 
       - name: Create DMG with an Applications shortcut
         run: |
-          DMG_PATH="Zana-$TAG-universal.dmg"
+          DMG_PATH="Zana-$TAG-apple-silicon.dmg"
           staging="$(mktemp -d)"
           ditto "$APP_PATH" "$staging/Zana.app"
           ln -s /Applications "$staging/Applications"
@@ -352,7 +334,7 @@ jobs:
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Zana-macos-universal
+          name: Zana-macos-apple-silicon
           path: Zana-*.dmg*
           if-no-files-found: error
 
@@ -366,7 +348,7 @@ jobs:
       - name: Download macOS artifact
         uses: actions/download-artifact@v4
         with:
-          name: Zana-macos-universal
+          name: Zana-macos-apple-silicon
 
       - name: Create release (refuses to overwrite an existing one)
         env:

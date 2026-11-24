@@ -6,10 +6,17 @@ import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from jobs import Jobs  # noqa: E402
+from jobs import Jobs, conversation_end_warning  # noqa: E402
 
 
 class JobsTest(unittest.TestCase):
+    def test_long_job_warning_names_the_job_and_conversation_end(self):
+        warning = conversation_end_warning(12).lower()
+        self.assertIn("job 12", warning)
+        self.assertIn("stopped", warning)
+        self.assertIn("conversation ends", warning)
+        self.assertIn("cannot be resumed", warning)
+
     def test_quick_command_finishes_with_output_and_exit_code(self):
         async def run():
             with tempfile.TemporaryDirectory() as home:

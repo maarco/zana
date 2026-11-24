@@ -36,7 +36,7 @@ from livekit.agents.voice.agent_session import SessionConnectOptions
 from livekit.plugins import openai, silero
 
 from fillers import DEFAULT_PHRASES, Fillers, chunks_with_gap
-from jobs import Jobs
+from jobs import Jobs, conversation_end_warning
 from orb_state import OrbState
 from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls,
                        repeats, split_say, topics, wants_redo, wants_voiceprint)
@@ -54,7 +54,7 @@ TERMINAL_TIMEOUT = float(os.getenv("VOICEBOT_TERMINAL_TIMEOUT", "900"))  # jobs 
 TRANSCRIPT = Transcript(HOME)  # always-on: every line heard and said
 FILLERS = Fillers(HOME)  # thinking sounds, made in Voicebot's voice and cached
 DEBUG_LOG = os.path.join(HOME, "logs", "debug.jsonl")  # what Voicebot does, for Zana's Debug window
-SAY = "\n(Now say one short sentence with the answer.)"
+SAY = "\n(Now answer concisely in plain spoken words.)"
 MIN_VOICE_CHECK = int(0.5 * RATE)  # shorter turns are not checked against the voice print
 # Every tool, as the model sees it, gets this required field; its text is spoken while the tool runs.
 SAY_FIELD = {"type": "string",
@@ -125,7 +125,7 @@ def load_prompt() -> str:
                 return f.read()
         except OSError:
             continue
-    return "You are an AI voicebot. Answer in one short spoken sentence."
+    return "You are an AI voicebot. Keep replies concise and conversational, usually one or two short sentences. Use your judgment; clarity matters more than a rigid count."
 
 
 def context_chars(ctx) -> int:
@@ -429,7 +429,7 @@ class Voicebot(Agent):
             unread = TRANSCRIPT.take_unread().strip()
             if unread:
                 extra = ("\n\nUnread transcript (what the user said while you were asleep, oldest first):\n"
-                         + unread + "\n(Answer their latest request directly in one sentence; don't say you're listening.)")
+                         + unread + "\n(Answer their latest request directly and concisely; don't say you're listening.)")
         else:
             TRANSCRIPT.mark_read()
         self.last_heard = now
@@ -1042,7 +1042,7 @@ class Voicebot(Agent):
     @function_tool()
     async def read_system_prompt(self, context: RunContext) -> str:
         """Read your own system prompt (the user's file) so you can tell them what your instructions say."""
-        return load_prompt()[:6000] + "\n(Summarize what they asked about in one sentence.)"
+        return load_prompt()[:6000] + "\n(Summarize the instructions briefly.)"
 
     @function_tool()
     async def open_voicebot_folder(self, context: RunContext) -> str:
@@ -1107,8 +1107,8 @@ class Voicebot(Agent):
         job.task.add_done_callback(finished)
         debug("job", id=job.id, pid=job.pid, command=command, log=job.log)
         return (f"Still running as job {job.id} (process {job.pid}), output streaming to {job.log}. "
-                "Tell the user in a few words that it's running; check_job shows progress and stop_job stops it. "
-                "You'll be told when it finishes.")
+                f"IMPORTANT: Tell the user explicitly that {conversation_end_warning(job.id)} "
+                "check_job shows progress and stop_job stops it now; you'll be told if it finishes first.")
 
     @function_tool()
     async def check_job(self, context: RunContext, job: int) -> str:
@@ -1295,7 +1295,7 @@ async def entrypoint(ctx: agents.JobContext):
     if agent.voice_gated:
         interruption.update(enabled=False, discard_audio_if_uninterruptible=False)
     transforms = ["filter_markdown", "filter_emoji", speakable_stream]
-    if os.getenv("VOICEBOT_ONE_SENTENCE", "1") != "0":
+    if os.getenv("VOICEBOT_ONE_SENTENCE", "0") != "0":
         transforms.append(one_sentence)
 
     async def log_spoken(text):

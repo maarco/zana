@@ -1,8 +1,8 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # Zana macOS Build Script
-# Builds a universal binary (Intel + Apple Silicon)
+# Builds for Apple silicon only.
 
 echo "=== Zana macOS Build ==="
 
@@ -18,90 +18,51 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 cd "$PROJECT_ROOT"
 
-# Check for Rust targets
+# Check for the Apple silicon Rust target.
 echo -e "${YELLOW}Checking Rust targets...${NC}"
 if ! rustup target list --installed | grep -q "aarch64-apple-darwin"; then
     echo "Adding aarch64-apple-darwin target..."
     rustup target add aarch64-apple-darwin
 fi
 
-if ! rustup target list --installed | grep -q "x86_64-apple-darwin"; then
-    echo "Adding x86_64-apple-darwin target..."
-    rustup target add x86_64-apple-darwin
-fi
-
-# Parse arguments
+# Parse arguments.
 BUILD_TYPE="release"
-UNIVERSAL=false
-
 while [[ $# -gt 0 ]]; do
-    case $1 in
+    case "$1" in
         --debug)
             BUILD_TYPE="debug"
             shift
             ;;
-        --universal)
-            UNIVERSAL=true
-            shift
+        --help|-h)
+            echo "Usage: $0 [--debug]"
+            exit 0
             ;;
         *)
-            shift
+            echo -e "${RED}Unsupported argument: $1${NC}" >&2
+            echo "Usage: $0 [--debug]" >&2
+            exit 2
             ;;
     esac
 done
 
-if [ "$UNIVERSAL" = true ]; then
-    echo -e "${YELLOW}Building universal binary...${NC}"
-
-    # Build for Apple Silicon
-    echo "Building for Apple Silicon (aarch64)..."
-    cargo tauri build --target aarch64-apple-darwin
-
-    # Build for Intel
-    echo "Building for Intel (x86_64)..."
-    cargo tauri build --target x86_64-apple-darwin
-
-    # Create universal binary
-    echo "Creating universal binary..."
-    ARM_APP="target/aarch64-apple-darwin/release/bundle/macos/Zana.app"
-    INTEL_APP="target/x86_64-apple-darwin/release/bundle/macos/Zana.app"
-    UNIVERSAL_APP="target/universal-apple-darwin/release/bundle/macos/Zana.app"
-    EXECUTABLE="Zana-app"
-
-    mkdir -p "$(dirname "$UNIVERSAL_APP")"
-    cp -R "$ARM_APP" "$UNIVERSAL_APP"
-
-    # Merge binaries with lipo
-    lipo -create \
-        "$ARM_APP/Contents/MacOS/$EXECUTABLE" \
-        "$INTEL_APP/Contents/MacOS/$EXECUTABLE" \
-        -output "$UNIVERSAL_APP/Contents/MacOS/$EXECUTABLE"
-
-    echo -e "${GREEN}Universal binary created at: $UNIVERSAL_APP${NC}"
-else
-    echo -e "${YELLOW}Building for current architecture...${NC}"
-
-    if [ "$BUILD_TYPE" = "debug" ]; then
-        cargo tauri build --debug
-    else
-        cargo tauri build
-    fi
-
-    echo -e "${GREEN}Build complete!${NC}"
+BUILD_ARGS=(--target aarch64-apple-darwin)
+if [[ "$BUILD_TYPE" == "debug" ]]; then
+    BUILD_ARGS+=(--debug)
 fi
 
-# Show output location
+echo -e "${YELLOW}Building for Apple silicon (aarch64)...${NC}"
+cargo tauri build "${BUILD_ARGS[@]}"
+echo -e "${GREEN}Build complete!${NC}"
+
+# Show output location.
 echo ""
 echo "=== Build Output ==="
-if [ "$UNIVERSAL" = true ]; then
-    ls -la target/universal-apple-darwin/release/bundle/macos/
-    ls -la target/universal-apple-darwin/release/bundle/dmg/ 2>/dev/null || true
+TARGET_DIR="target/aarch64-apple-darwin/$BUILD_TYPE"
+if [[ -d "$TARGET_DIR/bundle/macos" ]]; then
+    ls -la "$TARGET_DIR/bundle/macos/"
+elif [[ -d "$TARGET_DIR/bundle/dmg" ]]; then
+    ls -la "$TARGET_DIR/bundle/dmg/"
 else
-    ARCH=$(uname -m)
-    if [ "$ARCH" = "arm64" ]; then
-        TARGET_DIR="target/aarch64-apple-darwin/release"
-    else
-        TARGET_DIR="target/x86_64-apple-darwin/release"
-    fi
-    ls -la "$TARGET_DIR/bundle/macos/" 2>/dev/null || ls -la target/release/bundle/macos/
+    echo -e "${RED}No macOS bundle found under $TARGET_DIR/bundle${NC}" >&2
+    exit 1
 fi

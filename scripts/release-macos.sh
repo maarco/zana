@@ -24,7 +24,7 @@ cargo check -p Zana-app --locked
 cargo test -p Zana-app --locked
 cargo clippy -p Zana-app --all-targets --all-features --locked -- -D warnings
 
-"$PROJECT_ROOT/scripts/build-macos.sh" --universal
+"$PROJECT_ROOT/scripts/build-macos.sh"
 "$PROJECT_ROOT/scripts/sign-and-notarize.sh"
 
 echo "=== Zana macOS Release Build Complete ==="
