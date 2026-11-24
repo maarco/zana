@@ -140,6 +140,23 @@ class JobsTest(unittest.TestCase):
                     await asyncio.gather(job.task, job._output_task, return_exceptions=True)
         asyncio.run(run())
 
+    def test_shell_exit_keeps_capturing_late_background_child_output(self):
+        async def run():
+            with tempfile.TemporaryDirectory() as home:
+                job = await Jobs(home, timeout=2).start("printf shell; (sleep 0.4; printf late) &")
+                try:
+                    await asyncio.wait_for(job.task, 1)
+                    await asyncio.sleep(0.55)
+                    self.assertIn(b"late", Path(job.log).read_bytes())
+                finally:
+                    job.stop()
+                    tasks = [job.task, job._output_task]
+                    late_output_task = getattr(job, "_late_output_task", None)
+                    if late_output_task is not None:
+                        tasks.append(late_output_task)
+                    await asyncio.gather(*tasks, return_exceptions=True)
+        asyncio.run(run())
+
 
 if __name__ == "__main__":
     unittest.main()
