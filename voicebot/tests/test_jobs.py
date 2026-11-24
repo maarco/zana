@@ -170,6 +170,16 @@ class JobsTest(unittest.TestCase):
                     await asyncio.gather(*tasks, return_exceptions=True)
         asyncio.run(run())
 
+    def test_shell_exit_warns_while_background_output_is_pending(self):
+        async def run():
+            with tempfile.TemporaryDirectory() as home:
+                job = await Jobs(home, timeout=5).start("(sleep 2; printf late) &")
+                await asyncio.wait_for(job.task, 1)
+                return job.output()
+
+        output = asyncio.run(run())
+        self.assertIn("output may be missing", output)
+
     def test_shell_exit_releases_late_output_drain_and_pipe(self):
         async def run():
             with tempfile.TemporaryDirectory() as home:
