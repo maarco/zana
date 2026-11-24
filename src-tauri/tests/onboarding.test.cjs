@@ -33,13 +33,21 @@ function loadAudioVisualization() {
     close() {}
   }
 
+  let microphoneRequestCount = 0;
   const context = {
     document: {
       getElementById() {
         return { classList: { add() {}, remove() {} }, style: {}, textContent: '' };
       },
     },
-    navigator: { mediaDevices: { getUserMedia: async () => ({}) } },
+    navigator: {
+      mediaDevices: {
+        getUserMedia: async () => {
+          microphoneRequestCount += 1;
+          return {};
+        },
+      },
+    },
     AudioContext,
     Uint8Array,
     setInterval() { intervalCount += 1; return intervalCount; },
@@ -52,11 +60,19 @@ function loadAudioVisualization() {
     `${html.slice(start, end)}; globalThis.startAudioVisualization = startAudioVisualization;`,
     context,
   );
-  return { context, intervalCount: () => intervalCount };
+  return {
+    context,
+    intervalCount: () => intervalCount,
+    microphoneRequestCount: () => microphoneRequestCount,
+  };
 }
 
-test('granted microphone starts onboarding audio visualization', async () => {
-  const { context, intervalCount } = loadAudioVisualization();
-  await context.startAudioVisualization();
+test('overlapping microphone retries start one audio visualization', async () => {
+  const { context, intervalCount, microphoneRequestCount } = loadAudioVisualization();
+  await Promise.all([
+    context.startAudioVisualization(),
+    context.startAudioVisualization(),
+  ]);
+  assert.equal(microphoneRequestCount(), 1);
   assert.equal(intervalCount(), 1);
 });
