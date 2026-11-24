@@ -67,6 +67,7 @@ class Job:
         try:
             await asyncio.wait_for(self._capture_output(), timeout=OUTPUT_LATE_DRAIN_SECONDS)
         except TimeoutError:
+            self._output_error = True
             self._close_output_pipe()
 
     async def _wait(self) -> None:
