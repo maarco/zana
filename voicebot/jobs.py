@@ -16,6 +16,7 @@ from retention import append_bounded
 SHELL = next(([path, "-lc"] for path in ("/bin/zsh", "/bin/bash") if os.path.exists(path)), ["/bin/sh", "-c"])
 MAX_JOB_LOG_BYTES = 5 * 1024 * 1024
 LOG_READ_BYTES = 64 * 1024
+OUTPUT_DRAIN_GRACE_SECONDS = 0.1
 
 
 class Job:
@@ -52,7 +53,11 @@ class Job:
             self.exit_code = await self.proc.wait()
             timed_out = True
         finally:
-            await self._output_task
+            # The shell can exit while a background child still holds its stdout pipe.
+            # Finish the job on the shell's exit, while allowing a short drain for final output.
+            drained, _ = await asyncio.wait({self._output_task}, timeout=OUTPUT_DRAIN_GRACE_SECONDS)
+            if self._output_task in drained:
+                await self._output_task
             if timed_out:
                 try:
                     append_bounded(self.log, f"\n[stopped after {self.timeout:.0f} seconds]\n".encode(),
