@@ -80,6 +80,19 @@ class JobsTest(unittest.TestCase):
                 self.assertTrue(Path(job.log).read_bytes().endswith(b"TAIL\n"))
         asyncio.run(run())
 
+    def test_job_output_log_write_failure_is_reported(self):
+        async def run():
+            with tempfile.TemporaryDirectory() as home:
+                command = shlex.join([sys.executable, "-c", "print('JOB OUTPUT')"])
+                with patch.object(jobs, "append_bounded", side_effect=PermissionError("denied")):
+                    job = await Jobs(home).start(command)
+                    await asyncio.wait_for(job.task, 5)
+                return job.output(), job.exit_code
+
+        output, exit_code = asyncio.run(run())
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Could not save terminal output", output)
+
     def test_shell_completion_is_not_held_open_by_background_child_pipe(self):
         async def run():
             with tempfile.TemporaryDirectory() as home:
