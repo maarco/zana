@@ -44,7 +44,8 @@ from voiceprint import RATE, VoicePrint, VoiceTap, speech_seconds, to_mono_16k
 from speech import TOOL_SAY, join_sentences, one_sentence, speakable_stream
 from prompt_guidance import (
     assemble_instructions, load_app_tool_guidance, load_personal_prompt,
-    remove_legacy_guidance_after_consent, take_legacy_prompt_offer,
+    has_legacy_tool_guidance, remove_legacy_guidance_after_consent,
+    take_legacy_prompt_offer,
 )
 import updater
 
@@ -364,8 +365,16 @@ class Voicebot(Agent):
                          "Zana's Preferences."),
         }
         notes = [guides[t] for t in topics(heard) if t in guides]
+        personal_prompt = load_prompt()
+        cleanup_offer_history = (
+            TRANSCRIPT.search("old tool guidance from your personal prompt", limit=1)
+            if has_legacy_tool_guidance(personal_prompt)
+            else []
+        )
         migration_offer = take_legacy_prompt_offer(
-            HOME, load_prompt(), TRANSCRIPT.tail_lines(2)
+            HOME,
+            personal_prompt,
+            "\n".join([*TRANSCRIPT.tail_lines(2), *cleanup_offer_history]),
         )
         if migration_offer:
             notes.append(migration_offer)

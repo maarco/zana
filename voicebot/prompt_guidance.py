@@ -156,14 +156,15 @@ def take_legacy_prompt_offer(
         return ""
     with _MIGRATION_LOCK:
         state = _read_migration_state(home)
+        if last_voicebot_turn_offered_cleanup(transcript):
+            state = state or {}
+            state.update(delivered=True, version=TOOL_GUIDANCE_VERSION)
+            _write_migration_state(home, state)
+            return ""
         if state is None or state.get("delivered"):
             return ""
         if state.get("offered"):
-            if not last_voicebot_turn_offered_cleanup(transcript):
-                return _MIGRATION_OFFER
-            state.update(delivered=True)
-            _write_migration_state(home, state)
-            return ""
+            return _MIGRATION_OFFER
         state.update(offered=True, version=TOOL_GUIDANCE_VERSION)
         _write_migration_state(home, state)
     return _MIGRATION_OFFER
