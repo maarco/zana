@@ -191,14 +191,19 @@ def explicitly_consents_to_cleanup(user_text: str, *, offer_was_immediately_prio
     ):
         return False
     if re.match(r"^(yes|yeah|yep|sure|okay|ok|please do|go ahead|do it|do that)\b", text):
-        explicit_target = bool(
-            re.search(r"\b(remove|delete|clean up|strip)\b", text)
-            and re.search(r"\b(old|legacy|duplicate|tool|guidance|instructions|notes|text|prompt)\b", text)
-        )
+        explicit_target = _requests_tool_guidance_cleanup(text)
         return offer_was_immediately_prior or explicit_target
+    return _requests_tool_guidance_cleanup(text)
+
+
+def _requests_tool_guidance_cleanup(text: str) -> bool:
+    """Require the deletion request itself to name the app-owned tool guidance."""
     return bool(
-        re.match(r"^(please\s+)?(remove|delete|clean up|strip)\b", text)
-        and re.search(r"\b(old|legacy|duplicate|tool|guidance|instructions|notes|text|prompt)\b", text)
+        re.search(
+            r"\b(remove|delete|clean up|strip)\b.{0,60}\btool[- ](?:guidance|instructions)\b"
+            r"|\btool[- ](?:guidance|instructions)\b.{0,60}\b(remove|delete|clean up|strip)\b",
+            text,
+        )
     )
 
 
