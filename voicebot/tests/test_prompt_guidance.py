@@ -168,17 +168,20 @@ class PromptGuidanceTest(unittest.TestCase):
         self.assertFalse(changed)
         self.assertEqual(unchanged, prompt)
 
-    def test_bare_yes_after_long_cleanup_offer_remains_bound_to_offer(self):
+    def test_bare_yes_after_prefixed_long_question_is_not_cleanup_consent(self):
         prompt = "Personal intro.\n" + prompt_guidance.LEGACY_TOOL_GUIDANCE
         prompt_guidance.take_legacy_prompt_offer(self.home, prompt)
         transcript = Transcript(self.home)
         transcript.record("Voicebot", "🙂" * 3000 + " " + prompt_guidance._MIGRATION_OFFER_QUESTION)
         transcript.record("User", "Yes")
-        cleaned, changed, _ = prompt_guidance.remove_legacy_guidance_after_consent(
-            self.home, prompt, "Yes", transcript.tail_lines(2)
+        recent = transcript.tail_lines(2)
+        self.assertTrue(recent.startswith("[2026-11-24 "))
+        self.assertIn("Voicebot: " + "🙂" * 3000, recent)
+        unchanged, changed, _ = prompt_guidance.remove_legacy_guidance_after_consent(
+            self.home, prompt, "Yes", recent
         )
-        self.assertTrue(changed)
-        self.assertNotIn("see_screen: the app and window", cleaned)
+        self.assertFalse(changed)
+        self.assertEqual(unchanged, prompt)
 
     def test_explicit_consent_removes_only_exact_stock_lines(self):
         custom_line = "My own tool rule: preserve every original phrase."
