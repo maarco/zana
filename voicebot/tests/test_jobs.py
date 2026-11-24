@@ -195,6 +195,25 @@ class JobsTest(unittest.TestCase):
                     )
         asyncio.run(run())
 
+    def test_shell_exit_reports_output_cut_off_after_late_drain_window(self):
+        async def run():
+            with tempfile.TemporaryDirectory() as home:
+                job = await Jobs(home, timeout=2).start("printf shell; sleep 60 &")
+                try:
+                    await asyncio.wait_for(job.task, 2)
+                    await asyncio.sleep(jobs.OUTPUT_LATE_DRAIN_SECONDS + 0.1)
+                    return job.output()
+                finally:
+                    job.stop()
+                    await asyncio.gather(
+                        job.task,
+                        job._output_task,
+                        *(task for task in (job._late_output_task,) if task is not None),
+                        return_exceptions=True,
+                    )
+
+        self.assertIn("output may be missing", asyncio.run(run()))
+
 
 if __name__ == "__main__":
     unittest.main()
