@@ -226,6 +226,20 @@ class PromptGuidanceTest(unittest.TestCase):
         self.assertFalse(changed)
         self.assertEqual(unchanged, prompt)
 
+    def test_question_about_cleanup_does_not_consent(self):
+        prompt = prompt_guidance.LEGACY_TOOL_GUIDANCE + "\nKeep this personal note.\n"
+        prompt_guidance.take_legacy_prompt_offer(self.home, prompt)
+        for reply in (
+            "Should I remove the old tool guidance?",
+            "Do you want me to remove the old tool guidance?",
+            "Would it be okay if I remove the old tool guidance?",
+        ):
+            unchanged, changed, _ = prompt_guidance.remove_legacy_guidance_after_consent(
+                self.home, prompt, reply
+            )
+            self.assertFalse(changed, reply)
+            self.assertEqual(unchanged, prompt, reply)
+
     def test_corrupt_migration_state_fails_closed(self):
         old_prompt = prompt_guidance.LEGACY_TOOL_GUIDANCE
         prompt_guidance.take_legacy_prompt_offer(self.home, old_prompt)
