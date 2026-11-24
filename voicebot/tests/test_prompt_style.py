@@ -1,8 +1,7 @@
 """Contract checks for the user-facing default Voicebot response style."""
 
-from pathlib import Path
 import unittest
-
+from pathlib import Path
 
 PROMPT = Path(__file__).parents[1] / "system_prompt.default.md"
 
@@ -12,8 +11,10 @@ class DefaultPromptStyleTests(unittest.TestCase):
         prompt = PROMPT.read_text(encoding="utf-8")
         self.assertIn("usually one or two short sentences", prompt)
         self.assertIn("clarity and conversation flow matter more than a rigid count", prompt)
+        self.assertIn("give a concise answer", prompt)
         self.assertNotIn("Exactly one short sentence per reply", prompt)
         self.assertNotIn("never two", prompt)
+        self.assertNotIn("give the answer in one sentence", prompt)
 
     def test_allows_natural_casual_phrasing_without_forcing_slang(self):
         prompt = PROMPT.read_text(encoding="utf-8")
