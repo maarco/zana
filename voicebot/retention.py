@@ -2,6 +2,12 @@
 import json
 import os
 
+try:
+    import fcntl
+except ImportError:  # Windows uses msvcrt for the same sidecar lock.
+    fcntl = None
+    import msvcrt
+
 
 def append_bounded(path: str, data: bytes, max_bytes: int, *, preserve_lines: bool = False,
                    trim_to: int | None = None) -> None:
@@ -47,23 +53,39 @@ def append_bounded(path: str, data: bytes, max_bytes: int, *, preserve_lines: bo
 
 def append_bounded_jsonl(path: str, event: dict, max_bytes: int) -> None:
     """Append one JSONL event, omitting oversized payloads rather than writing invalid JSON."""
-    line = json.dumps(event, default=str, separators=(",", ":")).encode("utf-8")
-    if len(line) + 1 > max_bytes:
-        line = json.dumps({"t": event.get("t"), "kind": event.get("kind", "event"),
-                           "truncated": True}, separators=(",", ":")).encode("utf-8")
-    if len(line) + 1 > max_bytes:
-        line = b'{"truncated":true}'
-    record = line + b"\n"
-    try:
-        with open(path, "rb") as f:
-            f.seek(0, os.SEEK_END)
-            if f.tell():
-                f.seek(-1, os.SEEK_END)
-                if f.read(1) != b"\n":
-                    record = b"\n" + record
-    except FileNotFoundError:
-        pass
-    append_bounded(path, record, max_bytes, preserve_lines=True)
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(path + ".lock", "a+b") as lock_file:
+        if fcntl is not None:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        else:
+            lock_file.seek(0)
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
+        try:
+            line = json.dumps(event, default=str, separators=(",", ":")).encode("utf-8")
+            if len(line) + 1 > max_bytes:
+                line = json.dumps({"t": event.get("t"), "kind": event.get("kind", "event"),
+                                   "truncated": True}, separators=(",", ":")).encode("utf-8")
+            if len(line) + 1 > max_bytes:
+                line = b'{"truncated":true}'
+            record = line + b"\n"
+            try:
+                with open(path, "rb") as f:
+                    f.seek(0, os.SEEK_END)
+                    if f.tell():
+                        f.seek(-1, os.SEEK_END)
+                        if f.read(1) != b"\n":
+                            record = b"\n" + record
+            except FileNotFoundError:
+                pass
+            append_bounded(path, record, max_bytes, preserve_lines=True)
+        finally:
+            if fcntl is not None:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            else:
+                lock_file.seek(0)
+                msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
 
 
 def prune_prompt_history(directory: str, keep: int = 20) -> int:

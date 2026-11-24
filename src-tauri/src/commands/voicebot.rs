@@ -3,6 +3,7 @@
 use crate::state::{AppState, Settings};
 use crate::voicebot;
 use serde::Serialize;
+use std::fs::OpenOptions;
 use std::process::Command;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -538,6 +539,14 @@ pub async fn voicebot_debug_tail(offset: u64) -> Result<DebugTail, String> {
 #[tauri::command]
 pub async fn clear_voicebot_debug() -> Result<(), String> {
     let path = voicebot::home_dir().join("logs/debug.jsonl");
+    let lock_path = path.with_extension("jsonl.lock");
+    let lock = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(lock_path)
+        .map_err(|e| e.to_string())?;
+    lock.lock().map_err(|e| e.to_string())?;
     if path.exists() {
         std::fs::write(&path, "").map_err(|e| e.to_string())?;
     }
