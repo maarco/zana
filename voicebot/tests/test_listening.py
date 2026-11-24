@@ -88,6 +88,16 @@ class TranscriptTest(unittest.TestCase):
             self.assertTrue(tail.startswith("["))  # no partial first line
             self.assertLessEqual(len(tail), 120)
 
+    def test_tail_lines_keeps_complete_long_turns(self):
+        with tempfile.TemporaryDirectory() as home:
+            t = Transcript(home)
+            t.record("Voicebot", "Would you like me to remove the old tool guidance?")
+            long_reply = "Yes, I agree. " + ("More context. " * 400)
+            t.record("User", long_reply)
+            tail = t.tail_lines(2)
+            self.assertIn("Voicebot: Would you like me to remove the old tool guidance?", tail)
+            self.assertIn("User: " + long_reply, tail)
+
     def test_unread_is_capped_to_the_newest_text(self):
         with tempfile.TemporaryDirectory() as home:
             t = Transcript(home, unread_limit=50)
