@@ -15,6 +15,15 @@ from listening import clean
 SHELL = next(([path, "-lc"] for path in ("/bin/zsh", "/bin/bash") if os.path.exists(path)), ["/bin/sh", "-c"])
 
 
+def conversation_end_warning(job_id: int) -> str:
+    """Disclose exactly which long-running job is cancelled when its session ends."""
+    return (
+        f"Job {job_id} will be stopped if this conversation ends, including when "
+        "you close the orb or change Voicebot settings. It cannot be resumed in a "
+        "later conversation; keep this conversation open if you want it to finish."
+    )
+
+
 class Job:
     """One terminal command running in its own process group, its output going to a log file."""
 

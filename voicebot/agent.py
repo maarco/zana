@@ -36,7 +36,7 @@ from livekit.agents.voice.agent_session import SessionConnectOptions
 from livekit.plugins import openai, silero
 
 from fillers import DEFAULT_PHRASES, Fillers, chunks_with_gap
-from jobs import Jobs
+from jobs import Jobs, conversation_end_warning
 from orb_state import OrbState
 from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls,
                        repeats, split_say, topics, wants_redo, wants_voiceprint)
@@ -1107,8 +1107,8 @@ class Voicebot(Agent):
         job.task.add_done_callback(finished)
         debug("job", id=job.id, pid=job.pid, command=command, log=job.log)
         return (f"Still running as job {job.id} (process {job.pid}), output streaming to {job.log}. "
-                "Tell the user in a few words that it's running; check_job shows progress and stop_job stops it. "
-                "You'll be told when it finishes.")
+                f"IMPORTANT: Tell the user explicitly that {conversation_end_warning(job.id)} "
+                "check_job shows progress and stop_job stops it now; you'll be told if it finishes first.")
 
     @function_tool()
     async def check_job(self, context: RunContext, job: int) -> str:

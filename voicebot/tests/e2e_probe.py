@@ -282,7 +282,7 @@ async def mode_jobs():
 
 
 async def mode_memory():
-    """Compaction (with a 1,500 character budget for the test), conversation search, and quiet job stops.
+    """Check compaction, conversation search, and warned job cancellation when the conversation closes.
     config.json is restored afterwards."""
     cfg_path = os.path.join(HOME, "config.json")
     original = open(cfg_path).read()
@@ -334,7 +334,10 @@ async def mode_memory():
         await asyncio.sleep(8)
         late = [e["text"] for e in events(mark) if e["kind"] == "said"]
         print("after stop, extra replies:", late or "none")
-        await turn("run the terminal command: sleep 120")
+        job_reply = await turn("run the terminal command: sleep 120")
+        assert "conversation ends" in job_reply.lower() and "stopped" in job_reply.lower(), (
+            f"long-job reply did not disclose conversation-close cancellation: {job_reply!r}")
+        print("long job warning names conversation-close behavior: true")
         await room.disconnect()
         gone = False
         for _ in range(40):
