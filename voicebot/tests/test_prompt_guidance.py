@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-import prompt_guidance  # noqa: E402
+import prompt_guidance
 
 
 class PromptGuidanceTest(unittest.TestCase):
