@@ -119,8 +119,8 @@ class Jobs:
         job_id = self.next_id
         self.next_id += 1
         log_path = os.path.join(folder, f"{job_id}.log")
-        with open(log_path, "wb"):
-            pass
+        log_fd = os.open(log_path, os.O_CREAT | os.O_TRUNC | os.O_WRONLY, 0o666)
+        os.close(log_fd)
         try:
             proc = await asyncio.create_subprocess_exec(
                 *SHELL, command, cwd=os.path.expanduser(os.getenv("VOICEBOT_TERMINAL_DIR", "~")),

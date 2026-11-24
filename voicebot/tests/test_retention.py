@@ -6,7 +6,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from retention import append_bounded, append_bounded_jsonl, prune_prompt_history  # noqa: E402
+from retention import append_bounded, append_bounded_jsonl, prune_prompt_history
 
 
 class BoundedAppendTest(unittest.TestCase):

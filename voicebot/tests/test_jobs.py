@@ -5,11 +5,12 @@ import shlex
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-import jobs  # noqa: E402
-from jobs import Jobs  # noqa: E402
+import jobs
+from jobs import Jobs
 
 
 class JobsTest(unittest.TestCase):
@@ -69,8 +70,7 @@ class JobsTest(unittest.TestCase):
                     job = await Jobs(home).start(command)
                     await asyncio.wait_for(job.task, 5)
                 self.assertLessEqual(os.path.getsize(job.log), 1024)
-                with open(job.log, "rb") as f:
-                    self.assertTrue(f.read().endswith(b"TAIL\n"))
+                self.assertTrue(Path(job.log).read_bytes().endswith(b"TAIL\n"))
         asyncio.run(run())
 
     def test_shell_completion_is_not_held_open_by_background_child_pipe(self):
