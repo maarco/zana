@@ -85,6 +85,39 @@ class JobsTest(unittest.TestCase):
                     await asyncio.gather(job.task, return_exceptions=True)
         asyncio.run(run())
 
+    def test_shell_exit_completes_job_while_process_wait_is_held_by_stdout(self):
+        async def run():
+            class PipeHeldProcess:
+                def __init__(self):
+                    self.pid = 2**30
+                    self.returncode = None
+                    self.stdout = asyncio.StreamReader()
+                    self.exited = asyncio.get_running_loop().create_future()
+
+                async def wait(self):
+                    await self.exited
+                    return self.returncode
+
+            with tempfile.TemporaryDirectory() as home:
+                proc = PipeHeldProcess()
+                job = jobs.Job(1, "background child", proc, os.path.join(home, "job.log"), 1)
+
+                async def shell_exits():
+                    await asyncio.sleep(0.01)
+                    proc.returncode = 0
+
+                exit_task = asyncio.create_task(shell_exits())
+                try:
+                    done, _ = await asyncio.wait({job.task}, timeout=0.5)
+                    self.assertIn(job.task, done, "shell exit must not wait for inherited stdout EOF")
+                    self.assertEqual(job.exit_code, 0)
+                finally:
+                    proc.stdout.feed_eof()
+                    if not proc.exited.done():
+                        proc.exited.set_result(proc.returncode)
+                    await asyncio.gather(job.task, exit_task, return_exceptions=True)
+        asyncio.run(run())
+
 
 if __name__ == "__main__":
     unittest.main()
