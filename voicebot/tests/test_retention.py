@@ -5,6 +5,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
 try:
@@ -54,27 +55,17 @@ class BoundedAppendTest(unittest.TestCase):
                         pass
                     clear_done.set()
 
-            errors = []
-
-            def append_event():
-                try:
-                    append_bounded_jsonl(path, {"kind": "new"}, 80)
-                except Exception as exc:  # surface thread failures in the test thread
-                    errors.append(exc)
-
-            with patch("retention.os.replace", side_effect=pause_before_replace):
-                writer = threading.Thread(target=append_event)
-                writer.start()
+            with patch("retention.os.replace", side_effect=pause_before_replace), ThreadPoolExecutor(
+                max_workers=2
+            ) as pool:
+                writer = pool.submit(append_bounded_jsonl, path, {"kind": "new"}, 80)
                 self.assertTrue(replace_ready.wait(2), "append did not reach its trim replacement")
-                clearer = threading.Thread(target=clear_debug_log)
-                clearer.start()
+                clearer = pool.submit(clear_debug_log)
                 cleared_before_replace = clear_done.wait(0.1)
                 allow_replace.set()
-                writer.join(2)
-                clearer.join(2)
+                writer.result(timeout=2)
+                clearer.result(timeout=2)
 
-            self.assertFalse(writer.is_alive() or clearer.is_alive(), "log operations did not finish")
-            self.assertFalse(errors, f"append thread failed: {errors!r}")
             self.assertFalse(cleared_before_replace, "clear did not wait for the in-flight trim")
             with open(path, "rb") as f:
                 self.assertNotIn(b'"old"', f.read())
