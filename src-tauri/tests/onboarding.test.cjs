@@ -76,3 +76,41 @@ test('overlapping microphone retries start one audio visualization', async () =>
   assert.equal(microphoneRequestCount(), 1);
   assert.equal(intervalCount(), 1);
 });
+
+test('completion marker failure is shown in onboarding', async () => {
+  const html = fs.readFileSync(onboardingPath, 'utf8');
+  const start = html.indexOf('window.completeGenesis = async function() {');
+  assert.notEqual(start, -1, 'completion handler exists');
+
+  let depth = 0;
+  let end = -1;
+  for (let index = html.indexOf('{', start); index < html.length; index += 1) {
+    if (html[index] === '{') depth += 1;
+    if (html[index] === '}' && --depth === 0) {
+      end = index + 1;
+      break;
+    }
+  }
+  assert.notEqual(end, -1, 'completion handler closes');
+
+  const completionError = { hidden: true, textContent: '' };
+  const context = {
+    window: {
+      __TAURI__: {
+        core: {
+          invoke: async () => ({ success: false, error: 'permission denied' }),
+        },
+      },
+    },
+    document: { getElementById: () => completionError },
+    console: { error() {} },
+  };
+  vm.runInNewContext(
+    `${html.slice(start, end)}; globalThis.completeGenesis = window.completeGenesis;`,
+    context,
+  );
+
+  await context.completeGenesis();
+  assert.equal(completionError.hidden, false);
+  assert.match(completionError.textContent, /permission denied/);
+});
