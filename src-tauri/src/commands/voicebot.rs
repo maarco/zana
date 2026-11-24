@@ -542,6 +542,7 @@ pub async fn clear_voicebot_debug() -> Result<(), String> {
     let lock_path = path.with_extension("jsonl.lock");
     let lock = OpenOptions::new()
         .create(true)
+        .truncate(false)
         .read(true)
         .write(true)
         .open(lock_path)
