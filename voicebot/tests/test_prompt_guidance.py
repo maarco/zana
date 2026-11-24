@@ -269,6 +269,21 @@ class PromptGuidanceTest(unittest.TestCase):
         self.assertFalse(changed)
         self.assertEqual(unchanged, prompt)
 
+    def test_request_targeting_another_document_does_not_consent(self):
+        prompt = prompt_guidance.LEGACY_TOOL_GUIDANCE + "\nKeep this personal note.\n"
+        prompt_guidance.take_legacy_prompt_offer(self.home, prompt)
+        for request in (
+            "Yes, delete the tool guidance from the README.",
+            "Please remove tool guidance from the docs, not my prompt.",
+            "Can you clean up tool instructions in my notes file?",
+        ):
+            with self.subTest(request=request):
+                unchanged, changed, _ = prompt_guidance.remove_legacy_guidance_after_consent(
+                    self.home, prompt, request
+                )
+                self.assertFalse(changed)
+                self.assertEqual(unchanged, prompt)
+
     def test_question_about_cleanup_does_not_consent(self):
         prompt = prompt_guidance.LEGACY_TOOL_GUIDANCE + "\nKeep this personal note.\n"
         prompt_guidance.take_legacy_prompt_offer(self.home, prompt)
