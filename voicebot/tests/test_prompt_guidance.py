@@ -95,6 +95,15 @@ class PromptGuidanceTest(unittest.TestCase):
     def test_bare_yes_is_not_consent_without_a_migration_offer_context(self):
         self.assertFalse(prompt_guidance.explicitly_consents_to_cleanup("yes"))
 
+    def test_cleanup_rejects_bare_yes_without_a_recent_spoken_offer(self):
+        old_prompt = "Personal opening.\n" + prompt_guidance.LEGACY_TOOL_GUIDANCE + "\nMy unique ending.\n"
+        prompt_guidance.take_legacy_prompt_offer(self.home, old_prompt)
+        unchanged, changed, _ = prompt_guidance.remove_legacy_guidance_after_consent(
+            self.home, old_prompt, "yes"
+        )
+        self.assertFalse(changed)
+        self.assertEqual(unchanged, old_prompt)
+
     def test_explicit_consent_removes_only_exact_stock_lines(self):
         custom_line = "My own tool rule: preserve every original phrase."
         old_prompt = (
