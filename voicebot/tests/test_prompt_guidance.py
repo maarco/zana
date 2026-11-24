@@ -212,6 +212,20 @@ class PromptGuidanceTest(unittest.TestCase):
         self.assertFalse(changed)
         self.assertEqual(unchanged, prompt)
 
+    def test_unrelated_delete_request_after_offer_does_not_consent(self):
+        prompt = prompt_guidance.LEGACY_TOOL_GUIDANCE + "\nKeep this personal note.\n"
+        prompt_guidance.take_legacy_prompt_offer(self.home, prompt)
+        transcript = (
+            "[2026-11-24 10:00:00] Voicebot: "
+            + prompt_guidance._MIGRATION_OFFER_QUESTION
+            + "\n[2026-11-24 10:00:01] User: Yes, delete the old transcript file.\n"
+        )
+        unchanged, changed, _ = prompt_guidance.remove_legacy_guidance_after_consent(
+            self.home, prompt, "Yes, delete the old transcript file.", transcript
+        )
+        self.assertFalse(changed)
+        self.assertEqual(unchanged, prompt)
+
     def test_corrupt_migration_state_fails_closed(self):
         old_prompt = prompt_guidance.LEGACY_TOOL_GUIDANCE
         prompt_guidance.take_legacy_prompt_offer(self.home, old_prompt)
