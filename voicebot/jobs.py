@@ -41,6 +41,7 @@ class Job:
         self.ended: float | None = None
         self.exit_code: int | None = None
         self._output_error = False
+        self._output_pending = False
         self._output_task = asyncio.create_task(self._capture_output())
         self._late_output_task: asyncio.Task | None = None
         self.task = asyncio.ensure_future(self._wait())
@@ -69,6 +70,11 @@ class Job:
         except TimeoutError:
             self._output_error = True
             self._close_output_pipe()
+        except asyncio.CancelledError:
+            self._output_error = True
+            raise
+        finally:
+            self._output_pending = False
 
     async def _wait(self) -> None:
         timed_out = False
@@ -96,6 +102,7 @@ class Job:
                 await asyncio.gather(self._output_task, return_exceptions=True)
                 # The shell is done, but a background child may still own stdout.
                 # Keep a bounded tail window without holding a pipe open for the child's lifetime.
+                self._output_pending = True
                 self._late_output_task = asyncio.create_task(self._capture_late_output())
             if timed_out:
                 try:
@@ -122,7 +129,10 @@ class Job:
         except OSError:
             text = ""
             self._output_error = True
-        if self._output_error:
+        if self._output_pending:
+            warning = "[Background process output may be missing while collection is still active.]"
+            text = f"{text}\n{warning}" if text else warning
+        elif self._output_error:
             warning = "[Could not save terminal output fully; some output may be missing.]"
             text = f"{text}\n{warning}" if text else warning
         return clean("\n".join(text.splitlines()[-lines:])) if lines else ""
