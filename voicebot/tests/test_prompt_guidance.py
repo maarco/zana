@@ -9,6 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import prompt_guidance
+from listening import Transcript
 
 
 class PromptGuidanceTest(unittest.TestCase):
@@ -152,6 +153,18 @@ class PromptGuidanceTest(unittest.TestCase):
         )
         self.assertFalse(changed)
         self.assertEqual(unchanged, prompt)
+
+    def test_bare_yes_after_long_cleanup_offer_remains_bound_to_offer(self):
+        prompt = "Personal intro.\n" + prompt_guidance.LEGACY_TOOL_GUIDANCE
+        prompt_guidance.take_legacy_prompt_offer(self.home, prompt)
+        transcript = Transcript(self.home)
+        transcript.record("Voicebot", "🙂" * 3000 + " " + prompt_guidance._MIGRATION_OFFER_QUESTION)
+        transcript.record("User", "Yes")
+        cleaned, changed, _ = prompt_guidance.remove_legacy_guidance_after_consent(
+            self.home, prompt, "Yes", transcript.tail_lines(2)
+        )
+        self.assertTrue(changed)
+        self.assertNotIn("see_screen: the app and window", cleaned)
 
     def test_explicit_consent_removes_only_exact_stock_lines(self):
         custom_line = "My own tool rule: preserve every original phrase."
