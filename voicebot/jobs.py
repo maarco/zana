@@ -17,6 +17,7 @@ SHELL = next(([path, "-lc"] for path in ("/bin/zsh", "/bin/bash") if os.path.exi
 MAX_JOB_LOG_BYTES = 5 * 1024 * 1024
 LOG_READ_BYTES = 64 * 1024
 OUTPUT_DRAIN_GRACE_SECONDS = 0.1
+OUTPUT_LATE_DRAIN_SECONDS = 0.75
 
 
 def conversation_end_warning(job_id: int) -> str:
@@ -55,6 +56,19 @@ class Job:
                 # Keep draining even if this disk write fails, so a noisy child cannot deadlock.
                 self._output_error = True
 
+    def _close_output_pipe(self) -> None:
+        transport = getattr(self.proc, "_transport", None)
+        pipe = transport.get_pipe_transport(1) if transport is not None else None
+        if pipe is not None:
+            pipe.close()
+
+    async def _capture_late_output(self) -> None:
+        """Capture a short tail from descendants, then release an inherited stdout pipe."""
+        try:
+            await asyncio.wait_for(self._capture_output(), timeout=OUTPUT_LATE_DRAIN_SECONDS)
+        except TimeoutError:
+            self._close_output_pipe()
+
     async def _wait(self) -> None:
         timed_out = False
         try:
@@ -80,8 +94,8 @@ class Job:
                 self._output_task.cancel()
                 await asyncio.gather(self._output_task, return_exceptions=True)
                 # The shell is done, but a background child may still own stdout.
-                # Keep draining it without holding the job's completion open.
-                self._late_output_task = asyncio.create_task(self._capture_output())
+                # Keep a bounded tail window without holding a pipe open for the child's lifetime.
+                self._late_output_task = asyncio.create_task(self._capture_late_output())
             if timed_out:
                 try:
                     append_bounded(self.log, f"\n[stopped after {self.timeout:.0f} seconds]\n".encode(),
