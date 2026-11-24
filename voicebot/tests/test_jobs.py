@@ -118,6 +118,21 @@ class JobsTest(unittest.TestCase):
                     await asyncio.gather(job.task, exit_task, return_exceptions=True)
         asyncio.run(run())
 
+    def test_shell_exit_closes_output_drain_when_background_child_keeps_pipe_open(self):
+        async def run():
+            with tempfile.TemporaryDirectory() as home:
+                job = await Jobs(home, timeout=1).start("sleep 60 &")
+                try:
+                    await asyncio.wait_for(job.task, 2)
+                    self.assertTrue(
+                        job._output_task.done(),
+                        "completed shell leaves its inherited stdout drain task pending",
+                    )
+                finally:
+                    job.stop()
+                    await asyncio.gather(job.task, job._output_task, return_exceptions=True)
+        asyncio.run(run())
+
 
 if __name__ == "__main__":
     unittest.main()
