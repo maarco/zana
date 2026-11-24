@@ -235,6 +235,27 @@ class Transcript:
             text = text.split("\n", 1)[1]  # drop the partial first line
         return text.strip()
 
+    def tail_lines(self, count: int) -> str:
+        """Read the newest complete transcript lines, including long individual turns."""
+        if count <= 0:
+            return ""
+        chunks = []
+        position = self._size()
+        newline_count = 0
+        try:
+            with open(self.path, "rb") as f:
+                while position > 0 and newline_count < count:
+                    size = min(4096, position)
+                    position -= size
+                    f.seek(position)
+                    chunk = f.read(size)
+                    chunks.append(chunk)
+                    newline_count += chunk.count(b"\n")
+        except OSError:
+            return ""
+        text = b"".join(reversed(chunks)).decode(errors="replace")
+        return "\n".join(text.splitlines()[-count:]).strip()
+
     def search(self, words: str, limit: int = 12) -> list[str]:
         """Transcript lines with every word (word starts match, case and punctuation ignored), each with the
         line after it (usually the reply); when no line has them all, the lines with the most. Newest last."""
