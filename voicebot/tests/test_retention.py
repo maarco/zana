@@ -3,7 +3,14 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import unittest
+from unittest.mock import patch
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Voicebot's file-lock contract is POSIX-only
+    fcntl = None
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from retention import append_bounded, append_bounded_jsonl, prune_prompt_history
@@ -21,6 +28,56 @@ class BoundedAppendTest(unittest.TestCase):
             self.assertTrue(content.endswith(b"line-39\n"))
             self.assertTrue(all(line.startswith(b"line-") for line in content.splitlines()))
             self.assertNotIn(b"line-00", content)
+
+    @unittest.skipIf(fcntl is None, "POSIX advisory locks are unavailable")
+    def test_debug_clear_cannot_restore_history_during_trim(self):
+        with tempfile.TemporaryDirectory() as home:
+            path = os.path.join(home, "logs", "debug.jsonl")
+            os.makedirs(os.path.dirname(path))
+            with open(path, "wb") as f:
+                f.write(b'{"kind":"old"}\n' * 5)
+
+            replace_ready = threading.Event()
+            allow_replace = threading.Event()
+            clear_done = threading.Event()
+            real_replace = os.replace
+
+            def pause_before_replace(source, target):
+                replace_ready.set()
+                self.assertTrue(allow_replace.wait(2), "test did not release the log replacement")
+                real_replace(source, target)
+
+            def clear_debug_log():
+                with open(path + ".lock", "a+b") as lock_file:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+                    with open(path, "wb"):
+                        pass
+                    clear_done.set()
+
+            errors = []
+
+            def append_event():
+                try:
+                    append_bounded_jsonl(path, {"kind": "new"}, 80)
+                except Exception as exc:  # surface thread failures in the test thread
+                    errors.append(exc)
+
+            with patch("retention.os.replace", side_effect=pause_before_replace):
+                writer = threading.Thread(target=append_event)
+                writer.start()
+                self.assertTrue(replace_ready.wait(2), "append did not reach its trim replacement")
+                clearer = threading.Thread(target=clear_debug_log)
+                clearer.start()
+                cleared_before_replace = clear_done.wait(0.1)
+                allow_replace.set()
+                writer.join(2)
+                clearer.join(2)
+
+            self.assertFalse(writer.is_alive() or clearer.is_alive(), "log operations did not finish")
+            self.assertFalse(errors, f"append thread failed: {errors!r}")
+            self.assertFalse(cleared_before_replace, "clear did not wait for the in-flight trim")
+            with open(path, "rb") as f:
+                self.assertNotIn(b'"old"', f.read())
 
     def test_jsonl_event_does_not_join_a_crash_truncated_previous_line(self):
         with tempfile.TemporaryDirectory() as home:
