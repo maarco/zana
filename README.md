@@ -32,7 +32,7 @@ installation, usage, status, or troubleshooting are historical. Use
 ## System Requirements
 
 - **macOS**: 13 Ventura or newer recommended
-- **Processor**: Apple Silicon (M1/M2/M3) or Intel
+- **Processor**: Apple silicon only (M-series)
 - **RAM**: 8GB minimum (16GB recommended for larger Whisper models)
 - **Storage**: ~2GB for app + Whisper models
 
@@ -299,7 +299,7 @@ cargo test -- --nocapture
 # Build optimized binary
 cargo build -p Zana-app --release
 
-# Build, sign, notarize, and verify a universal macOS DMG.
+# Build, sign, notarize, and verify an Apple silicon macOS DMG.
 # Release DMGs must use the same Developer ID identity so macOS Accessibility
 # permissions stay attached across installs.
 export APPLE_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)"
@@ -314,7 +314,7 @@ export APPLE_TEAM_ID="TEAMID"
 
 Pushing an annotated `vX.Y.Z` tag on a `main` commit starts the release:
 `.github/workflows/release.yml` checks that `Cargo.toml` and `tauri.conf.json`
-carry the tag's version, builds, signs, notarizes and staples the universal
+carry the tag's version, builds, signs, notarizes and staples the Apple silicon
 DMG, and publishes the GitHub release; it refuses to replace an existing
 release. `cut-release.sh` runs the same checks locally first and pushes the
 tag. To re-run a release for a tag that already exists:
