@@ -93,8 +93,10 @@ OPENROUTER_API_KEY=... OPENROUTER_MODEL=...   # only used when Preferences > Mod
   while the tool runs and never reaches the tool.
 - **Terminal jobs**: a command still running after three seconds keeps going as
   a job; its output streams to `jobs/<n>.log`, Voicebot gets the job number and
-  process id, and it is told when the job ends. Jobs stop after 15 minutes or
-  when the conversation closes.
+  process id, and it is told when the job ends. Long-job replies warn that the
+  named job stops when the conversation closes (including orb close or Voicebot
+  settings changes) and cannot be resumed later. Jobs also stop after 15 minutes
+  or when explicitly stopped.
 - **Compaction**: past 12,000 characters (besides the instructions), the older
   part of the conversation is folded into a summary and the last three turns stay
   word for word; the Debug window shows each compaction and every reply shows the

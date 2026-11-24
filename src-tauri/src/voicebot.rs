@@ -43,6 +43,7 @@ fn require_apple_silicon(arch: &str) -> Result<(), &'static str> {
 pub const CODE_FILES: [&str; 13] = [
     "agent.py",
     "voice_server.py",
+    "port_reporting.py",
     "speech.py",
     "listening.py",
     "jobs.py",
@@ -397,7 +398,6 @@ fn run(code: &Path) -> Result<(), String> {
         uuid::Uuid::new_v4().simple()
     );
     let lk_port = free_tcp_port()?;
-    let voice_port = free_tcp_port()?;
     let rtc_tcp = free_tcp_port()?;
     let rtc_udp = free_udp_port()?;
     let url = format!("ws://127.0.0.1:{lk_port}");
@@ -432,16 +432,30 @@ fn run(code: &Path) -> Result<(), String> {
             // never write bytecode next to the code: in a signed .app that breaks the seal
             .env("PYTHONPYCACHEPREFIX", home.join("pycache"));
     };
+    let voice_port_file = home.join("voice-server.port");
+    let _ = std::fs::remove_file(&voice_port_file);
     let mut voice = std::process::Command::new(&python);
     voice
         .arg("voice_server.py")
-        .env("VOICE_SERVER_PORT", voice_port.to_string());
+        .env("VOICE_SERVER_PORT", "0")
+        .env("VOICE_SERVER_PORT_FILE", &voice_port_file);
     common(&mut voice);
     spawn("voice", &mut voice, &logs, &home)?;
-    let health = format!("http://127.0.0.1:{voice_port}/health");
+    let mut voice_port = None;
     wait_until(
         Duration::from_secs(600),
-        "The speech server did not start; see logs/voice.log",
+        "The speech server did not bind; see logs/voice.log",
+        || {
+            voice_port = read_voice_port(&voice_port_file);
+            voice_port.is_some()
+        },
+    )?;
+    let voice_port =
+        voice_port.ok_or_else(|| "The speech server did not report its port".to_owned())?;
+    let health = format!("http://127.0.0.1:{voice_port}/health");
+    wait_until(
+        Duration::from_secs(20),
+        "The speech server did not become healthy; see logs/voice.log",
         || {
             std::process::Command::new("curl")
                 .args(["-sf", "-m", "2", &health])
@@ -646,18 +660,55 @@ fn spawn(
 
 /// Stop every child process group (agent first, LiveKit last).
 pub fn stop() {
-    let children: Vec<_> = {
+    let mut children: Vec<_> = {
         let mut guard = state().lock().unwrap();
         guard.running = None;
         std::mem::take(&mut guard.children)
     };
+    terminate_groups(&mut children);
     for (name, mut child) in children.into_iter().rev() {
-        terminate_group(child.id());
         let _ = child.wait();
         log::info!("[Voicebot] stopped {name}");
     }
     let _ = std::fs::remove_file(home_dir().join("pids"));
 }
+
+#[cfg(unix)]
+fn terminate_groups(children: &mut [(String, std::process::Child)]) {
+    // Signal every child group first so the total graceful shutdown budget is shared.
+    for (_, child) in children.iter() {
+        // SAFETY: each child is started with process_group(0), so this targets its group.
+        unsafe {
+            libc::kill(-(child.id() as i32), libc::SIGTERM);
+        }
+    }
+
+    let deadline = Instant::now() + Duration::from_secs(4);
+    while Instant::now() < deadline {
+        let mut alive = false;
+        for (_, child) in children.iter_mut() {
+            let _ = child.try_wait(); // Reap an exited leader while descendants drain.
+                                      // SAFETY: signal 0 only checks whether this child process group still exists.
+            let result = unsafe { libc::kill(-(child.id() as i32), 0) };
+            alive |=
+                result == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM);
+        }
+        if !alive {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+
+    for (_, child) in children.iter() {
+        // SAFETY: as above; this group exceeded the shared SIGTERM grace period.
+        unsafe {
+            libc::kill(-(child.id() as i32), libc::SIGKILL);
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn terminate_groups(_children: &mut [(String, std::process::Child)]) {}
 
 #[cfg(unix)]
 fn terminate_group(pgid: u32) {
@@ -745,6 +796,16 @@ fn free_udp_port() -> Result<u16, String> {
         .map_err(|e| e.to_string())
 }
 
+#[cfg(unix)]
+fn read_voice_port(path: &Path) -> Option<u16> {
+    std::fs::read_to_string(path)
+        .ok()?
+        .trim()
+        .parse::<u16>()
+        .ok()
+        .filter(|port| *port != 0)
+}
+
 fn wait_until(limit: Duration, error: &str, mut ready: impl FnMut() -> bool) -> Result<(), String> {
     let deadline = Instant::now() + limit;
     while Instant::now() < deadline {
@@ -771,6 +832,61 @@ fn dead_child() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn shutdown_signals_all_groups_before_waiting() {
+        use std::os::unix::process::CommandExt;
+
+        let ready_dir = tempfile::tempdir().unwrap();
+        let mut children = Vec::new();
+        let mut ready_files = Vec::new();
+        for (index, name) in ["agent", "voice", "livekit"].into_iter().enumerate() {
+            let ready_file = ready_dir.path().join(format!("ready-{index}"));
+            let script = format!(
+                "import os, signal, time; signal.signal(signal.SIGTERM, lambda *_: (time.sleep(1), os._exit(0))); open({:?}, 'w').close(); time.sleep(30)",
+                ready_file.to_string_lossy()
+            );
+            let child = std::process::Command::new("python3")
+                .args(["-c", &script])
+                .process_group(0)
+                .spawn()
+                .unwrap();
+            children.push((name.to_string(), child));
+            ready_files.push(ready_file);
+        }
+        let ready_deadline = Instant::now() + Duration::from_secs(5);
+        while ready_files.iter().any(|path| !path.exists()) && Instant::now() < ready_deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            ready_files.iter().all(|path| path.exists()),
+            "children did not become ready"
+        );
+
+        let started = Instant::now();
+        terminate_groups(&mut children);
+        for (_, child) in &mut children {
+            let _ = child.wait();
+        }
+        assert!(
+            started.elapsed() < Duration::from_millis(2500),
+            "three graceful handlers should finish concurrently, elapsed {:?}",
+            started.elapsed()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn voice_server_port_file_requires_a_valid_nonzero_port() {
+        let temp = tempfile::tempdir().unwrap();
+        let port_file = temp.path().join("voice-server.port");
+        assert_eq!(read_voice_port(&port_file), None);
+        std::fs::write(&port_file, "0\n").unwrap();
+        assert_eq!(read_voice_port(&port_file), None);
+        std::fs::write(&port_file, "43127\n").unwrap();
+        assert_eq!(read_voice_port(&port_file), Some(43127));
+    }
 
     #[cfg(unix)]
     #[test]
