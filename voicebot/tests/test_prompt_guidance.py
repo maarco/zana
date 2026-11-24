@@ -119,6 +119,21 @@ class PromptGuidanceTest(unittest.TestCase):
         self.assertNotIn("see_screen: the app and window", unchanged)
         self.assertIn("Keep my note.", unchanged)
 
+    def test_failed_state_write_does_not_repeat_offer_after_decline(self):
+        blocked_home = Path(self.temp.name) / "blocked-home"
+        blocked_home.write_text("blocks directory creation", encoding="utf-8")
+        prompt = prompt_guidance.LEGACY_TOOL_GUIDANCE
+        self.assertTrue(prompt_guidance.take_legacy_prompt_offer(blocked_home, prompt))
+
+        transcript = (
+            "[2026-11-24 10:00:00] Voicebot: "
+            + prompt_guidance._MIGRATION_OFFER_QUESTION
+            + "\n[2026-11-24 10:00:01] User: No\n"
+        )
+        self.assertEqual(
+            prompt_guidance.take_legacy_prompt_offer(blocked_home, prompt, transcript), ""
+        )
+
     def test_no_legacy_guidance_means_no_offer_or_state_write(self):
         self.assertEqual(prompt_guidance.take_legacy_prompt_offer(self.home, "Only my personal rules."), "")
         self.assertFalse((self.home / prompt_guidance.MIGRATION_STATE_FILENAME).exists())
