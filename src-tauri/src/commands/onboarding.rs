@@ -3,18 +3,8 @@
 //! Tauri commands for first-run onboarding flow.
 
 use crate::onboarding;
-use crate::state::AppState;
-use crate::stt::WhisperModel;
 use serde::{Deserialize, Serialize};
-use tauri::{Emitter, State, Window};
-
-/// Download progress event for onboarding
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OnboardingDownloadProgress {
-    pub downloaded: u64,
-    pub total: u64,
-    pub percent: f32,
-}
+use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
 /// Response for onboarding operations
 #[derive(Debug, Serialize, Deserialize)]
@@ -52,75 +42,37 @@ pub fn open_accessibility_settings() {
     log::info!("[Onboarding] open_accessibility_settings completed");
 }
 
-/// Download the default Whisper model for onboarding
-///
-/// Downloads the Small English model (ggml-small.en.bin) with progress updates.
-/// Emits `download-progress` events during download.
-/// Returns success if model is already cached or download completes.
+/// Open the macOS Microphone privacy settings pane.
 #[tauri::command]
-pub async fn download_whisper_model(
-    state: State<'_, AppState>,
-    window: Window,
-) -> Result<OnboardingResponse, String> {
-    let engine = state.whisper_engine.lock().await;
+pub fn open_microphone_settings() {
+    onboarding::open_microphone_settings();
+}
 
-    // Use Small model for onboarding (good balance of speed/accuracy)
-    let model = WhisperModel::Small;
-
-    // Check if already downloaded
-    if engine.is_model_downloaded(model) {
-        log::info!("Whisper model already downloaded, skipping");
-        // Emit 100% progress so frontend knows download is complete
-        let _ = window.emit(
-            "download-progress",
-            OnboardingDownloadProgress {
-                downloaded: 100,
-                total: 100,
-                percent: 100.0,
-            },
-        );
-        return Ok(OnboardingResponse {
-            success: true,
-            error: None,
-        });
+/// Open Voicebot Preferences from the onboarding flow so the user can choose a chat model,
+/// configure its API key, and set an optional wake word.
+#[tauri::command]
+pub fn open_preferences_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("preferences") {
+        window.show().map_err(|error| error.to_string())?;
+        window.set_focus().map_err(|error| error.to_string())?;
+        return Ok(());
     }
 
-    // Progress callback that emits events to frontend
-    let window_clone = window.clone();
-    let progress_callback = move |downloaded: u64, total: u64| {
-        let percent = if total > 0 {
-            (downloaded as f32 / total as f32) * 100.0
-        } else {
-            0.0
-        };
-
-        let _ = window_clone.emit(
-            "download-progress",
-            OnboardingDownloadProgress {
-                downloaded,
-                total,
-                percent,
-            },
-        );
-    };
-
-    // Download the model
-    match engine.download_model(model, Some(progress_callback)).await {
-        Ok(_path) => {
-            log::info!("Whisper model downloaded successfully for onboarding");
-            Ok(OnboardingResponse {
-                success: true,
-                error: None,
-            })
-        }
-        Err(e) => {
-            log::error!("Failed to download Whisper model for onboarding: {}", e);
-            Ok(OnboardingResponse {
-                success: false,
-                error: Some(e.to_string()),
-            })
-        }
-    }
+    WebviewWindowBuilder::new(
+        &app,
+        "preferences",
+        WebviewUrl::App("preferences.html".into()),
+    )
+    .title("Zana Preferences")
+    .decorations(false)
+    .transparent(true)
+    .shadow(true)
+    .inner_size(500.0, 680.0)
+    .center()
+    .resizable(false)
+    .build()
+    .map(|_| ())
+    .map_err(|error| error.to_string())
 }
 
 /// Mark onboarding as complete
@@ -146,13 +98,15 @@ pub fn mark_onboarding_complete() -> Result<OnboardingResponse, String> {
     }
 }
 
-/// Complete onboarding and exit app
+/// Complete onboarding and restart into normal Voicebot startup.
 ///
-/// Marks onboarding as complete and exits the application.
-/// User should restart the app to use Zana normally.
+/// Marks onboarding as complete, then restarts the application so the first-run gate is no longer
+/// active and the Voicebot session can answer the user's first question.
 #[tauri::command]
-pub fn complete_onboarding_and_exit(app: tauri::AppHandle) -> Result<OnboardingResponse, String> {
-    log::info!("Onboarding complete - exiting application");
+pub fn complete_onboarding_and_restart(
+    app: tauri::AppHandle,
+) -> Result<OnboardingResponse, String> {
+    log::info!("Onboarding complete - restarting into Voicebot startup");
 
     // Mark onboarding complete
     if let Err(e) = onboarding::mark_onboarding_complete() {
@@ -163,10 +117,10 @@ pub fn complete_onboarding_and_exit(app: tauri::AppHandle) -> Result<OnboardingR
         });
     }
 
-    // Exit the app - user will restart to use Zana
+    // Give the invoke response time to reach the onboarding window before relaunching.
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(500));
-        app.exit(0);
+        app.restart();
     });
 
     Ok(OnboardingResponse {
@@ -187,17 +141,5 @@ mod tests {
         };
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("\"success\":true"));
-    }
-
-    #[test]
-    fn test_download_progress_serialization() {
-        let progress = OnboardingDownloadProgress {
-            downloaded: 100,
-            total: 1000,
-            percent: 10.0,
-        };
-        let json = serde_json::to_string(&progress).unwrap();
-        assert!(json.contains("\"downloaded\":100"));
-        assert!(json.contains("\"percent\":10.0"));
     }
 }

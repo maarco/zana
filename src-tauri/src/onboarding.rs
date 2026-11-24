@@ -67,11 +67,31 @@ pub fn check_accessibility() -> bool {
     }
 }
 
-/// Open System Settings to the Accessibility pane (macOS only)
+/// Open the platform's Microphone privacy settings pane where supported.
+pub fn open_microphone_settings() {
+    #[cfg(target_os = "macos")]
+    {
+        let url = "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone";
+        if let Err(error) = std::process::Command::new("open").arg(url).spawn() {
+            log::error!("Failed to open Microphone privacy settings: {error}");
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Err(error) = std::process::Command::new("cmd")
+            .args(["/C", "start", "", "ms-settings:privacy-microphone"])
+            .spawn()
+        {
+            log::error!("Failed to open Microphone privacy settings: {error}");
+        }
+    }
+}
+
+/// Open System Settings to the Accessibility pane (macOS only).
 ///
-/// On macOS, opens System Settings directly to the Accessibility
-/// pane where users can grant accessibility permissions.
-/// On other platforms, does nothing.
+/// On macOS, opens System Settings directly to the Accessibility pane where users can grant
+/// accessibility permissions. On other platforms, this does nothing.
 pub fn open_accessibility_settings() {
     #[cfg(target_os = "macos")]
     {

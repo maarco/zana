@@ -587,9 +587,10 @@ fn main() {
             commands::is_first_run,
             commands::check_accessibility_permission,
             commands::open_accessibility_settings,
-            commands::download_whisper_model,
+            commands::open_microphone_settings,
+            commands::open_preferences_window,
             commands::mark_onboarding_complete,
-            commands::complete_onboarding_and_exit,
+            commands::complete_onboarding_and_restart,
             // Diagnostics
             commands::run_diagnostics,
             // Settings

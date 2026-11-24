@@ -1,0 +1,1 @@
+First-run setup now guides users through Voicebot microphone access, Accessibility for typing/pasting, and model/API-key plus optional wake-word settings. It no longer presents Fn-key dictation or downloads Whisper, offers a direct Microphone Settings action when permission is denied, and restarts into normal Voicebot startup after setup.

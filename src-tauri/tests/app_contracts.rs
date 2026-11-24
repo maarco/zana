@@ -15,6 +15,28 @@ fn read_repo_file(path: &str) -> String {
 }
 
 #[test]
+fn onboarding_is_voicebot_setup_without_whisper_download() {
+    let onboarding = read_repo_file("src-ui/onboarding.html");
+    let command_module = read_repo_file("src-tauri/src/commands/onboarding.rs");
+    let main = read_repo_file("src-tauri/src/main.rs");
+
+    assert!(onboarding.contains("chat model") && onboarding.contains("API key"));
+    assert!(onboarding.contains("wake word"));
+    assert!(onboarding.contains("Accessibility lets Voicebot type or paste"));
+    assert!(onboarding.contains("openMicrophoneSettings"));
+    assert!(onboarding.contains("openVoicebotPreferences"));
+    assert!(onboarding.contains("complete_onboarding_and_restart"));
+    assert!(!onboarding.contains("download_whisper_model"));
+    assert!(!onboarding.contains("Whisper AI"));
+    assert!(!onboarding.contains("Fn key"));
+    assert!(!command_module.contains("download_whisper_model"));
+    assert!(command_module.contains("open_microphone_settings"));
+    assert!(command_module.contains("open_preferences_window"));
+    assert!(main.contains("commands::complete_onboarding_and_restart"));
+    assert!(!main.contains("commands::download_whisper_model"));
+}
+
+#[test]
 fn preferences_window_has_tauri_capability() {
     let tauri_config: Value =
         serde_json::from_str(&read_repo_file("src-tauri/tauri.conf.json")).unwrap();
