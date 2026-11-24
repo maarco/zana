@@ -243,15 +243,28 @@ class Transcript:
         if not wanted or limit <= 0:
             return []
 
-        def score(line: str) -> int:
-            said = normalize(line.split("] ", 1)[-1]).split()
-            return sum(any(word.startswith(want) for word in said) for want in wanted)
+        max_wanted = max(map(len, wanted))
+
+        def matching_words(text: str, *, line_start: bool) -> set[int]:
+            lowered = text.lower()
+            matches = set()
+            for word_index, want in enumerate(wanted):
+                offset = 0
+                while (position := lowered.find(want, offset)) >= 0:
+                    boundary = position == 0 and line_start
+                    if position > 0:
+                        before = lowered[position - 1]
+                        boundary = not ("a" <= before <= "z" or "0" <= before <= "9")
+                    if boundary:
+                        matches.add(word_index)
+                        break
+                    offset = position + 1
+            return matches
 
         # Keep only the newest result window; never retain a list proportional to transcript size.
         selected = deque()
         selected_indices = set()
         max_lines = 2 * limit
-        best = 0
 
         def add(index: int, line: str) -> None:
             if index in selected_indices:
@@ -266,33 +279,72 @@ class Transcript:
             with open(self.path, errors="replace") as f:
                 previous = None
                 index = 0
+                line_started = False
+                line_matches: set[int] = set()
+                carry = ""
+                line_buffer = ""
+                line_head = ""
+                line_tail = ""
+                line_best = [0]
+
+                def current_line() -> str:
+                    return line_head + " ... " + line_tail if line_head else line_buffer
+
+                def finish_line() -> None:
+                    nonlocal previous, index, line_matches
+                    if previous is not None:
+                        prev_index, prev_line, prev_matches = previous
+                        hits = len(prev_matches)
+                        if hits:
+                            if hits > line_best[0]:
+                                line_best[0] = hits
+                                selected.clear()
+                                selected_indices.clear()
+                            if hits == line_best[0]:
+                                add(prev_index, prev_line)
+                                add(index, current_line())
+                    previous = (index, current_line(), line_matches)
+                    index += 1
+                    line_matches = set()
+
                 while True:
                     chunk = f.readline(16 * 1024)  # cap memory even if one transcript line is unusually long
                     if not chunk:
                         break
-                    line = chunk.rstrip("\r\n")
-                    if previous is not None:
-                        prev_index, prev_line = previous
-                        hits = score(prev_line)
-                        if hits:
-                            if hits > best:
-                                best = hits
-                                selected.clear()
-                                selected_indices.clear()
-                            if hits == best:
-                                add(prev_index, prev_line)
-                                add(index, line)
-                    previous = (index, line)
-                    index += 1
+                    display_fragment = chunk.rstrip("\r\n")
+                    fragment = display_fragment
+                    if not line_started:
+                        fragment = fragment.split("] ", 1)[-1]
+                        line_started = True
+                    searchable = carry + fragment
+                    line_matches.update(matching_words(searchable, line_start=not carry and not line_buffer))
+                    carry = searchable[-(max_wanted + 1):]
+
+                    if len(line_buffer) + len(display_fragment) <= 16 * 1024 and not line_head:
+                        line_buffer += display_fragment
+                    else:
+                        if line_buffer:
+                            line_head = line_buffer[:8 * 1024]
+                            line_tail = line_buffer[-8 * 1024:]
+                            line_buffer = ""
+                        line_tail = (line_tail + display_fragment)[-8 * 1024:]
+
+                    if chunk.endswith("\n"):
+                        finish_line()
+                        line_started = False
+                        carry = ""
+                        line_buffer = line_head = line_tail = ""
+                if line_started:
+                    finish_line()
                 if previous is not None:
-                    prev_index, prev_line = previous
-                    hits = score(prev_line)
+                    prev_index, prev_line, prev_matches = previous
+                    hits = len(prev_matches)
                     if hits:
-                        if hits > best:
-                            best = hits
+                        if hits > line_best[0]:
+                            line_best[0] = hits
                             selected.clear()
                             selected_indices.clear()
-                        if hits == best:
+                        if hits == line_best[0]:
                             add(prev_index, prev_line)
         except OSError:
             return []
