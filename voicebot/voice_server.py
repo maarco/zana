@@ -12,6 +12,8 @@ from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse, PlainTextResponse
 from pydantic import BaseModel
 
+from port_reporting import report_bound_port
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 VOICEBOT_HOME = os.path.expanduser(os.getenv("VOICEBOT_HOME", os.path.join(HERE, ".home")))
 # Model ids resolve through the Hugging Face cache; a local folder path also works.
@@ -210,4 +212,13 @@ def speech(req: SpeechReq):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=int(os.getenv("VOICE_SERVER_PORT", "8800")))
+
+    class PortReportingServer(uvicorn.Server):
+        async def startup(self, sockets=None):
+            await super().startup(sockets=sockets)
+            path = os.getenv("VOICE_SERVER_PORT_FILE")
+            if path:
+                report_bound_port(self, path)
+
+    config = uvicorn.Config(app, host="127.0.0.1", port=int(os.getenv("VOICE_SERVER_PORT", "8800")))
+    PortReportingServer(config).run()

@@ -640,6 +640,7 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
         "prompt_guidance.py",
         "tool_guidance.md",
         "voice_server.py",
+        "port_reporting.py",
         "speech.py",
         "listening.py",
         "jobs.py",
@@ -667,6 +668,18 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
     assert!(
         main_rs.contains("Zana_app::voicebot::stop()"),
         "Zana must stop Voicebot's processes when it exits"
+    );
+}
+
+#[test]
+fn speech_server_reports_its_os_assigned_port_before_agent_startup() {
+    let supervisor = read_repo_file("src-tauri/src/voicebot.rs");
+    let server = read_repo_file("voicebot/voice_server.py");
+    assert!(
+        supervisor.contains(".env(\"VOICE_SERVER_PORT\", \"0\")")
+            && supervisor.contains("VOICE_SERVER_PORT_FILE")
+            && server.contains("report_bound_port(self, path)"),
+        "the app must use a port chosen by the listening speech server, not a stale probe"
     );
 }
 

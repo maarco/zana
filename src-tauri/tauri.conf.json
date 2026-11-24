@@ -14,6 +14,7 @@
       "../voicebot/prompt_guidance.py": "voicebot/prompt_guidance.py",
       "../voicebot/tool_guidance.md": "voicebot/tool_guidance.md",
       "../voicebot/voice_server.py": "voicebot/voice_server.py",
+      "../voicebot/port_reporting.py": "voicebot/port_reporting.py",
       "../voicebot/speech.py": "voicebot/speech.py",
       "../voicebot/listening.py": "voicebot/listening.py",
       "../voicebot/jobs.py": "voicebot/jobs.py",
