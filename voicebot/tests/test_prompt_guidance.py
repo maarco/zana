@@ -126,6 +126,33 @@ class PromptGuidanceTest(unittest.TestCase):
         self.assertFalse(changed)
         self.assertEqual(unchanged, old_prompt)
 
+    def test_bare_yes_requires_the_exact_cleanup_question(self):
+        prompt = "Personal intro.\n" + prompt_guidance.LEGACY_TOOL_GUIDANCE + "\nKeep this note.\n"
+        exact_offer = (
+            "[2026-11-24 10:00:00] Voicebot: Would you like me to remove the old tool guidance "
+            "from your personal prompt?\n[2026-11-24 10:00:01] User: Yes\n"
+        )
+        prompt_guidance.take_legacy_prompt_offer(self.home, prompt)
+        cleaned, changed, _ = prompt_guidance.remove_legacy_guidance_after_consent(
+            self.home, prompt, "Yes", exact_offer
+        )
+        self.assertTrue(changed)
+        self.assertNotIn("see_screen: the app and window", cleaned)
+
+        unrelated_home = Path(self.temp.name) / "unrelated-home"
+        unrelated_home.mkdir()
+        prompt_guidance.take_legacy_prompt_offer(unrelated_home, prompt)
+        unrelated_turn = (
+            "[2026-11-24 10:00:00] Voicebot: I will not remove the old tool guidance "
+            "from your personal prompt unless asked. Would you like me to close the current window?\n"
+            "[2026-11-24 10:00:01] User: Yes\n"
+        )
+        unchanged, changed, _ = prompt_guidance.remove_legacy_guidance_after_consent(
+            unrelated_home, prompt, "Yes", unrelated_turn
+        )
+        self.assertFalse(changed)
+        self.assertEqual(unchanged, prompt)
+
     def test_explicit_consent_removes_only_exact_stock_lines(self):
         custom_line = "My own tool rule: preserve every original phrase."
         old_prompt = (
