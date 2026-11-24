@@ -73,6 +73,18 @@ class JobsTest(unittest.TestCase):
                     self.assertTrue(f.read().endswith(b"TAIL\n"))
         asyncio.run(run())
 
+    def test_shell_completion_is_not_held_open_by_background_child_pipe(self):
+        async def run():
+            with tempfile.TemporaryDirectory() as home:
+                job = await Jobs(home, timeout=1).start("sleep 5 &")
+                try:
+                    done, _ = await asyncio.wait({job.task}, timeout=0.5)
+                    self.assertIn(job.task, done, "exited shell job waits for background child's stdout EOF")
+                finally:
+                    job.stop()
+                    await asyncio.gather(job.task, return_exceptions=True)
+        asyncio.run(run())
+
 
 if __name__ == "__main__":
     unittest.main()
