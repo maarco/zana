@@ -198,16 +198,17 @@ def explicitly_consents_to_cleanup(user_text: str, *, offer_was_immediately_prio
 
 
 def _requests_tool_guidance_cleanup(text: str) -> bool:
-    """Require a direct request naming the app-owned tool guidance."""
+    """Require a direct request whose complete target is the app-owned tool guidance."""
     action_and_target = (
         r"(?:remove|delete|clean up|strip)\b.{0,60}\btool[- ](?:guidance|instructions)\b"
+        r"(?:\s+(?:from|in)\s+(?:my|the|your)\s+(?:(?:personal|system)\s+)?prompt)?"
     )
     direct_request = (
-        rf"^(?:yes[, ]+)?(?:please\s+)?{action_and_target}",
-        rf"^(?:can|could|would|will)\s+you\s+(?:please\s+)?{action_and_target}",
-        rf"^(?:i want|i'd like|i would like)\s+you to\s+{action_and_target}",
+        rf"(?:yes[, ]+)?(?:please\s+)?{action_and_target}[.!?]*",
+        rf"(?:can|could|would|will)\s+you\s+(?:please\s+)?{action_and_target}[.!?]*",
+        rf"(?:i want|i'd like|i would like)\s+you to\s+{action_and_target}[.!?]*",
     )
-    return any(re.search(pattern, text) for pattern in direct_request)
+    return any(re.fullmatch(pattern, text) for pattern in direct_request)
 
 
 def _remove_exact_legacy_lines(prompt: str) -> tuple[str, int]:
