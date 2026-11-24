@@ -61,12 +61,27 @@ class PromptGuidanceTest(unittest.TestCase):
         old_prompt = "Personal text.\n" + prompt_guidance.LEGACY_TOOL_GUIDANCE + "\nUnique addition.\n"
         path = self.write_personal_prompt(old_prompt)
         first = prompt_guidance.take_legacy_prompt_offer(self.home, old_prompt)
-        second = prompt_guidance.take_legacy_prompt_offer(self.home, old_prompt)
         self.assertIn("explicitly agrees", first)
-        self.assertEqual(second, "")
         self.assertEqual(json.loads((self.home / prompt_guidance.MIGRATION_STATE_FILENAME).read_text())["offered"], True)
         with path.open("r", encoding="utf-8", newline="") as stream:
             self.assertEqual(stream.read(), old_prompt)
+
+    def test_failed_offer_turn_retries_until_offer_is_in_transcript(self):
+        old_prompt = "Personal text.\n" + prompt_guidance.LEGACY_TOOL_GUIDANCE
+        self.write_personal_prompt(old_prompt)
+        first = prompt_guidance.take_legacy_prompt_offer(self.home, old_prompt)
+        retry = prompt_guidance.take_legacy_prompt_offer(self.home, old_prompt)
+        self.assertTrue(first)
+        self.assertTrue(retry, "a model failure before speaking must not consume the offer")
+
+        transcript = (
+            "[2026-11-24 10:00:00] Voicebot: Would you like me to remove the old tool guidance "
+            "from your personal prompt?\n[2026-11-24 10:00:01] User: No\n"
+        )
+        self.assertEqual(prompt_guidance.take_legacy_prompt_offer(self.home, old_prompt, transcript), "")
+        state = json.loads((self.home / prompt_guidance.MIGRATION_STATE_FILENAME).read_text())
+        self.assertTrue(state["delivered"])
+        self.assertEqual(prompt_guidance.take_legacy_prompt_offer(self.home, old_prompt), "")
 
     def test_no_legacy_guidance_means_no_offer_or_state_write(self):
         self.assertEqual(prompt_guidance.take_legacy_prompt_offer(self.home, "Only my personal rules."), "")
