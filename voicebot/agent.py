@@ -58,7 +58,7 @@ TERMINAL_TIMEOUT = float(os.getenv("VOICEBOT_TERMINAL_TIMEOUT", "900"))  # jobs 
 TRANSCRIPT = Transcript(HOME)  # always-on: every line heard and said
 FILLERS = Fillers(HOME)  # thinking sounds, made in Voicebot's voice and cached
 DEBUG_LOG = os.path.join(HOME, "logs", "debug.jsonl")  # what Voicebot does, for Zana's Debug window
-SAY = "\n(Now say one short sentence with the answer.)"
+SAY = "\n(Now answer concisely in plain spoken words.)"
 MIN_VOICE_CHECK = int(0.5 * RATE)  # shorter turns are not checked against the voice print
 # Every tool, as the model sees it, gets this required field; its text is spoken while the tool runs.
 SAY_FIELD = {"type": "string",
@@ -429,7 +429,7 @@ class Voicebot(Agent):
             unread = TRANSCRIPT.take_unread().strip()
             if unread:
                 extra = ("\n\nUnread transcript (what the user said while you were asleep, oldest first):\n"
-                         + unread + "\n(Answer their latest request directly in one sentence; don't say you're listening.)")
+                         + unread + "\n(Answer their latest request directly and concisely; don't say you're listening.)")
         else:
             TRANSCRIPT.mark_read()
         self.last_heard = now
@@ -1054,7 +1054,7 @@ class Voicebot(Agent):
     @function_tool()
     async def read_system_prompt(self, context: RunContext) -> str:
         """Read your own system prompt (the user's file) so you can tell them what your instructions say."""
-        return load_prompt()[:6000] + "\n(Summarize what they asked about in one sentence.)"
+        return load_prompt()[:6000] + "\n(Summarize the instructions briefly.)"
 
     @function_tool()
     async def open_voicebot_folder(self, context: RunContext) -> str:
@@ -1307,7 +1307,7 @@ async def entrypoint(ctx: agents.JobContext):
     if agent.voice_gated:
         interruption.update(enabled=False, discard_audio_if_uninterruptible=False)
     transforms = ["filter_markdown", "filter_emoji", speakable_stream]
-    if os.getenv("VOICEBOT_ONE_SENTENCE", "1") != "0":
+    if os.getenv("VOICEBOT_ONE_SENTENCE", "0") != "0":
         transforms.append(one_sentence)
 
     async def log_spoken(text):
