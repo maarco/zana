@@ -25,25 +25,53 @@ import threading
 import time
 from pathlib import Path
 
+import updater
 from dotenv import load_dotenv
+from fillers import DEFAULT_PHRASES, Fillers, chunks_with_gap
+from jobs import Jobs, conversation_end_warning
+from listening import (
+    ToolCallText,
+    Transcript,
+    clean,
+    heard_wake_word,
+    is_goodbye,
+    parse_text_tool_calls,
+    repeats,
+    split_say,
+    topics,
+    wants_redo,
+    wants_voiceprint,
+)
 from livekit import agents, rtc
 from livekit.agents import (
-    Agent, AgentServer, AgentSession, APIConnectOptions, JobProcess, RunContext, StopResponse,
-    function_tool, get_job_context, inference, llm, mcp,
+    Agent,
+    AgentServer,
+    AgentSession,
+    APIConnectOptions,
+    JobProcess,
+    RunContext,
+    StopResponse,
+    function_tool,
+    get_job_context,
+    inference,
+    llm,
+    mcp,
 )
 from livekit.agents.voice import room_io
 from livekit.agents.voice.agent_session import SessionConnectOptions
 from livekit.plugins import openai, silero
-
-from fillers import DEFAULT_PHRASES, Fillers, chunks_with_gap
-from jobs import Jobs, conversation_end_warning
 from orb_state import OrbState
-from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls,
-                       repeats, split_say, topics, wants_redo, wants_voiceprint)
-from voiceprint import RATE, VoicePrint, VoiceTap, speech_seconds, to_mono_16k
+from prompt_guidance import (
+    assemble_instructions,
+    has_legacy_tool_guidance,
+    load_app_tool_guidance,
+    load_personal_prompt,
+    remove_legacy_guidance_after_consent,
+    take_legacy_prompt_offer,
+)
 from retention import append_bounded_jsonl, prune_prompt_history
 from speech import TOOL_SAY, join_sentences, one_sentence, speakable_stream
-import updater
+from voiceprint import RATE, VoicePrint, VoiceTap, speech_seconds, to_mono_16k
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HOME = os.path.expanduser(os.getenv("VOICEBOT_HOME", os.path.join(HERE, ".home")))
@@ -122,13 +150,7 @@ def read_json(name: str) -> dict:
 
 
 def load_prompt() -> str:
-    for path in (os.path.join(HOME, "system_prompt.md"), os.path.join(HERE, "system_prompt.default.md")):
-        try:
-            with open(path) as f:
-                return f.read()
-        except OSError:
-            continue
-    return "You are an AI voicebot. Keep replies concise and conversational, usually one or two short sentences. Use your judgment; clarity matters more than a rigid count."
+    return load_personal_prompt(HOME, HERE)
 
 
 def context_chars(ctx) -> int:
@@ -145,14 +167,11 @@ def context_chars(ctx) -> int:
 
 
 def build_instructions(name: str) -> str:
-    """Name, system prompt, then the recent conversation from the transcript file (continuity across
-    conversations and prompt reloads)."""
+    """App-owned guidance, the untouched personal prompt, then recent transcript context."""
     recent = TRANSCRIPT.tail(3000)
-    text = f"Your name is {name}.\n\n{load_prompt()}"
-    if recent:
-        text += ("\n\nRecent conversation, from your transcript file (oldest first; continue from it, and never "
-                 "read it out unless asked):\n" + recent)
-    return text
+    return assemble_instructions(
+        name, load_app_tool_guidance(HERE), load_prompt(), recent=recent
+    )
 
 
 def write_config(**changes) -> dict:
@@ -274,6 +293,7 @@ class Voicebot(Agent):
         self.wake_timeout = float(config.get("wake_timeout_seconds") or 120)
         self.asleep = bool(self.wake_word)
         self.last_heard = 0.0
+        self.last_user_text = ""
         self.publish = publish
         self.tap = VoiceTap()
         self.voiceprint = VoicePrint(HOME)
@@ -375,8 +395,21 @@ class Voicebot(Agent):
                          "Zana's Preferences."),
         }
         notes = [guides[t] for t in topics(heard) if t in guides]
+        personal_prompt = load_prompt()
+        cleanup_offer_history = (
+            TRANSCRIPT.search("old tool guidance from your personal prompt", limit=1)
+            if has_legacy_tool_guidance(personal_prompt)
+            else []
+        )
+        migration_offer = take_legacy_prompt_offer(
+            HOME,
+            personal_prompt,
+            "\n".join([*TRANSCRIPT.tail_lines(2), *cleanup_offer_history]),
+        )
+        if migration_offer:
+            notes.append(migration_offer)
         if notes:
-            debug("context", topics=topics(heard))
+            debug("context", topics=topics(heard), migration_offer=bool(migration_offer))
         return "\n".join(notes)
 
     def say_all(self, text: str, **kwargs) -> None:
@@ -422,6 +455,7 @@ class Voicebot(Agent):
     def gate(self, heard: str, score: float | None = None) -> str | None:
         """Record what was heard; return what the model should get, or None while asleep."""
         TRANSCRIPT.record("User", heard)
+        self.last_user_text = heard
         now = time.time()
         if self.wake_word and not self.asleep and now - self.last_heard > self.wake_timeout:
             self.go_to_sleep()
@@ -916,20 +950,32 @@ class Voicebot(Agent):
         debug("prompt", action="reloaded", name=self.name)
 
     @function_tool()
-    async def edit_system_prompt(self, context: RunContext, find: str, replace: str) -> str:
-        """Edit your own system prompt: replace an exact piece of its text with new text, or leave find empty to
-        add replace at the end. It applies right away. Use when the user asks you to change your rules, style,
-        personality or anything about how you behave. Call read_system_prompt first if you need the exact wording.
+    async def edit_system_prompt(
+        self, context: RunContext, find: str = "", replace: str = "",
+        remove_legacy_tool_guidance: bool = False,
+    ) -> str:
+        """Edit personal instructions, or remove exact legacy app-tool lines after explicit consent.
 
         Args:
-            find: Exact text from your prompt to replace (empty to append).
-            replace: The new text.
+            find: Exact text to replace (empty to append; leave empty for migration mode).
+            replace: Replacement text (leave empty for migration mode).
+            remove_legacy_tool_guidance: Use only after the user explicitly agreed to the one-time offer;
+                removes exact unchanged stock guidance lines and preserves all other prompt text.
         """
         path = os.path.join(HOME, "system_prompt.md")
         old = load_prompt()
-        if find and find not in old:
-            return "That exact text isn't in the prompt; read_system_prompt shows the wording." + SAY
-        new = old.replace(find, replace, 1) if find else old.rstrip("\n") + "\n" + replace.strip() + "\n"
+        if remove_legacy_tool_guidance:
+            if find or replace:
+                return "For the legacy cleanup, leave find and replace empty; nothing was changed." + SAY
+            new, changed, message = remove_legacy_guidance_after_consent(
+                HOME, old, self.last_user_text, TRANSCRIPT.tail_lines(2)
+            )
+            if not changed:
+                return message + SAY
+        else:
+            if find and find not in old:
+                return "That exact text isn't in the prompt; read_system_prompt shows the wording." + SAY
+            new = old.replace(find, replace, 1) if find else old.rstrip("\n") + "\n" + replace.strip() + "\n"
         history = os.path.join(HOME, "prompt-history")
         os.makedirs(history, exist_ok=True)
         stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")

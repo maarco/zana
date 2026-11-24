@@ -658,11 +658,13 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
     // Every file the supervisor needs ships in the bundle.
     assert_eq!(
         Zana_app::voicebot::CODE_FILES.len(),
-        14,
+        16,
         "the Voicebot bundle file list must include all runtime files"
     );
     for file in [
         "agent.py",
+        "prompt_guidance.py",
+        "tool_guidance.md",
         "voice_server.py",
         "port_reporting.py",
         "speech.py",

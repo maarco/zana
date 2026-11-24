@@ -237,6 +237,29 @@ class Transcript:
             text = text.split("\n", 1)[1]  # drop the partial first line
         return text.strip()
 
+    def tail_lines(self, count: int) -> str:
+        """Read the newest complete transcript lines, including long individual turns."""
+        if count <= 0:
+            return ""
+        chunks = []
+        position = self._size()
+        newline_count = 0
+        try:
+            with open(self.path, "rb") as f:
+                # Include the newline before the oldest requested line so a long
+                # preceding turn is not returned with its speaker header cut off.
+                while position > 0 and newline_count <= count:
+                    size = min(4096, position)
+                    position -= size
+                    f.seek(position)
+                    chunk = f.read(size)
+                    chunks.append(chunk)
+                    newline_count += chunk.count(b"\n")
+        except OSError:
+            return ""
+        text = b"".join(reversed(chunks)).decode(errors="replace")
+        return "\n".join(text.splitlines()[-count:]).strip()
+
     def search(self, words: str, limit: int = 12) -> list[str]:
         """Search bounded transcript chunks; return best-matching lines and their replies, newest last."""
         wanted = normalize(words).split()

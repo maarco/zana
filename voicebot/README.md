@@ -30,7 +30,8 @@ Everything per-user lives in the Voicebot folder,
 | File | What it is |
 |---|---|
 | `.env` | Keys and models (never committed; see below) |
-| `system_prompt.md` | The system prompt (edit it in Preferences) |
+| `system_prompt.md` | Your personal instructions (edit them in Preferences); never overwritten after creation |
+| `.prompt-migration.json` | App-owned record that the one-time legacy tool-guidance offer was made |
 | `config.json` | Terminal switch, wake word and chat model, written by Zana |
 | `mcp.json` | MCP servers, Claude Desktop format |
 | `transcript.md` | Always-on transcript of everything heard and said; retained until you delete it |
@@ -38,6 +39,8 @@ Everything per-user lives in the Voicebot folder,
 | `fillers/` | Cached thinking-sound audio and its manifest |
 | `venv/`, `voices/` | The Python environment and VibeVoice voices |
 | `prompt-history/` | The 20 newest saved versions of the system prompt |
+
+Current tool help is bundled with the app in `tool_guidance.md` and is placed before your personal prompt at runtime. It is not copied into `system_prompt.md`; edits to your personal instructions therefore never remove current tool guidance. Existing prompts are preserved, with a one-time opt-in offer to remove only exact unchanged stock tool-guide lines.
 
 Each terminal job log is capped at 5 MB. Searching the transcript scans bounded
 chunks on a worker thread so a large transcript does not delay Voicebot replies.
