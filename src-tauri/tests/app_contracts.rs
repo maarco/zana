@@ -635,6 +635,11 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
         "Preferences > Model must be written into the agent's config"
     );
     // Every file the supervisor needs ships in the bundle.
+    assert_eq!(
+        Zana_app::voicebot::CODE_FILES.len(),
+        14,
+        "the Voicebot bundle file list must include all runtime files"
+    );
     for file in [
         "agent.py",
         "voice_server.py",
