@@ -504,6 +504,27 @@ fn short_hotkey_release_cancels_pending_capture() {
 }
 
 #[test]
+fn voicebot_debug_clear_opens_its_lock_without_truncating_it() {
+    let source = read_repo_file("src-tauri/src/commands/voicebot.rs");
+    let clear = source
+        .split_once("pub async fn clear_voicebot_debug()")
+        .expect("debug clear command must exist")
+        .1
+        .split_once("if path.exists()")
+        .expect("debug clear command must preserve its log clearing step")
+        .0;
+
+    assert!(
+        clear.contains(".create(true)")
+            && clear.contains(".read(true)")
+            && clear.contains(".write(true)")
+            && clear.contains(".truncate(false)")
+            && clear.contains(".open(lock_path)"),
+        "debug clear must create/open the lock without truncating it"
+    );
+}
+
+#[test]
 fn failed_stop_does_not_transcribe_stale_audio() {
     let source = read_repo_file("src-tauri/src/main.rs");
 
@@ -635,6 +656,11 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
         "Preferences > Model must be written into the agent's config"
     );
     // Every file the supervisor needs ships in the bundle.
+    assert_eq!(
+        Zana_app::voicebot::CODE_FILES.len(),
+        14,
+        "the Voicebot bundle file list must include all runtime files"
+    );
     for file in [
         "agent.py",
         "voice_server.py",
@@ -642,6 +668,7 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
         "speech.py",
         "listening.py",
         "jobs.py",
+        "retention.py",
         "fillers.py",
         "orb_state.py",
         "voiceprint.py",

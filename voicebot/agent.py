@@ -41,6 +41,7 @@ from orb_state import OrbState
 from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls,
                        repeats, split_say, topics, wants_redo, wants_voiceprint)
 from voiceprint import RATE, VoicePrint, VoiceTap, speech_seconds, to_mono_16k
+from retention import append_bounded_jsonl, prune_prompt_history
 from speech import TOOL_SAY, join_sentences, one_sentence, speakable_stream
 import updater
 
@@ -54,6 +55,9 @@ TERMINAL_TIMEOUT = float(os.getenv("VOICEBOT_TERMINAL_TIMEOUT", "900"))  # jobs 
 TRANSCRIPT = Transcript(HOME)  # always-on: every line heard and said
 FILLERS = Fillers(HOME)  # thinking sounds, made in Voicebot's voice and cached
 DEBUG_LOG = os.path.join(HOME, "logs", "debug.jsonl")  # what Voicebot does, for Zana's Debug window
+MAX_DEBUG_LOG_BYTES = 20 * 1024 * 1024
+MAX_PROMPT_HISTORY = 20
+_DEBUG_LOG_LOCK = threading.Lock()
 SAY = "\n(Now answer concisely in plain spoken words.)"
 MIN_VOICE_CHECK = int(0.5 * RATE)  # shorter turns are not checked against the voice print
 # Every tool, as the model sees it, gets this required field; its text is spoken while the tool runs.
@@ -98,11 +102,10 @@ log = logging.getLogger("voicebot")
 
 
 def debug(kind: str, **data) -> None:
-    """One line per thing Voicebot does: heard, ignored, woke, said, tool, error, session."""
+    """One bounded JSONL line per thing Voicebot does: heard, woke, said, tool, error, session."""
     try:
-        os.makedirs(os.path.dirname(DEBUG_LOG), exist_ok=True)
-        with open(DEBUG_LOG, "a") as f:
-            f.write(json.dumps({"t": time.time(), "kind": kind, **data}, default=str) + "\n")
+        with _DEBUG_LOG_LOCK:
+            append_bounded_jsonl(DEBUG_LOG, {"t": time.time(), "kind": kind, **data}, MAX_DEBUG_LOG_BYTES)
     except OSError:
         pass
 
@@ -262,6 +265,10 @@ class Voicebot(Agent):
         self.base_instructions = build_instructions(self.name)
         self.summary = ""  # the compacted part of this conversation, kept at the end of the instructions
         super().__init__(instructions=self.base_instructions)
+        try:
+            prune_prompt_history(os.path.join(HOME, "prompt-history"), keep=MAX_PROMPT_HISTORY)
+        except OSError as exc:
+            log.warning("could not prune prompt history: %s", exc)
         self.terminal = bool(config.get("terminal"))
         self.wake_word = str(config.get("wake_word") or "").strip()
         self.wake_timeout = float(config.get("wake_timeout_seconds") or 120)
@@ -738,7 +745,7 @@ class Voicebot(Agent):
         Args:
             words: The words to look for, like "pty manager" or "wake word".
         """
-        found = TRANSCRIPT.search(words)
+        found = await TRANSCRIPT.search_async(words)
         if not found:
             return f'Nothing in the transcript has "{words}".' + SAY
         return "Transcript lines, oldest first:\n" + clean("\n".join(found), 4000) + SAY
@@ -925,9 +932,13 @@ class Voicebot(Agent):
         new = old.replace(find, replace, 1) if find else old.rstrip("\n") + "\n" + replace.strip() + "\n"
         history = os.path.join(HOME, "prompt-history")
         os.makedirs(history, exist_ok=True)
-        stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
         with open(os.path.join(history, f"system_prompt-{stamp}.md"), "w") as f:
             f.write(old)
+        try:
+            prune_prompt_history(history, keep=MAX_PROMPT_HISTORY)
+        except OSError as exc:
+            log.warning("could not prune prompt history: %s", exc)
         with open(path, "w") as f:
             f.write(new)
         diff = "\n".join(difflib.unified_diff(old.splitlines(), new.splitlines(), "before", "after", lineterm="", n=0))

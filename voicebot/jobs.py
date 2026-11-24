@@ -10,9 +10,14 @@ import signal
 import time
 
 from listening import clean
+from retention import append_bounded
 
 # zsh as a login shell on macOS (the user's PATH and aliases); bash or sh elsewhere, such as CI
 SHELL = next(([path, "-lc"] for path in ("/bin/zsh", "/bin/bash") if os.path.exists(path)), ["/bin/sh", "-c"])
+MAX_JOB_LOG_BYTES = 5 * 1024 * 1024
+LOG_READ_BYTES = 64 * 1024
+OUTPUT_DRAIN_GRACE_SECONDS = 0.1
+OUTPUT_LATE_DRAIN_SECONDS = 0.75
 
 
 def conversation_end_warning(job_id: int) -> str:
@@ -27,27 +32,85 @@ def conversation_end_warning(job_id: int) -> str:
 class Job:
     """One terminal command running in its own process group, its output going to a log file."""
 
-    def __init__(self, job_id: int, command: str, proc, log_path: str, log_file, timeout: float):
-        self.id, self.command, self.proc, self.log, self._log_file = job_id, command, proc, log_path, log_file
+    def __init__(self, job_id: int, command: str, proc, log_path: str, timeout: float):
+        self.id, self.command, self.proc, self.log = job_id, command, proc, log_path
         self.timeout = timeout
         self.pid = proc.pid
         self.quiet = False  # stopped on purpose: nobody needs to hear that it ended
         self.started = time.time()
         self.ended: float | None = None
         self.exit_code: int | None = None
+        self._output_error = False
+        self._output_pending = False
+        self._output_task = asyncio.create_task(self._capture_output())
+        self._late_output_task: asyncio.Task | None = None
         self.task = asyncio.ensure_future(self._wait())
 
-    async def _wait(self) -> None:
+    async def _capture_output(self) -> None:
+        """Drain the child pipe continuously, keeping only the newest bounded part of its log."""
+        if self.proc.stdout is None:
+            return
+        while chunk := await self.proc.stdout.read(LOG_READ_BYTES):
+            try:
+                append_bounded(self.log, chunk, MAX_JOB_LOG_BYTES)
+            except OSError:
+                # Keep draining even if this disk write fails, so a noisy child cannot deadlock.
+                self._output_error = True
+
+    def _close_output_pipe(self) -> None:
+        transport = getattr(self.proc, "_transport", None)
+        pipe = transport.get_pipe_transport(1) if transport is not None else None
+        if pipe is not None:
+            pipe.close()
+
+    async def _capture_late_output(self) -> None:
+        """Capture a short tail from descendants, then release an inherited stdout pipe."""
         try:
-            self.exit_code = await asyncio.wait_for(self.proc.wait(), self.timeout)
-        except asyncio.TimeoutError:
-            self.stop()
-            self.exit_code = await self.proc.wait()
-            with open(self.log, "a") as f:
-                f.write(f"\n[stopped after {self.timeout:.0f} seconds]\n")
+            await asyncio.wait_for(self._capture_output(), timeout=OUTPUT_LATE_DRAIN_SECONDS)
+        except TimeoutError:
+            self._output_error = True
+            self._close_output_pipe()
+        except asyncio.CancelledError:
+            self._output_error = True
+            raise
         finally:
+            self._output_pending = False
+
+    async def _wait(self) -> None:
+        timed_out = False
+        try:
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + self.timeout
+            while self.proc.returncode is None:
+                remaining = deadline - loop.time()
+                if remaining <= 0:
+                    self.stop()
+                    timed_out = True
+                    while self.proc.returncode is None:
+                        await asyncio.sleep(0.01)
+                    break
+                await asyncio.sleep(min(0.01, remaining))
+            self.exit_code = self.proc.returncode
+        finally:
+            # The shell can exit while a background child still holds its stdout pipe.
+            # Finish the job on the shell's exit, while allowing a short drain for final output.
+            drained, _ = await asyncio.wait({self._output_task}, timeout=OUTPUT_DRAIN_GRACE_SECONDS)
+            if self._output_task in drained:
+                await self._output_task
+            else:
+                self._output_task.cancel()
+                await asyncio.gather(self._output_task, return_exceptions=True)
+                # The shell is done, but a background child may still own stdout.
+                # Keep a bounded tail window without holding a pipe open for the child's lifetime.
+                self._output_pending = True
+                self._late_output_task = asyncio.create_task(self._capture_late_output())
+            if timed_out:
+                try:
+                    append_bounded(self.log, f"\n[stopped after {self.timeout:.0f} seconds]\n".encode(),
+                                   MAX_JOB_LOG_BYTES)
+                except OSError:
+                    self._output_error = True
             self.ended = time.time()
-            self._log_file.close()
 
     def stop(self, quiet: bool = False) -> None:
         """Kill the job's whole process group."""
@@ -56,13 +119,22 @@ class Job:
             os.killpg(self.pid, signal.SIGKILL)
         except (ProcessLookupError, PermissionError):
             pass
+        if self._late_output_task is not None:
+            self._late_output_task.cancel()
 
     def output(self, lines: int = 80) -> str:
         try:
             with open(self.log, errors="replace") as f:
                 text = f.read()
         except OSError:
-            return ""
+            text = ""
+            self._output_error = True
+        if self._output_pending:
+            warning = "[Background process output may be missing while collection is still active.]"
+            text = f"{text}\n{warning}" if text else warning
+        elif self._output_error:
+            warning = "[Could not save terminal output fully; some output may be missing.]"
+            text = f"{text}\n{warning}" if text else warning
         return clean("\n".join(text.splitlines()[-lines:])) if lines else ""
 
     def summary(self, lines: int = 40) -> str:
@@ -87,16 +159,16 @@ class Jobs:
         job_id = self.next_id
         self.next_id += 1
         log_path = os.path.join(folder, f"{job_id}.log")
-        log_file = open(log_path, "wb")
+        log_fd = os.open(log_path, os.O_CREAT | os.O_TRUNC | os.O_WRONLY, 0o666)
+        os.close(log_fd)
         try:
             proc = await asyncio.create_subprocess_exec(
                 *SHELL, command, cwd=os.path.expanduser(os.getenv("VOICEBOT_TERMINAL_DIR", "~")),
-                stdout=log_file, stderr=asyncio.subprocess.STDOUT,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
                 start_new_session=True)  # its own process group, so stop() takes pipelines down too
         except OSError as exc:
-            log_file.close()
             return f"Could not start the terminal: {exc}"
-        job = Job(job_id, command, proc, log_path, log_file, self.timeout)
+        job = Job(job_id, command, proc, log_path, self.timeout)
         self.jobs[job_id] = job
         return job
 
