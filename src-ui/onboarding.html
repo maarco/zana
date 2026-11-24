@@ -386,99 +386,11 @@
       color: var(--text-ethereal);
     }
 
-    /* ========================================
-       PHASE 3: DOWNLOAD - CONSCIOUSNESS
-       ======================================== */
-    #phase-download .title {
-      font-size: 24px;
-      font-weight: 900;
-      margin-bottom: 12px;
-    }
-
-    #phase-download .subtitle {
-      font-size: 14px;
-      font-weight: 900;
+    .microphone-denied {
+      max-width: 520px;
+      margin: 18px auto;
       color: var(--text-whisper);
-    }
-
-    .consciousness-container {
-      width: 400px;
-      margin: 60px 0;
-      position: relative;
-    }
-
-    .neural-progress {
-      height: 4px;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 100px;
-      overflow: hidden;
-      position: relative;
-    }
-
-    .neural-progress-fill {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg,
-        var(--nebula-core) 0%,
-        #FBBF24 50%,
-        var(--nebula-core) 100%);
-      background-size: 200% 100%;
-      border-radius: 100px;
-      transition: width 0.3s ease;
-      animation: shimmer 2s linear infinite;
-    }
-
-    @keyframes shimmer {
-      0% { background-position: 200% 0; }
-      100% { background-position: -200% 0; }
-    }
-
-    .download-stats {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 16px;
-      font-size: 12px;
-      color: var(--text-whisper);
-    }
-
-    .download-percent {
-      color: var(--nebula-core);
-      font-weight: 900;
-    }
-
-    .consciousness-visual {
-      width: 300px;
-      height: 200px;
-      margin: 40px auto 0;
-      position: relative;
-    }
-
-    .synapse {
-      position: absolute;
-      width: 6px;
-      height: 6px;
-      background: var(--nebula-core);
-      border-radius: 50%;
-      opacity: 0;
-      animation: synapse-fire 3s ease-in-out infinite;
-    }
-
-    @keyframes synapse-fire {
-      0%, 100% { opacity: 0; transform: scale(0.5); }
-      50% { opacity: 1; transform: scale(1); box-shadow: 0 0 20px var(--nebula-core); }
-    }
-
-    .download-message {
-      margin-top: 20px;
-      font-size: 13px;
-      color: var(--text-whisper);
-      font-style: italic;
-      animation: message-fade 4s ease-in-out infinite;
-    }
-
-    @keyframes message-fade {
-      0%, 100% { opacity: 0.4; }
-      50% { opacity: 0.8; }
+      pointer-events: auto;
     }
 
     /* ========================================
@@ -717,31 +629,36 @@
   <!-- NARRATIVE PHASES -->
   <div id="narrative">
 
-    <!-- PHASE 0: THE VOID -->
+    <!-- PHASE 0: VOICEBOT INTRODUCTION -->
     <div class="phase active" id="phase-void">
-      <div class="text-reveal">In the beginning, there was silence</div>
-      <div class="prompt">Your voice will bring light to the void</div>
-      <button class="begin-trigger" onclick="beginGenesis()">Awaken</button>
+      <div class="text-reveal">Meet your Voicebot</div>
+      <div class="prompt">Set up your microphone, chat model, API key, and optional wake word. Accessibility lets Voicebot type or paste where you ask.</div>
+      <button class="begin-trigger" onclick="beginGenesis()">Set up Voicebot</button>
     </div>
 
-    <!-- PHASE 1: FIRST LIGHT - VOICE -->
+    <!-- PHASE 1: MICROPHONE -->
     <div class="phase" id="phase-voice">
+      <div class="title">Check your microphone</div>
+      <div class="subtitle">Allow Zana to use your microphone, then say a short phrase.</div>
       <div class="voice-status" id="voice-status">
         <div class="status-text" id="status-waiting">waiting</div>
         <div class="status-text hidden" id="status-hearing">hearing you</div>
-        <div class="status-text hidden" id="status-creating">creating</div>
+        <div class="status-text hidden" id="status-creating">ready</div>
       </div>
-      <div class="instruction">Your voice creates light</div>
-      <div class="voice-hint" id="voice-hint">say anything</div>
-      <button class="skip-voice" onclick="skipVoiceTest()">Skip</button>
+      <div class="voice-hint" id="voice-hint">Say anything to test your microphone</div>
+      <div class="microphone-denied hidden" id="microphone-denied">
+        <div class="subtitle">Microphone access is off. Allow Zana in System Settings → Privacy &amp; Security → Microphone, then retry.</div>
+        <button class="btn-permission" onclick="openMicrophoneSettings()">Open Microphone Settings</button>
+        <button class="btn-continue" onclick="retryMicrophoneAccess()">Retry microphone</button>
+      </div>
+      <button class="skip-voice" onclick="skipVoiceTest()">Continue without testing</button>
     </div>
 
-    <!-- PHASE 2: PERMISSION - SOUL BINDING -->
+    <!-- PHASE 2: ACCESSIBILITY -->
     <div class="phase" id="phase-permission">
-      <div class="title">Grant the gift of presence</div>
+      <div class="title">Let Voicebot type for you</div>
       <div class="subtitle" id="permission-subtitle">
-        To hear you from anywhere, Zana needs accessibility permission.
-        This allows the Fn key to summon your voice assistant instantly.
+        Accessibility lets Voicebot type or paste a reply at your cursor when you ask. You can allow it now or continue and enable it later.
       </div>
       <div class="permission-orb">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--nebula-core)">
@@ -753,53 +670,21 @@
         <span class="dot"></span>
         <span id="permission-text">Awaiting permission</span>
       </div>
-      <button class="btn-permission" onclick="openAccessibilitySettings()">Open System Settings</button>
-      <button class="btn-continue" onclick="continueToDownload()">Continue anyway</button>
+      <button class="btn-permission" onclick="openAccessibilitySettings()">Open Accessibility Settings</button>
+      <button class="btn-continue" onclick="continueToSetup()">Continue anyway</button>
     </div>
 
-    <!-- PHASE 3: DOWNLOAD - CONSCIOUSNESS -->
-    <div class="phase" id="phase-download">
-      <div class="title">Forming consciousness</div>
-      <div class="subtitle">Downloading Whisper AI - Your voice interpreter</div>
-      <div class="consciousness-container">
-        <div class="neural-progress">
-          <div class="neural-progress-fill" id="download-progress"></div>
-        </div>
-        <div class="download-stats">
-          <span id="download-size">0 MB / 462 MB</span>
-          <span class="download-percent" id="download-percent">0%</span>
-        </div>
-        <div class="consciousness-visual" id="consciousness-visual"></div>
-      </div>
-      <div class="download-message" id="download-message">Initializing neural pathways...</div>
-    </div>
-
-    <!-- PHASE 4: READY - AWAKENING -->
+    <!-- PHASE 3: VOICEBOT READY -->
     <div class="phase" id="phase-ready">
       <div class="ready-top">
-        <div class="awakening">I am ready</div>
-        <div class="subtitle">Your voice assistant has awakened</div>
+        <div class="awakening">Your Voicebot is ready</div>
+        <div class="subtitle">Choose a chat model and API key in Preferences. Your wake word is optional and can be changed there.</div>
       </div>
-
       <div class="ready-bottom">
-        <div class="instructions-container" id="key-instructions">
-          <div class="instruction-row">
-            <div class="key-visual">
-              <span class="key" id="key-hold">Fn</span>
-              <span class="key-action">Hold</span>
-            </div>
-            <span class="instruction-text">Hold to record, release to transcribe</span>
-          </div>
-          <div class="instruction-row">
-            <div class="key-visual">
-              <span class="key" id="key-double">Fn</span>
-              <span class="key-action">x2</span>
-            </div>
-            <span class="instruction-text">Double-tap for hands-free mode</span>
-          </div>
-        </div>
-        <button class="btn-complete" onclick="completeGenesis()">Begin</button>
-        <div class="restart-note">Zana will restart to complete setup</div>
+        <button class="btn-permission" onclick="openVoicebotPreferences()">Open Voicebot Preferences</button>
+        <button class="btn-complete" onclick="completeGenesis()">Start Voicebot</button>
+        <div id="completion-error" class="subtitle" role="alert" aria-live="assertive" hidden></div>
+        <div class="restart-note">Zana will restart and start Voicebot. Then ask your first question.</div>
       </div>
     </div>
   </div>
@@ -817,21 +702,10 @@
       audioLevel: 0,
       isListening: false,
       permissionGranted: false,
-      downloadPercent: 0,
       genesisProgress: 0, // 0.0 to 1.0 - controls shader evolution
     };
 
-    const phases = ['void', 'voice', 'permission', 'download', 'ready'];
-    const downloadMessages = [
-      'Initializing neural pathways...',
-      'Forming auditory cortex...',
-      'Building language models...',
-      'Calibrating voice recognition...',
-      'Establishing consciousness matrix...',
-      'Preparing for first words...',
-      'Almost there...',
-      'Awakening...',
-    ];
+    const phases = ['void', 'voice', 'permission', 'ready'];
 
     // ============================================================================
     // GENESIS RENDERER (WebGPU/WebGL2)
@@ -1001,9 +875,9 @@
               float ring = smoothstep(0.01, 0.0, abs(d - ringDist));
               col += permColor * ring * 0.5;
             }
-            // === PHASE 3: DOWNLOAD - Consciousness Forming ===
+            // === PHASE 3: VOICEBOT READY ===
             else if (phase < 3.5) {
-              // Neural network forming based on download progress
+              // Neural network representing the Voicebot ready state
               float orbSize = 0.08 + genesis * 0.12;
               float orb = 1.0 - smoothstep(0.0, orbSize, d);
               float glow = 1.0 - smoothstep(0.0, 0.4, d);
@@ -1216,31 +1090,6 @@
     }
 
     // ============================================================================
-    // SYNAPSE VISUALIZATION (for download phase)
-    // ============================================================================
-    function createSynapses() {
-      const container = document.getElementById('consciousness-visual');
-      if (!container) return;
-
-      container.innerHTML = '';
-      const positions = [
-        [20, 30], [50, 10], [80, 30],
-        [10, 60], [30, 50], [50, 45], [70, 50], [90, 60],
-        [20, 80], [40, 90], [60, 90], [80, 80],
-        [35, 70], [65, 70], [50, 75]
-      ];
-
-      positions.forEach((pos, i) => {
-        const synapse = document.createElement('div');
-        synapse.className = 'synapse';
-        synapse.style.left = pos[0] + '%';
-        synapse.style.top = pos[1] + '%';
-        synapse.style.animationDelay = (i * 0.2) + 's';
-        container.appendChild(synapse);
-      });
-    }
-
-    // ============================================================================
     // PHASE NAVIGATION
     // ============================================================================
     function goToPhase(phaseIndex) {
@@ -1259,17 +1108,15 @@
       // Phase-specific initialization
       if (phaseIndex === 2) {
         if (isWindows) {
-          // Windows doesn't need accessibility permission - skip to download
-          state.genesisProgress = 0.4;
+          // Windows does not require Accessibility permission.
+          state.genesisProgress = 0.8;
           setTimeout(() => goToPhase(3), 500);
           return;
         }
-        // macOS: Permission phase - start checking
+        // macOS: Permission phase - start checking.
         checkPermissionLoop();
       } else if (phaseIndex === 3) {
-        // Download phase
-        createSynapses();
-        startDownload();
+        state.genesisProgress = 1.0;
       }
     }
 
@@ -1302,16 +1149,45 @@
       }
     };
 
-    window.continueToDownload = function() {
-      state.genesisProgress = 0.4;
+    window.openMicrophoneSettings = async function() {
+      try {
+        await window.__TAURI__.core.invoke('open_microphone_settings');
+      } catch (e) {
+        console.error('[Genesis] Failed to open Microphone settings:', e);
+      }
+    };
+
+    window.retryMicrophoneAccess = function() {
+      startAudioVisualization();
+    };
+
+    window.openVoicebotPreferences = async function() {
+      try {
+        await window.__TAURI__.core.invoke('open_preferences_window');
+      } catch (e) {
+        console.error('[Genesis] Failed to open Voicebot Preferences:', e);
+      }
+    };
+
+    window.continueToSetup = function() {
+      state.genesisProgress = 0.8;
       goToPhase(3);
     };
 
     window.completeGenesis = async function() {
+      const errorMessage = document.getElementById('completion-error');
+      errorMessage.hidden = true;
+      errorMessage.textContent = '';
       try {
-        await window.__TAURI__.core.invoke('complete_onboarding_and_exit');
+        const result = await window.__TAURI__.core.invoke('complete_onboarding_and_restart');
+        if (!result || !result.success) {
+          errorMessage.textContent = `Could not start Voicebot: ${result?.error || 'setup could not be completed. Try again.'}`;
+          errorMessage.hidden = false;
+        }
       } catch (e) {
         console.error('[Genesis] Failed to complete:', e);
+        errorMessage.textContent = `Could not start Voicebot: ${e?.message || 'setup could not be completed. Try again.'}`;
+        errorMessage.hidden = false;
       }
     };
 
@@ -1340,10 +1216,19 @@
     let audioContext = null;
     let analyser = null;
     let audioVisualizationInterval = null;
+    globalThis.audioVisualizationStarting = false;
 
     async function startAudioVisualization() {
+      if (globalThis.audioVisualizationStarting) return;
+      globalThis.audioVisualizationStarting = true;
+
+      const denied = document.getElementById('microphone-denied');
+      const hint = document.getElementById('voice-hint');
+      denied.classList.add('hidden');
+      hint.textContent = 'Requesting microphone access…';
       try {
         audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        hint.textContent = 'Say anything to test your microphone';
         audioContext = new AudioContext();
         const source = audioContext.createMediaStreamSource(audioStream);
         analyser = audioContext.createAnalyser();
@@ -1353,7 +1238,6 @@
         const statusWaiting = document.getElementById('status-waiting');
         const statusHearing = document.getElementById('status-hearing');
         const statusCreating = document.getElementById('status-creating');
-        const hint = document.getElementById('voice-hint');
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         let voiceDetectedCount = 0;
@@ -1411,13 +1295,10 @@
 
       } catch (e) {
         console.warn('[Genesis] Audio not available:', e);
-        // No mic access - show message and auto-proceed
-        const hint = document.getElementById('voice-hint');
-        hint.textContent = 'microphone not available';
-        setTimeout(() => {
-          state.genesisProgress = 0.3;
-          goToPhase(2);
-        }, 3000);
+        hint.textContent = 'Microphone access is needed for Voicebot conversations.';
+        denied.classList.remove('hidden');
+      } finally {
+        globalThis.audioVisualizationStarting = false;
       }
     }
 
@@ -1480,91 +1361,10 @@
     }
 
     // ============================================================================
-    // DOWNLOAD
-    // ============================================================================
-    async function startDownload() {
-      const progressEl = document.getElementById('download-progress');
-      const sizeEl = document.getElementById('download-size');
-      const percentEl = document.getElementById('download-percent');
-      const messageEl = document.getElementById('download-message');
-
-      let downloadComplete = false;
-
-      // Helper to show completion and advance
-      const completeDownload = () => {
-        if (downloadComplete) return;
-        downloadComplete = true;
-
-        state.genesisProgress = 1.0;
-        progressEl.style.width = '100%';
-        percentEl.textContent = '100%';
-        sizeEl.textContent = 'Complete';
-        messageEl.textContent = 'Consciousness formed';
-
-        setTimeout(() => {
-          goToPhase(4);
-        }, 1500);
-      };
-
-      try {
-        // Listen for progress events
-        await window.__TAURI__.event.listen('download-progress', (event) => {
-          const { downloaded, total, percent } = event.payload;
-
-          state.downloadPercent = percent;
-          state.genesisProgress = 0.5 + (percent / 100) * 0.4;
-
-          progressEl.style.width = percent + '%';
-          percentEl.textContent = Math.round(percent) + '%';
-
-          if (total > 0 && total < 1000) {
-            // Already downloaded case - backend sends 100/100
-            sizeEl.textContent = 'Already downloaded';
-          } else {
-            sizeEl.textContent = `${(downloaded / 1024 / 1024).toFixed(1)} MB / ${(total / 1024 / 1024).toFixed(1)} MB`;
-          }
-
-          // Update message based on progress
-          const msgIndex = Math.floor((percent / 100) * (downloadMessages.length - 1));
-          messageEl.textContent = downloadMessages[msgIndex];
-
-          // If we got 100%, mark as complete
-          if (percent >= 100) {
-            completeDownload();
-          }
-        });
-
-        // Small delay to ensure listener is fully registered
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        const result = await window.__TAURI__.core.invoke('download_whisper_model');
-
-        // If invoke returned success, ensure we complete
-        // (handles case where event arrives before/after invoke returns)
-        if (result && result.success) {
-          // Give event a moment to process, then force complete
-          setTimeout(() => {
-            completeDownload();
-          }, 500);
-        }
-
-      } catch (e) {
-        console.error('[Genesis] Download failed:', e);
-        messageEl.textContent = 'Download failed. Please try again.';
-      }
-    }
-
-    // ============================================================================
     // INITIALIZATION
     // ============================================================================
     async function init() {
       console.log('[Genesis] Initializing...');
-
-      // Platform-specific key labels
-      if (isWindows) {
-        document.getElementById('key-hold').textContent = 'Ctrl';
-        document.getElementById('key-double').textContent = 'Ctrl';
-      }
 
       // Create ambient particles
       createParticles();
