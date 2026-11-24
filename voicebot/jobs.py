@@ -39,6 +39,7 @@ class Job:
         self.started = time.time()
         self.ended: float | None = None
         self.exit_code: int | None = None
+        self._output_error = False
         self._output_task = asyncio.create_task(self._capture_output())
         self._late_output_task: asyncio.Task | None = None
         self.task = asyncio.ensure_future(self._wait())
@@ -52,7 +53,7 @@ class Job:
                 append_bounded(self.log, chunk, MAX_JOB_LOG_BYTES)
             except OSError:
                 # Keep draining even if this disk write fails, so a noisy child cannot deadlock.
-                pass
+                self._output_error = True
 
     async def _wait(self) -> None:
         timed_out = False
@@ -86,7 +87,7 @@ class Job:
                     append_bounded(self.log, f"\n[stopped after {self.timeout:.0f} seconds]\n".encode(),
                                    MAX_JOB_LOG_BYTES)
                 except OSError:
-                    pass
+                    self._output_error = True
             self.ended = time.time()
 
     def stop(self, quiet: bool = False) -> None:
@@ -104,7 +105,11 @@ class Job:
             with open(self.log, errors="replace") as f:
                 text = f.read()
         except OSError:
-            return ""
+            text = ""
+            self._output_error = True
+        if self._output_error:
+            warning = "[Could not save terminal output fully; some output may be missing.]"
+            text = f"{text}\n{warning}" if text else warning
         return clean("\n".join(text.splitlines()[-lines:])) if lines else ""
 
     def summary(self, lines: int = 40) -> str:
