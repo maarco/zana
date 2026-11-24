@@ -190,9 +190,8 @@ def explicitly_consents_to_cleanup(user_text: str, *, offer_was_immediately_prio
         text,
     ):
         return False
-    if re.match(r"^(yes|yeah|yep|sure|okay|ok|please do|go ahead|do it|do that)\b", text):
-        explicit_target = _requests_tool_guidance_cleanup(text)
-        return offer_was_immediately_prior or explicit_target
+    if re.fullmatch(r"(yes|yeah|yep|sure|okay|ok|please do|go ahead|do it|do that)[.!?]*", text):
+        return offer_was_immediately_prior
     return _requests_tool_guidance_cleanup(text)
 
 
