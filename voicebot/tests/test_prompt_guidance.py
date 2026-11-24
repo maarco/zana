@@ -203,6 +203,15 @@ class PromptGuidanceTest(unittest.TestCase):
         self.assertIn("Keep this unique note.", cleaned)
         self.assertIn("all other prompt text was preserved", message)
 
+    def test_unrelated_delete_request_does_not_consent_to_prompt_cleanup(self):
+        prompt = prompt_guidance.LEGACY_TOOL_GUIDANCE + "\nKeep this personal note.\n"
+        prompt_guidance.take_legacy_prompt_offer(self.home, prompt)
+        unchanged, changed, _ = prompt_guidance.remove_legacy_guidance_after_consent(
+            self.home, prompt, "Yes, delete the old transcript file."
+        )
+        self.assertFalse(changed)
+        self.assertEqual(unchanged, prompt)
+
     def test_corrupt_migration_state_fails_closed(self):
         old_prompt = prompt_guidance.LEGACY_TOOL_GUIDANCE
         prompt_guidance.take_legacy_prompt_offer(self.home, old_prompt)
