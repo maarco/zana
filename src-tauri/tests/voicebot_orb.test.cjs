@@ -41,7 +41,7 @@ test('each retained state maps to its own named color and animation', () => {
 test('privacy and preview overlays override the retained state without mutating it', () => {
   const active = { connected: true, agentOrbState: 'working' };
   for (const quiet of [
-    { connected: false }, { muted: true }, { dictating: true }, { asleep: true },
+    { connected: false }, { muted: true }, { asleep: true },
   ]) {
     assert.equal(orb.resolveState({ ...active, ...quiet }), 'idle');
   }

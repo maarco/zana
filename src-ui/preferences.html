@@ -321,130 +321,6 @@ var(--background);
     .inline-status.error {
       color: var(--destructive);
     }
-    .orb-picker {
-      padding: 10px 12px 12px;
-      background: var(--card);
-      border-radius: var(--radius);
-      margin-bottom: 6px;
-      min-height: 390px;
-    }
-    .orb-picker-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 8px;
-    }
-    .orb-brand {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      color: var(--muted-foreground);
-      font-size: 10px;
-      font-weight: 800;
-      text-transform: uppercase;
-    }
-    .orb-brand::before {
-      content: '';
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--orb-accent, var(--ok));
-      box-shadow: 0 0 14px var(--orb-accent, var(--ok));
-    }
-    .orb-count {
-      color: var(--muted-foreground);
-      font-size: 10px;
-      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
-    }
-    .orb-carousel {
-      display: grid;
-      grid-template-columns: 34px minmax(0, 1fr) 34px;
-      align-items: center;
-      gap: 10px;
-    }
-    .orb-arrow {
-      width: 34px;
-      height: 34px;
-      padding: 0;
-      display: grid;
-      place-items: center;
-      background: var(--muted);
-      color: var(--foreground);
-      font-size: 18px;
-    }
-    .orb-arrow:hover {
-      background: var(--accent);
-    }
-    .orb-preview-shell {
-      min-width: 0;
-      display: grid;
-      grid-template-columns: minmax(260px, 1fr);
-      align-items: center;
-      gap: 12px;
-    }
-    .orb-preview-frame {
-      width: min(320px, 62vw);
-      aspect-ratio: 1;
-      overflow: hidden;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(255,255,255,0.04), transparent 68%);
-      position: relative;
-      justify-self: center;
-    }
-    .orb-preview-frame iframe {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      width: 320px;
-      height: 320px;
-      border: 0;
-      background: transparent;
-      pointer-events: none;
-      transform: translate(-50%, -50%);
-      transform-origin: center;
-    }
-    .orb-preview-copy {
-      min-width: 0;
-      max-width: 620px;
-      justify-self: center;
-      text-align: center;
-    }
-    .orb-preview-name {
-      color: var(--foreground);
-      font-size: 15px;
-      font-weight: 800;
-      line-height: 1.15;
-    }
-    .orb-preview-desc {
-      margin-top: 4px;
-      color: var(--muted-foreground);
-      font-size: 12px;
-      line-height: 1.35;
-    }
-    .orb-picker-actions {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      margin-top: 10px;
-    }
-    .orb-active-label {
-      color: var(--muted-foreground);
-      font-size: 11px;
-    }
-    #orb-style {
-      display: none;
-    }
-    @media (max-width: 560px) {
-      .orb-preview-shell {
-        grid-template-columns: 1fr;
-      }
-      .orb-preview-frame {
-        width: min(180px, 100%);
-        justify-self: center;
-      }
-    }
     button {
       padding: 7px 14px;
       border-radius: var(--radius);
@@ -699,20 +575,6 @@ var(--background);
       </div>
     </div>
 
-    <div class="section" data-section="general">
-      <div class="section-head">
-        <div class="section-title">General</div>
-      </div>
-
-      <div class="setting-row">
-        <div>
-          <div class="setting-label">Show in Menu Bar</div>
-          <div class="setting-desc">Display Zana icon in menu bar</div>
-        </div>
-        <div class="toggle active" id="menubar-toggle"></div>
-      </div>
-    </div>
-
     <div class="section" data-section="diagnostics">
       <div class="section-head">
         <div class="section-title">Diagnostics</div>
@@ -722,7 +584,7 @@ var(--background);
       <div class="setting-row">
         <div>
           <div class="setting-label">Run Health Check</div>
-          <div class="setting-desc">Check permissions, audio and Voicebot</div>
+          <div class="setting-desc">Check permissions and Voicebot</div>
         </div>
         <button class="btn-primary" onclick="runDoctor()">Doctor</button>
       </div>
@@ -740,12 +602,7 @@ var(--background);
     </div>
   </div>
 
-  <script src="orb-styles.js"></script>
   <script>
-    const ORB_STYLES = window.ZANA_ORB_STYLES || [];
-    let previewOrbIndex = 0;
-    let selectedOrbStyle = 'fire-v8';
-
     // Toggle switches
     document.querySelectorAll('.toggle').forEach(toggle => {
       const label = toggle.closest('.setting-row')?.querySelector('.setting-label')?.textContent.trim();
@@ -894,14 +751,6 @@ var(--background);
       window.close();
     }
 
-    function setToggle(id, active) {
-      document.getElementById(id)?.classList.toggle('active', Boolean(active));
-    }
-
-    function isToggleActive(id) {
-      return document.getElementById(id).classList.contains('active');
-    }
-
     function setFieldValue(id, value) {
       const field = document.getElementById(id);
       if (field && value !== undefined && value !== null) {
@@ -909,118 +758,7 @@ var(--background);
       }
     }
 
-    function setupOrbOptions() {
-      const select = document.getElementById('orb-style');
-      select.innerHTML = '';
-      ORB_STYLES.forEach(style => {
-        const option = document.createElement('option');
-        option.value = style.id;
-        option.textContent = style.name;
-        select.appendChild(option);
-      });
-    }
-
-    function getOrbIndex(styleId) {
-      const index = ORB_STYLES.findIndex(style => style.id === styleId);
-      return index >= 0 ? index : 0;
-    }
-
-    function renderOrbPreview() {
-      if (!ORB_STYLES.length) {
-        return;
-      }
-
-      const style = ORB_STYLES[previewOrbIndex];
-      const picker = document.getElementById('orb-picker');
-      const preview = document.getElementById('orb-preview');
-      const count = document.getElementById('orb-count');
-      const name = document.getElementById('orb-preview-name');
-      const desc = document.getElementById('orb-preview-desc');
-      const active = document.getElementById('orb-active-label');
-      const selectButton = document.getElementById('orb-select-button');
-      const isSelected = selectedOrbStyle === style.id;
-
-      picker.style.setProperty('--orb-accent', style.accent);
-      preview.src = `orb.html?style=${encodeURIComponent(style.id)}`;
-      count.textContent = `${String(previewOrbIndex + 1).padStart(2, '0')} / ${String(ORB_STYLES.length).padStart(2, '0')}`;
-      name.textContent = style.name;
-      desc.textContent = style.description;
-      active.textContent = `selected: ${ORB_STYLES[getOrbIndex(selectedOrbStyle)].name}`;
-      selectButton.textContent = isSelected ? 'Selected' : 'Select';
-      selectButton.disabled = isSelected;
-    }
-
-    function shiftOrbPreview(direction) {
-      previewOrbIndex = (previewOrbIndex + direction + ORB_STYLES.length) % ORB_STYLES.length;
-      renderOrbPreview();
-    }
-
-    function setOrbStyleValue(styleId) {
-      selectedOrbStyle = ORB_STYLES.some(style => style.id === styleId) ? styleId : 'fire-v8';
-      const select = document.getElementById('orb-style');
-      select.value = selectedOrbStyle;
-      previewOrbIndex = getOrbIndex(selectedOrbStyle);
-      renderOrbPreview();
-    }
-
-    async function selectPreviewedOrb() {
-      const style = ORB_STYLES[previewOrbIndex];
-      selectedOrbStyle = style.id;
-      document.getElementById('orb-style').value = style.id;
-      renderOrbPreview();
-
-      if (window.__TAURI__) {
-        try {
-          const { invoke } = window.__TAURI__.core;
-          await invoke('set_orb_style', { style: style.id });
-        } catch (e) {
-          console.warn('Failed to live-apply orb style:', e);
-        }
-      }
-    }
-
-    async function loadAudioInputs(selectedAudioInput = 'default') {
-      const select = document.getElementById('audio-input');
-      select.innerHTML = '<option value="default">Default Microphone</option>';
-
-      if (!window.__TAURI__) {
-        select.value = selectedAudioInput || 'default';
-        return;
-      }
-
-      try {
-        const { invoke } = window.__TAURI__.core;
-        const result = await invoke('list_audio_devices');
-        if (result.success) {
-          for (const device of result.devices) {
-            const option = document.createElement('option');
-            option.value = device.id;
-            option.textContent = device.name + (device.is_default ? ' (Default)' : '');
-            select.appendChild(option);
-          }
-        }
-      } catch (e) {
-        console.warn('Failed to load audio devices:', e);
-      }
-
-      const hasSelectedOption = Array.from(select.options).some(
-        option => option.value === selectedAudioInput
-      );
-      if (selectedAudioInput && !hasSelectedOption && selectedAudioInput !== 'default') {
-        const option = document.createElement('option');
-        option.value = selectedAudioInput;
-        option.textContent = selectedAudioInput;
-        select.appendChild(option);
-      }
-      select.value = selectedAudioInput || 'default';
-    }
-
-    // Settings no longer on this page (the retired dictation ones) are saved back unchanged.
-    let loadedPrefs = {};
-
     function applyPreferences(prefs) {
-      loadedPrefs = prefs;
-      setToggle('menubar-toggle', prefs.showInMenuBar);
       setFieldValue('rewrite-api-key', prefs.rewriteApiKey);
       setFieldValue('rewrite-model', prefs.rewriteModel);
       setFieldValue('rewrite-api-url', prefs.rewriteApiUrl);
@@ -1030,8 +768,6 @@ var(--background);
 
     function collectPreferences() {
       return {
-        ...loadedPrefs,
-        showInMenuBar: isToggleActive('menubar-toggle'),
         rewriteApiKey: document.getElementById('rewrite-api-key').value,
         rewriteModel: document.getElementById('rewrite-model').value,
         rewriteApiUrl: document.getElementById('rewrite-api-url').value,
@@ -1120,12 +856,6 @@ var(--background);
       } finally {
         button.disabled = false;
       }
-    }
-
-    async function viewTranscriptions() {
-      if (!window.__TAURI__) return;
-      const { invoke } = window.__TAURI__.core;
-      await invoke('open_transcriptions_window');
     }
 
     async function openAccessibilitySettings() {

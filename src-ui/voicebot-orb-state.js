@@ -17,13 +17,13 @@
 
   const hasStyle = (state) => Object.prototype.hasOwnProperty.call(styles, state);
 
-  function resolveState({ connected, muted, dictating, asleep, voicePrint, preview,
+  function resolveState({ connected, muted, asleep, voicePrint, preview,
     agentOrbState, agentState, userSpeaking, micSilent }) {
     const previewState = preview === 'speaking' ? 'talking' : preview;
     if (hasStyle(previewState)) return previewState;
     // A dead microphone shows even while asleep (the wake word needs it); not when muted on purpose.
-    if (micSilent && connected && !muted && !dictating) return 'nomic';
-    if (!connected || muted || dictating || asleep) return 'idle';
+    if (micSilent && connected && !muted) return 'nomic';
+    if (!connected || muted || asleep) return 'idle';
     if (voicePrint) return 'voiceprint';
     if (agentOrbState !== 'voiceprint' && hasStyle(agentOrbState)) return agentOrbState;
     // Older agents have no orb attribute. LiveKit's "listening" means it is
