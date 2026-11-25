@@ -25,6 +25,7 @@ jobs:
     runs-on: macos-latest
     env:
       WHISPER_DONT_GENERATE_BINDINGS: "1"
+      CMAKE_PROJECT_INCLUDE: ${{ github.workspace }}/scripts/whisper-portable.cmake
 
     steps:
       - name: Checkout
@@ -43,7 +44,7 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          key: whisper-bundled-bindings-v1
+          key: whisper-portable-v1
 
       - name: Check formatting
         run: cargo fmt --all -- --check
