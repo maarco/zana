@@ -15,11 +15,12 @@ class SecurityPolicyContractTests(unittest.TestCase):
             "AppleScript app automation",
             "key presses sent to the active app",
             "configured MCP servers and their tools",
+            "optional rewrite provider requests",
         ):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, areas)
 
-        for phrase in ("global hotkeys", "optional rewrite provider requests"):
+        for phrase in ("global hotkeys",):
             with self.subTest(phrase=phrase):
                 self.assertNotIn(phrase, areas)
 
