@@ -11,6 +11,7 @@
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -122,6 +123,10 @@ pub fn write_agent_config(settings: &crate::state::Settings) -> std::io::Result<
     config.insert("voice".into(), settings.voicebot_voice.trim().into());
     config.insert("mood_minutes".into(), settings.voicebot_mood_minutes.into());
     config.insert(
+        "transcript_retention_days".into(),
+        settings.voicebot_transcript_retention_days.into(),
+    );
+    config.insert(
         "fillers".into(),
         serde_json::json!({
             "on": settings.voicebot_fillers,
@@ -202,9 +207,22 @@ pub fn llm_base_url(api_url: &str) -> String {
     }
 }
 
-/// A fresh screenshot for the agent's vision tool, scaled down to keep it cheap.
-pub fn screenshot() -> Result<PathBuf, String> {
-    let path = home_dir().join("screen.jpg");
+fn conversation_artifact_id(id: &str) -> Result<&str, String> {
+    if id.len() == 32
+        && id
+            .bytes()
+            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+    {
+        Ok(id)
+    } else {
+        Err("Invalid conversation id".into())
+    }
+}
+
+/// A fresh screenshot for one conversation's vision tool, scaled down to keep it cheap.
+pub fn screenshot(conversation_id: &str) -> Result<PathBuf, String> {
+    let conversation_id = conversation_artifact_id(conversation_id)?;
+    let path = home_dir().join(format!("screen-{conversation_id}.jpg"));
     let ok = std::process::Command::new("/usr/sbin/screencapture")
         .args(["-x", "-t", "jpg"])
         .arg(&path)
@@ -219,6 +237,27 @@ pub fn screenshot() -> Result<PathBuf, String> {
         .arg(&path)
         .output();
     Ok(path)
+}
+
+/// Clear only the Voicebot transcript and its unread marker, sharing the sidecar lock with Python.
+pub fn clear_transcript_at(home: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(home)?;
+    let path = home.join("transcript.md");
+    let lock_path = path.with_extension("md.lock");
+    let lock = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(lock_path)?;
+    lock.lock()?;
+    std::fs::write(&path, b"")?;
+    std::fs::write(home.join("transcript.read"), b"0")?;
+    Ok(())
+}
+
+pub fn clear_transcript() -> Result<(), String> {
+    clear_transcript_at(&home_dir()).map_err(|error| error.to_string())
 }
 
 /// A command-line tool from PATH or the usual install folders (apps opened from
@@ -840,6 +879,35 @@ fn dead_child() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn transcript_clear_is_scoped_and_resets_unread_marker() {
+        let home = tempfile::tempdir().unwrap();
+        let transcript = home.path().join("transcript.md");
+        let marker = home.path().join("transcript.read");
+        let unrelated = home.path().join("config.json");
+        std::fs::write(&transcript, "synthetic transcript").unwrap();
+        std::fs::write(&marker, "42").unwrap();
+        std::fs::write(&unrelated, "keep").unwrap();
+
+        clear_transcript_at(home.path()).unwrap();
+
+        assert_eq!(std::fs::read_to_string(transcript).unwrap(), "");
+        assert_eq!(std::fs::read_to_string(marker).unwrap(), "0");
+        assert_eq!(std::fs::read_to_string(unrelated).unwrap(), "keep");
+    }
+
+    #[test]
+    fn conversation_artifact_ids_are_lowercase_hex_and_fixed_length() {
+        let valid = "a".repeat(32);
+        assert_eq!(conversation_artifact_id(&valid), Ok(valid.as_str()));
+        for invalid in ["A".repeat(32), "a".repeat(31), "../outside".to_string()] {
+            assert!(
+                conversation_artifact_id(&invalid).is_err(),
+                "accepted {invalid}"
+            );
+        }
+    }
 
     #[cfg(unix)]
     #[test]

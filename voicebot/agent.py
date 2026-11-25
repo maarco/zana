@@ -8,9 +8,9 @@ zana.screenshot (path of a fresh screenshot) and zana.mute (turn the mic off).
 Per-user files live in VOICEBOT_HOME (Zana's app-data folder):
   .env               keys and model overrides (see README.md)
   system_prompt.md   the system prompt (edited in Zana's Preferences)
-  config.json        {"terminal": bool, "wake_word": str, "wake_timeout_seconds": int}
+  config.json        {"terminal": bool, "wake_word": str, "transcript_retention_days": int}
   mcp.json           MCP servers, Claude Desktop format: {"mcpServers": {...}}
-  transcript.md      everything heard and said, always appended
+  transcript.md      everything heard and said, retained for the configured age window
 """
 import asyncio
 import base64
@@ -23,6 +23,7 @@ import random
 import re
 import threading
 import time
+import uuid
 from pathlib import Path
 
 import updater
@@ -33,6 +34,8 @@ from listening import (
     ToolCallText,
     Transcript,
     clean,
+    normalize_retention_days,
+    remove_conversation_screenshot,
     heard_wake_word,
     is_goodbye,
     parse_text_tool_calls,
@@ -80,7 +83,7 @@ load_dotenv(os.path.join(HOME, ".env"))
 VOICE = os.getenv("VOICE_SERVER_URL", "http://127.0.0.1:8800/v1")
 FAST = float(os.getenv("VOICEBOT_FAST_SECONDS", "3"))  # slower terminal commands answer "on it" now and report later
 TERMINAL_TIMEOUT = float(os.getenv("VOICEBOT_TERMINAL_TIMEOUT", "900"))  # jobs are stopped after 15 minutes
-TRANSCRIPT = Transcript(HOME)  # always-on: every line heard and said
+TRANSCRIPT = Transcript(HOME)  # locally retained; age pruning runs at conversation start
 FILLERS = Fillers(HOME)  # thinking sounds, made in Voicebot's voice and cached
 DEBUG_LOG = os.path.join(HOME, "logs", "debug.jsonl")  # what Voicebot does, for Zana's Debug window
 MAX_DEBUG_LOG_BYTES = 20 * 1024 * 1024
@@ -279,7 +282,10 @@ async def zana(method: str, payload: str = "") -> str:
 
 
 class Voicebot(Agent):
-    def __init__(self, config: dict, publish) -> None:
+    def __init__(self, config: dict, publish, jobs: Jobs | None = None,
+                 conversation_id: str | None = None) -> None:
+        self.conversation_id = conversation_id or uuid.uuid4().hex
+        self.jobs = jobs or Jobs(HOME, TERMINAL_TIMEOUT, self.conversation_id)
         self.name = str(config.get("name") or "Voicebot").strip()
         self.base_instructions = build_instructions(self.name)
         self.summary = ""  # the compacted part of this conversation, kept at the end of the instructions
@@ -371,10 +377,11 @@ class Voicebot(Agent):
                        "vision model answer a question about it."),
             "debug": ("Right-clicking the orb (or Preferences, Voicebot, Debug) opens the Debug window: everything you "
                       "heard, said and ran, with errors."),
-            "transcript": ("Everything heard and said is written to the always-on transcript file, across every "
-                           "conversation; on the wake word you get the part said while you were asleep. "
-                           "search_conversations finds words in it, with dates. Long conversations are compacted: "
-                           "older turns are folded into a summary to keep you fast, and the transcript keeps everything."),
+            "transcript": (f"Everything heard and said is written to the local transcript across conversations; "
+                           f"on the wake word you get the part said while you were asleep. It keeps the newest "
+                           f"{TRANSCRIPT.retention_days} days by default, and the user can change that or clear it "
+                           "in Preferences > Voicebot. search_conversations finds words in it, with dates. "
+                           "Long conversations are compacted in chat; that does not change the retained transcript."),
             "prompt": (f"Your system prompt is the user's own file, system_prompt.md in your Voicebot folder ({HOME}). "
                        "You may read it out or summarize it when asked (read_system_prompt). edit_system_prompt changes "
                        "it (exact find and replace, or append) and reloads it at once, keeping a backup; "
@@ -388,7 +395,8 @@ class Voicebot(Agent):
                          "change_setting changes voice, model, reasoning, vision_model, thinking_sounds, "
                          "thinking_sound_lines, remake_sounds_days, mic_check_minutes, orb_design (original, "
                          "strands, halo, fur, nebula, liquid), mood_minutes, interrupt (voice: only the enrolled "
-                         "voice can interrupt you, or anyone), and terminal (off only). set_mood shows "
+                         "voice can interrupt you, or anyone), and terminal (off only). Transcript retention is "
+                         "changed in Preferences, and set_mood shows "
                          "your mood with the orb (calm, focused, warm, playful, dreamy, cool), at most every few minutes. "
                          "A model, reasoning or vision change starts a fresh conversation after your reply; say so. "
                          "You cannot change the API key or URL or turn the terminal on: the user does that in "
@@ -723,8 +731,8 @@ class Voicebot(Agent):
     async def compact(self) -> None:
         """Summarize all but the last few turns with the chat model and move the summary into the instructions
         (one system message; a made-up assistant turn holding it led the model to write tool calls as text).
-        The previous summary is folded into the new one, so the context stays bounded; the transcript file
-        keeps everything."""
+        The previous summary is folded into the new one, so the context stays bounded; the local transcript's
+        separate age-retention and Clear Transcript controls are unchanged."""
         try:
             snapshot = self.chat_ctx.copy()
             order = {item.id: index for index, item in enumerate(snapshot.items)}
@@ -772,7 +780,7 @@ class Voicebot(Agent):
 
     @function_tool()
     async def search_conversations(self, context: RunContext, words: str) -> str:
-        """Search the transcript of every conversation (everything heard and said, with dates) for words.
+        """Search the retained transcript across conversations (everything heard and said, with dates) for words.
         Use it when the user asks what was said or done before, or for anything from earlier that is no
         longer in front of you (older turns of this conversation are compacted into a summary).
 
@@ -925,7 +933,7 @@ class Voicebot(Agent):
         Args:
             question: What you want to know about the screen, like "what error is showing".
         """
-        path = await zana("zana.screenshot")
+        path = await zana("zana.screenshot", self.conversation_id)
         if not os.path.isfile(path):
             return f"No screenshot: {path}" + SAY
         with open(path, "rb") as f:
@@ -1148,7 +1156,7 @@ class Voicebot(Agent):
         """
         if not self.terminal:
             return "The terminal is off; the user can turn on Terminal Tool in Zana's Preferences." + SAY
-        job = await JOBS.start(command)
+        job = await self.jobs.start(command)
         if isinstance(job, str):
             return job + SAY
         done, _ = await asyncio.wait({job.task}, timeout=FAST)
@@ -1174,7 +1182,7 @@ class Voicebot(Agent):
         Args:
             job: The job number run_terminal gave you.
         """
-        found = JOBS.get(job)
+        found = self.jobs.get(job)
         return (found.summary(lines=40) if found else f"There is no job {job}.") + SAY
 
     @function_tool()
@@ -1184,7 +1192,7 @@ class Voicebot(Agent):
         Args:
             job: The job number.
         """
-        found = JOBS.get(job)
+        found = self.jobs.get(job)
         if not found:
             return f"There is no job {job}." + SAY
         found.stop(quiet=True)
@@ -1194,7 +1202,7 @@ class Voicebot(Agent):
     @function_tool()
     async def list_jobs(self, context: RunContext) -> str:
         """List terminal jobs from this conversation with their status."""
-        return ("\n".join(j.summary(lines=0) for j in JOBS.jobs.values()) or "No terminal jobs.") + SAY
+        return ("\n".join(j.summary(lines=0) for j in self.jobs.jobs.values()) or "No terminal jobs.") + SAY
 
     # ---------- Zana updates ----------
 
@@ -1319,9 +1327,6 @@ class Voicebot(Agent):
             self.say_all(f"Zana restarted, but it's still {now}, so the update didn't take.")
 
 
-JOBS = Jobs(HOME, TERMINAL_TIMEOUT)
-
-
 server = AgentServer(port=0, num_idle_processes=1, load_threshold=float("inf"))
 
 
@@ -1337,12 +1342,30 @@ async def entrypoint(ctx: agents.JobContext):
     # The room connects in session.start below; look the participant up only when publishing.
     orb = OrbState(lambda attributes: ctx.room.local_participant.set_attributes(attributes))
     ctx.add_shutdown_callback(orb.close)
+    conversation_id = uuid.uuid4().hex
+    config = read_json("config.json")
+    retention_days = normalize_retention_days(config.get("transcript_retention_days"))
+    TRANSCRIPT.retention_days = retention_days
+    TRANSCRIPT.prune_old(retention_days)
+    jobs = Jobs(HOME, TERMINAL_TIMEOUT, conversation_id)
 
     def publish(kind, **data):
         payload = json.dumps({"kind": kind, "t": time.time(), **data}, default=str).encode()
         asyncio.create_task(ctx.room.local_participant.publish_data(payload, reliable=True, topic="events"))
 
-    agent = Voicebot(read_json("config.json"), publish)
+    agent = Voicebot(config, publish, jobs=jobs, conversation_id=conversation_id)
+
+    cleanup_started = False
+
+    async def cleanup_conversation():
+        nonlocal cleanup_started
+        if cleanup_started:
+            return
+        cleanup_started = True
+        await agent.jobs.cleanup()
+        remove_conversation_screenshot(HOME, agent.conversation_id)
+
+    ctx.add_shutdown_callback(cleanup_conversation)
     await agent.load_mcp()
     # With a voice print set up, only that voice interrupts (maybe_barge_in): the built-in rule, where any speech
     # pauses Voicebot and cuts the reply and its remaining tool steps, is off, and audio heard while Voicebot
@@ -1450,9 +1473,9 @@ async def entrypoint(ctx: agents.JobContext):
 
     @session.on("close")
     def _on_close(_ev):
-        JOBS.stop_all()
         if agent.watch:
             agent.watch.cancel()
+        asyncio.create_task(cleanup_conversation())
         asyncio.create_task(orb.close())
 
     async def on_text(sess: AgentSession, ev) -> None:

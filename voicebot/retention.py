@@ -1,4 +1,5 @@
 """Small bounded-retention helpers for Voicebot's local logs and prompt snapshots."""
+from contextlib import contextmanager
 import json
 import os
 
@@ -7,6 +8,28 @@ try:
 except ImportError:  # Windows uses msvcrt for the same sidecar lock.
     fcntl = None
     import msvcrt
+
+
+@contextmanager
+def file_lock(path: str):
+    """Hold the sidecar lock shared by Python writers and native cleanup commands."""
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(path + ".lock", "a+b") as lock_file:
+        if fcntl is not None:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        else:
+            lock_file.seek(0)
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
+        try:
+            yield
+        finally:
+            if fcntl is not None:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            else:
+                lock_file.seek(0)
+                msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
 
 
 def append_bounded(path: str, data: bytes, max_bytes: int, *, preserve_lines: bool = False,
@@ -56,36 +79,24 @@ def append_bounded_jsonl(path: str, event: dict, max_bytes: int) -> None:
     parent = os.path.dirname(path)
     if parent:
         os.makedirs(parent, exist_ok=True)
-    with open(path + ".lock", "a+b") as lock_file:
-        if fcntl is not None:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-        else:
-            lock_file.seek(0)
-            msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
+    with file_lock(path):
+        line = json.dumps(event, default=str, separators=(",", ":")).encode("utf-8")
+        if len(line) + 1 > max_bytes:
+            line = json.dumps({"t": event.get("t"), "kind": event.get("kind", "event"),
+                               "truncated": True}, separators=(",", ":")).encode("utf-8")
+        if len(line) + 1 > max_bytes:
+            line = b'{"truncated":true}'
+        record = line + b"\n"
         try:
-            line = json.dumps(event, default=str, separators=(",", ":")).encode("utf-8")
-            if len(line) + 1 > max_bytes:
-                line = json.dumps({"t": event.get("t"), "kind": event.get("kind", "event"),
-                                   "truncated": True}, separators=(",", ":")).encode("utf-8")
-            if len(line) + 1 > max_bytes:
-                line = b'{"truncated":true}'
-            record = line + b"\n"
-            try:
-                with open(path, "rb") as f:
-                    f.seek(0, os.SEEK_END)
-                    if f.tell():
-                        f.seek(-1, os.SEEK_END)
-                        if f.read(1) != b"\n":
-                            record = b"\n" + record
-            except FileNotFoundError:
-                pass
-            append_bounded(path, record, max_bytes, preserve_lines=True)
-        finally:
-            if fcntl is not None:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-            else:
-                lock_file.seek(0)
-                msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+            with open(path, "rb") as f:
+                f.seek(0, os.SEEK_END)
+                if f.tell():
+                    f.seek(-1, os.SEEK_END)
+                    if f.read(1) != b"\n":
+                        record = b"\n" + record
+        except FileNotFoundError:
+            pass
+        append_bounded(path, record, max_bytes, preserve_lines=True)
 
 
 def prune_prompt_history(directory: str, keep: int = 20) -> int:

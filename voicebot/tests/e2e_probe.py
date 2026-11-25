@@ -63,10 +63,13 @@ async def mode_zana():
     room = rtc.Room()
     await room.connect(URL, token(target, "probe-a"))
     call = lambda m, p="": room.local_participant.perform_rpc(destination_identity="zana-user", method=m, payload=p, response_timeout=15)
-    shot = await call("zana.screenshot")
+    probe_conversation_id = "0" * 32
+    shot = await call("zana.screenshot", probe_conversation_id)
     print("screenshot:", shot, os.path.getsize(shot) if os.path.isfile(shot) else "MISSING")
     print("screen:", (await call("zana.screen"))[:200])
     await room.disconnect()
+    if os.path.isfile(shot):
+        os.remove(shot)
 
 
 async def mode_agent():
@@ -100,13 +103,13 @@ async def mode_agent():
     def handler(name, answer):
         async def h(data: rtc.RpcInvocationData):
             rpcs.append((name, data.payload))
-            return answer
+            return answer(data.payload) if callable(answer) else answer
         return h
 
-    shot = os.path.join(HOME, "screen.jpg")
     await room.connect(URL, token(room_name, "probe-user", {"client": "zana"}))
     for method, answer in [("zana.screen", "Front app and window now: TextEdit | Untitled"),
-                           ("zana.paste", "pasted at the cursor"), ("zana.screenshot", shot),
+                           ("zana.paste", "pasted at the cursor"),
+                           ("zana.screenshot", lambda payload: os.path.join(HOME, f"screen-{payload}.jpg")),
                            ("zana.mute", "microphone off")]:
         room.local_participant.register_rpc_method(method)(handler(method, answer))
 

@@ -32,9 +32,9 @@ Everything per-user lives in the Voicebot folder,
 | `.env` | Keys and models (never committed; see below) |
 | `system_prompt.md` | Your personal instructions (edit them in Preferences); never overwritten after creation |
 | `.prompt-migration.json` | App-owned record that the one-time legacy tool-guidance offer was made |
-| `config.json` | Terminal switch, wake word and chat model, written by Zana |
+| `config.json` | Terminal switch, wake word, transcript retention and chat model, written by Zana |
 | `mcp.json` | MCP servers, Claude Desktop format |
-| `transcript.md` | Always-on transcript of everything heard and said; retained until you delete it |
+| `transcript.md` | Transcript of everything heard and said; dated lines older than the configured retention window are pruned at conversation start |
 | `logs/` | `debug.jsonl` (most recent 20 MB for the Debug window), plus each process's log |
 | `fillers/` | Cached thinking-sound audio and its manifest |
 | `venv/`, `voices/` | The Python environment and VibeVoice voices |
@@ -42,8 +42,11 @@ Everything per-user lives in the Voicebot folder,
 
 Current tool help is bundled with the app in `tool_guidance.md` and is placed before your personal prompt at runtime. It is not copied into `system_prompt.md`; edits to your personal instructions therefore never remove current tool guidance. Existing prompts are preserved, with a one-time opt-in offer to remove only exact unchanged stock tool-guide lines.
 
-Each terminal job log is capped at 5 MB. Searching the transcript scans bounded
-chunks on a worker thread so a large transcript does not delay Voicebot replies.
+Each terminal job log is capped at 5 MB, named for its conversation, and removed
+when that conversation ends. The default transcript retention is 30 days; set
+it or use Clear Transcript in Preferences > Voicebot. Searching the transcript
+scans bounded chunks on a worker thread so a large transcript does not delay
+Voicebot replies.
 
 Preferences > Model sets the chat model (API key, model, OpenAI-compatible API
 URL), its reasoning level and the vision model; Preferences > Voicebot sets the
@@ -64,6 +67,10 @@ OPENROUTER_API_KEY=... OPENROUTER_MODEL=...   # only used when Preferences > Mod
 - **Wake word** (Preferences): Voicebot sleeps until it hears it. Everything you
   say is still written to `transcript.md`; on the wake word it gets the unread
   part, so it knows what you said while it slept.
+- **Transcript privacy**: Preferences > Voicebot keeps dated transcript lines for
+  30 days by default, prunes older lines when a conversation starts, and has a
+  Clear Transcript action that is safe to use while Voicebot is running. Chat
+  compaction does not extend or shorten this local retention window.
 - **Voice print**: say "set up my voice print" and talk for about ten seconds;
   from then on Voicebot only answers your voice (SpeechBrain ECAPA, run locally;
   only a 192-number voice signature is saved, never audio). Other voices still
@@ -86,24 +93,27 @@ OPENROUTER_API_KEY=... OPENROUTER_MODEL=...   # only used when Preferences > Mod
   their quiet endings. When enabled, clips made with older audio processing are
   regenerated in the background when Voicebot starts; the old cache remains
   available until the replacement is ready. Configure them in Preferences > Voicebot.
-- **Tools**: `see_screen`, `look_at_screen` (vision model), `type_up` (pastes at
-  your cursor), `press_keys`, `stop_listening` (also said with "goodbye"),
-  `search_conversations` (the transcript of every conversation), `run_terminal`,
+- **Tools**: `see_screen`, `look_at_screen` (vision model; its
+  `screen-<conversation-id>.jpg` is removed when that conversation ends),
+  `type_up` (pastes at your cursor), `press_keys`, `stop_listening` (also said with "goodbye"),
+  `search_conversations` (the locally retained transcript across conversations within the configured retention window), `run_terminal`,
   `run_applescript` and `check_job`/`stop_job`/`list_jobs` (only with the Terminal
   Tool switch), and `list/add/remove/reload_mcp_servers` (adding and removing need
   the Terminal Tool switch). Every tool call carries a required "say" field the
   model writes for that call ("Let me check your Downloads folder"); it is spoken
   while the tool runs and never reaches the tool.
 - **Terminal jobs**: a command still running after three seconds keeps going as
-  a job; its output streams to `jobs/<n>.log`, Voicebot gets the job number and
+  a job; its output streams to `jobs/<conversation-id>-job-<n>.log`, Voicebot gets the job number and
   process id, and it is told when the job ends. Long-job replies warn that the
   named job stops when the conversation closes (including orb close or Voicebot
-  settings changes) and cannot be resumed later. Jobs also stop after 15 minutes
-  or when explicitly stopped.
+  settings changes) and cannot be resumed later. When the conversation closes,
+  its log is removed after the job is stopped and its output drain finishes.
+  Jobs also stop after 15 minutes or when explicitly stopped.
 - **Compaction**: past 12,000 characters (besides the instructions), the older
   part of the conversation is folded into a summary and the last three turns stay
   word for word; the Debug window shows each compaction and every reply shows the
-  conversation size. The transcript file keeps everything.
+  conversation size. The transcript file is independently bounded by age or
+  Clear Transcript.
 - **Orb**: drag to move, click to mute, double-click for a new conversation
   (applies prompt, MCP and switch changes), right-click for the Debug window.
 - **Debug window**: every step live: what it heard (and whether it ignored it),

@@ -1,6 +1,9 @@
 //! Commands for Voicebot mode: Preferences settings and the orb window's tools.
 
-use crate::state::{AppState, Settings};
+use crate::state::{
+    AppState, Settings, MAX_VOICEBOT_TRANSCRIPT_RETENTION_DAYS,
+    MIN_VOICEBOT_TRANSCRIPT_RETENTION_DAYS,
+};
 use crate::voicebot;
 use serde::Serialize;
 use std::fs::OpenOptions;
@@ -20,6 +23,7 @@ pub struct VoicebotConfig {
     pub filler_days: u32,
     pub mic_check_minutes: u32,
     pub orb_design: String,
+    pub transcript_retention_days: u32,
     pub voiceprint: bool,
     pub prompt: String,
     pub mcp: String,
@@ -50,6 +54,7 @@ pub async fn get_voicebot_config(
         filler_days: settings.voicebot_filler_days,
         mic_check_minutes: settings.voicebot_mic_check_minutes,
         orb_design: settings.voicebot_orb_design.clone(),
+        transcript_retention_days: settings.voicebot_transcript_retention_days,
         voiceprint: home.join("voiceprint.npy").is_file(),
         prompt,
         mcp: std::fs::read_to_string(home.join("mcp.json")).unwrap_or_else(|_| MCP_EXAMPLE.into()),
@@ -128,6 +133,28 @@ pub async fn set_voicebot_fillers(
             .map(String::from)
             .collect();
         settings.voicebot_filler_days = days.max(1);
+        settings.clone()
+    };
+    state.save_settings().await.map_err(|e| e.to_string())?;
+    voicebot::write_agent_config(&settings).map_err(|e| e.to_string())
+}
+
+/// Keep a bounded amount of the local transcript; age pruning runs at the next conversation start.
+#[tauri::command]
+pub async fn set_voicebot_transcript_retention_days(
+    state: State<'_, AppState>,
+    days: u32,
+) -> Result<(), String> {
+    if !(MIN_VOICEBOT_TRANSCRIPT_RETENTION_DAYS..=MAX_VOICEBOT_TRANSCRIPT_RETENTION_DAYS)
+        .contains(&days)
+    {
+        return Err(format!(
+            "Transcript retention is a whole number from {MIN_VOICEBOT_TRANSCRIPT_RETENTION_DAYS} to {MAX_VOICEBOT_TRANSCRIPT_RETENTION_DAYS} days"
+        ));
+    }
+    let settings = {
+        let mut settings = state.settings.write().await;
+        settings.voicebot_transcript_retention_days = days;
         settings.clone()
     };
     state.save_settings().await.map_err(|e| e.to_string())?;
@@ -355,19 +382,25 @@ pub async fn voicebot_self_settings(
         "mic_check_minutes": s.voicebot_mic_check_minutes,
         "orb_design": s.voicebot_orb_design,
         "mood_minutes": s.voicebot_mood_minutes,
+        "transcript_retention_days": s.voicebot_transcript_retention_days,
         "orb_designs": ORB_DESIGNS,
         "terminal": s.voicebot_terminal,
         "voice_print": home.join("voiceprint.npy").is_file(),
     }))
 }
 
-/// Path of a fresh screenshot for the agent's vision tool.
+/// Path of a fresh screenshot for the calling conversation's vision tool.
 #[tauri::command]
-pub async fn voicebot_screenshot() -> Result<String, String> {
-    tokio::task::spawn_blocking(voicebot::screenshot)
+pub async fn voicebot_screenshot(conversation_id: String) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || voicebot::screenshot(&conversation_id))
         .await
         .map_err(|e| e.to_string())?
         .map(|p| p.display().to_string())
+}
+
+#[tauri::command]
+pub async fn clear_voicebot_transcript() -> Result<(), String> {
+    voicebot::clear_transcript()
 }
 
 #[tauri::command]

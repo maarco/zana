@@ -25,7 +25,9 @@ installation, usage, status, or troubleshooting are historical. Use
   Terminal Tool is off by default; MCP servers can be configured separately.
 - **Local transcript**: Voicebot saves everything it hears and says in
   `~/Library/Application Support/Zana/voicebot/transcript.md`, including while a
-  configured wake word has it asleep.
+  configured wake word has it asleep. Dated lines older than the 30-day default
+  are pruned at conversation start, and Preferences > Voicebot can clear it or
+  change retention.
 - **No usage analytics**: Settings stay local; transcript text and tool data
   are sent only to the model endpoint when used for a request.
 

@@ -12,8 +12,11 @@ your conversations.
 
 Voicebot uses the microphone while it is running. A local LiveKit server passes
 the audio to the local Parakeet speech-to-text model; microphone audio is not
-sent to the chat model. Voicebot writes a transcript of what it hears and says
-to `~/Library/Application Support/Zana/voicebot/transcript.md`.
+sent to the chat model. Voicebot writes a transcript of what it hears and says to
+`~/Library/Application Support/Zana/voicebot/transcript.md`. Dated lines older
+than the configured retention window are pruned when a conversation starts;
+the default is 30 days. Preferences > Voicebot lets you change the window or
+use Clear Transcript while Voicebot is running.
 
 By default, the wake word is empty, so Voicebot answers each recognized turn.
 If you set a wake word in Preferences > Voicebot, speech is still transcribed
@@ -54,14 +57,16 @@ model endpoint in Preferences > Model.
 
 Voicebot stores its files in `~/Library/Application Support/Zana/voicebot/`.
 This includes the transcript, prompt, configuration, optional `.env` and MCP
-settings, logs, voice assets, and `screen.jpg` (the most recent screenshot,
-which remains there until replaced or deleted). Zana's other settings and
-application data are also stored locally under `~/Library/Application Support/Zana/`.
-Use Preferences > Voicebot > Open Folder to inspect the Voicebot files. The transcript
-is retained until you delete it. Operational history is bounded: `logs/debug.jsonl`
+settings, logs, voice assets, and a conversation-scoped screenshot
+`screen-<conversation-id>.jpg` for the active conversation. The screenshot and
+that conversation's terminal job logs are removed when the conversation ends.
+Zana's other settings and application data are also stored locally under
+`~/Library/Application Support/Zana/`. Use Preferences > Voicebot > Open Folder
+to inspect the Voicebot files. Operational history is bounded: `logs/debug.jsonl`
 keeps at most 20 MB, each terminal job log keeps at most 5 MB, and prompt history
 keeps the 20 newest prompt backups. Transcript search reads bounded chunks off the
-agent event loop; it does not truncate the transcript.
+agent event loop; age pruning removes only dated transcript lines, while Clear
+Transcript removes all local transcript text and resets its unread marker.
 
 On first launch, Zana downloads Python packages, local speech models, and voice
 assets needed to run Voicebot. The app checks GitHub for release information

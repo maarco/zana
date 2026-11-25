@@ -29,8 +29,47 @@ class JobsTest(unittest.TestCase):
                 await job.task
                 self.assertEqual(job.exit_code, 3)
                 self.assertIn("hello-job", job.output())
-                self.assertTrue(os.path.isfile(os.path.join(home, "jobs", "1.log")))
+                self.assertTrue(job.log.endswith(f"{jobs.conversation_id}-job-1.log"))
+                self.assertTrue(os.path.isfile(job.log))
                 self.assertIn("finished with exit code 3", job.summary())
+        asyncio.run(run())
+
+    def test_cleanup_removes_only_this_conversations_logs(self):
+        async def run():
+            with tempfile.TemporaryDirectory() as home:
+                folder = Path(home, "jobs")
+                folder.mkdir()
+                sentinel = folder / "unrelated.log"
+                sentinel.write_text("keep")
+                first = Jobs(home, conversation_id="a" * 32)
+                second = Jobs(home, conversation_id="b" * 32)
+                first_job = await first.start("echo first")
+                second_job = await second.start("echo second")
+                await asyncio.gather(first_job.task, second_job.task)
+
+                self.assertNotEqual(first_job.log, second_job.log)
+                self.assertTrue(Path(first_job.log).exists())
+                self.assertTrue(Path(second_job.log).exists())
+                await first.cleanup()
+                self.assertFalse(Path(first_job.log).exists())
+                self.assertTrue(Path(second_job.log).exists())
+                self.assertTrue(sentinel.exists())
+                await second.cleanup()
+
+        asyncio.run(run())
+
+    def test_cleanup_stops_running_job_before_removing_its_log(self):
+        async def run():
+            with tempfile.TemporaryDirectory() as home:
+                jobs = Jobs(home, conversation_id="c" * 32)
+                job = await jobs.start("sleep 30")
+                self.assertTrue(Path(job.log).exists())
+
+                await jobs.cleanup()
+
+                self.assertFalse(Path(job.log).exists())
+                self.assertIsNotNone(job.ended)
+
         asyncio.run(run())
 
     def test_slow_command_reports_running_and_can_be_stopped(self):
