@@ -6,6 +6,16 @@ This project follows SemVer once public releases begin.
 
 ## Unreleased
 
+## 0.1.7
+
+- First-run setup walks you through Voicebot's permissions and lets you open
+  the relevant macOS settings directly.
+- Voicebot replies are more conversational. Removing old tool guidance from
+  your personal prompt requires consent for that specific cleanup.
+- Voicebot startup and shutdown are more reliable, and local diagnostic logs
+  are bounded.
+- The macOS installer now targets Apple silicon only.
+
 ## 0.1.6
 
 - Voicebot tells you when a new Zana release is out and installs it when you
