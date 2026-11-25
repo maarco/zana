@@ -130,6 +130,7 @@ jobs:
     runs-on: macos-15
     env:
       WHISPER_DONT_GENERATE_BINDINGS: "1"
+      CMAKE_PROJECT_INCLUDE: ${{ github.workspace }}/scripts/whisper-portable.cmake
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -148,7 +149,7 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          key: whisper-bundled-bindings-v1
+          key: whisper-portable-v1
 
       - name: Check formatting
         run: cargo fmt --all -- --check
@@ -223,6 +224,7 @@ jobs:
       TAG: ${{ needs.validate.outputs.tag }}
       APP_PATH: target/aarch64-apple-darwin/release/bundle/macos/Zana.app
       WHISPER_DONT_GENERATE_BINDINGS: "1"
+      CMAKE_PROJECT_INCLUDE: ${{ github.workspace }}/scripts/whisper-portable.cmake
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -241,7 +243,7 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          key: whisper-bundled-bindings-v1
+          key: whisper-portable-v1
 
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version "^2" --locked
