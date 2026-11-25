@@ -8,6 +8,8 @@
     <string>Zana</string>
     <key>NSAccessibilityUsageDescription</key>
     <string>Zana needs accessibility access to listen for keyboard shortcuts (Fn key) so you can start recording with a single press.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Zana uses Apple Events to type or paste text, send key presses, read the frontmost app, and run AppleScript tools you request.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Zana needs microphone access to record your voice for transcription.</string>
     <key>LSRequiresCarbon</key>

@@ -896,7 +896,8 @@ class Voicebot(Agent):
                 return f"Couldn't press {combo}: {exc}." + SAY
             code, out = await osascript(script)
             if code != 0:
-                return f"Pressing {combo} failed: {out.strip()[:200]} (Zana may need Accessibility permission)." + SAY
+                return (f"Pressing {combo} failed: {out.strip()[:200]} (Zana may need Accessibility and "
+                        "Automation permission; check System Settings > Privacy & Security.)" + SAY)
             await asyncio.sleep(0.05)
         return f"Pressed {keys}." + SAY
 
@@ -911,6 +912,9 @@ class Voicebot(Agent):
         if not self.terminal:
             return "AppleScript needs the Terminal Tool switch in Zana's Preferences." + SAY
         code, out = await osascript(script, timeout=60)
+        if code != 0:
+            return (f"AppleScript failed (exit code {code}): {out.strip()[:300]} (Zana may need "
+                    "Automation permission in System Settings > Privacy & Security > Automation.)" + SAY)
         return f"exit code {code}\n{out}" + SAY
 
     @function_tool()

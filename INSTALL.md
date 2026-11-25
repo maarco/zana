@@ -79,9 +79,14 @@ check the API URL, credentials, model ID, and provider access to that model.
   It is not needed just to speak with Voicebot. Grant it only if you want those
   actions; manage it in System Settings > Privacy & Security > Accessibility.
 - Screen Recording is needed only when Voicebot captures a screenshot after you
-  ask it to look at your screen. It is not needed for voice conversations.
-- macOS may also ask to let Zana control System Events for keyboard actions or
-  reading the frontmost app and window title.
+  ask it to look at your screen. It is not needed for voice conversations. If a
+  screenshot is denied, return to the onboarding permission screen and use the
+  Screen Recording > Open Settings action; after allowing Zana, retrying works
+  without relaunching the app.
+- Automation lets Zana control System Events for keyboard actions, pasting, and
+  reading the frontmost app and window title. macOS asks the first time one of
+  these actions runs. If it was denied, enable Zana under System Settings >
+  Privacy & Security > Automation, then retry the action.
 
 ## Check the setup
 

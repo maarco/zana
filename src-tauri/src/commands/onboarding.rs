@@ -31,6 +31,18 @@ pub fn check_accessibility_permission() -> bool {
     onboarding::check_accessibility()
 }
 
+/// Check Screen Recording permission without prompting.
+#[tauri::command]
+pub fn check_screen_recording_permission() -> bool {
+    onboarding::check_screen_recording()
+}
+
+/// Check Automation permission for the System Events actions used by Voicebot without prompting.
+#[tauri::command]
+pub fn check_automation_permission() -> bool {
+    onboarding::check_automation()
+}
+
 /// Open System Settings to Accessibility pane (macOS only)
 ///
 /// On macOS, opens System Settings directly to the Accessibility pane.
@@ -40,6 +52,22 @@ pub fn open_accessibility_settings() {
     log::info!("[Onboarding] open_accessibility_settings command called");
     onboarding::open_accessibility_settings();
     log::info!("[Onboarding] open_accessibility_settings completed");
+}
+
+/// Open System Settings to the Screen Recording pane.
+#[tauri::command]
+pub fn open_screen_recording_settings() {
+    log::info!("[Onboarding] open_screen_recording_settings command called");
+    onboarding::open_screen_recording_settings();
+    log::info!("[Onboarding] open_screen_recording_settings completed");
+}
+
+/// Open System Settings to the Automation pane.
+#[tauri::command]
+pub fn open_automation_settings() {
+    log::info!("[Onboarding] open_automation_settings command called");
+    onboarding::open_automation_settings();
+    log::info!("[Onboarding] open_automation_settings completed");
 }
 
 /// Open the macOS Microphone privacy settings pane.

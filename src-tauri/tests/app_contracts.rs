@@ -37,6 +37,46 @@ fn onboarding_is_voicebot_setup_without_whisper_download() {
 }
 
 #[test]
+fn mac_permission_recovery_is_wired_without_removing_existing_privacy_contracts() {
+    let onboarding = read_repo_file("src-tauri/src/onboarding.rs");
+    let command_module = read_repo_file("src-tauri/src/commands/onboarding.rs");
+    let main = read_repo_file("src-tauri/src/main.rs");
+    let ui = read_repo_file("src-ui/onboarding.html");
+    let plist = read_repo_file("src-tauri/Info.plist");
+    let entitlements = read_repo_file("src-tauri/entitlements.plist");
+
+    assert!(onboarding.contains("CGPreflightScreenCaptureAccess"));
+    assert!(onboarding.contains("AEDeterminePermissionToAutomateTarget"));
+    assert!(onboarding.contains("Privacy_ScreenCapture"));
+    assert!(onboarding.contains("Privacy_Automation"));
+    for command in [
+        "check_screen_recording_permission",
+        "check_automation_permission",
+        "open_screen_recording_settings",
+        "open_automation_settings",
+    ] {
+        assert!(
+            command_module.contains(command),
+            "onboarding command module must expose {command}"
+        );
+        assert!(
+            main.contains(&format!("commands::{command}")),
+            "main.rs must register {command}"
+        );
+        assert!(
+            ui.contains(&format!("'{command}'")),
+            "onboarding UI must invoke {command}"
+        );
+    }
+
+    assert!(plist.contains("<key>NSAppleEventsUsageDescription</key>"));
+    assert!(plist.contains("Apple Events"));
+    assert!(entitlements.contains("<key>com.apple.security.automation.apple-events</key>"));
+    assert!(entitlements.contains("<key>com.apple.security.device.microphone</key>"));
+    assert!(entitlements.contains("<key>com.apple.security.app-sandbox</key>"));
+}
+
+#[test]
 fn preferences_window_has_tauri_capability() {
     let tauri_config: Value =
         serde_json::from_str(&read_repo_file("src-tauri/tauri.conf.json")).unwrap();

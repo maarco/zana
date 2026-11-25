@@ -75,9 +75,13 @@ transcript. Zana does not send usage analytics or telemetry to a Zana service.
 - Accessibility: lets Voicebot paste text and send keyboard presses when you
   use its computer-control tools. It is not required for speech recognition.
 - Screen Recording: lets Voicebot capture a screenshot when you ask it to look
-  at your screen. It is not required for voice conversations.
-- Automation: macOS may ask to let Zana control System Events for keyboard
-  actions or to read the frontmost app and window title.
+  at your screen. It is not required for voice conversations. If access is
+  denied, Zana provides a Screen Recording Settings recovery path and checks
+  again after you grant access; a relaunch is not required.
+- Automation: lets Zana use Apple Events through System Events for keyboard
+  actions, pasting, frontmost-app context, and AppleScript tools you request.
+  macOS may ask on the first action. If access is denied, enable Zana under
+  System Settings > Privacy & Security > Automation.
 
 You can review or revoke these permissions in System Settings > Privacy &
 Security. If you delete local transcript or screenshot files, that does not

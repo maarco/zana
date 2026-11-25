@@ -1,0 +1,1 @@
+Onboarding checks Screen Recording and Automation without prompting and provides direct System Settings recovery actions. Screenshot, paste, and Voicebot AppleScript failures now explain the permission needed and how to retry after granting it.
