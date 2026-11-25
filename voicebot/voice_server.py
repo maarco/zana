@@ -26,6 +26,7 @@ CUSTOM_VOICES = os.path.join(VOICEBOT_HOME, "voices", "custom")  # extra .pt voi
 from vibevoice.modular.modeling_vibevoice_streaming_inference import VibeVoiceStreamingForConditionalGenerationInference
 from vibevoice.processor.vibevoice_streaming_processor import VibeVoiceStreamingProcessor
 from vibevoice.modular.streamer import AudioStreamer
+from generation_health import GenerationHealth
 
 log = logging.getLogger("voice_server")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -56,6 +57,7 @@ def _transcribe(path):
 # ---------- TTS: VibeVoice Realtime 0.5B (PyTorch MPS) ----------
 DEVICE = "mps" if torch.backends.mps.is_available() else "cpu"
 tts_lock = threading.Lock()
+tts_health = GenerationHealth()
 # live-tunable from the page's Voice settings tab: cfg = how tightly it follows the voice sample,
 # steps = diffusion steps (cleaner, slower), seed = same noise every sentence (-1 = random each time)
 TTS_SETTINGS = {"cfg": float(os.getenv("VIBEVOICE_CFG", "1.5")), "steps": int(os.getenv("VIBEVOICE_STEPS", "5")),
@@ -87,25 +89,26 @@ def _voice(name):
 def _tts_generate(text, voice, streamer, stop=None):
     try:
         with tts_lock:
-            if stop is not None and stop.is_set():
-                return
-            prefill = _voice(voice)
-            model_steps, seed = TTS_SETTINGS["steps"], TTS_SETTINGS["seed"]
-            _tts["model"].set_ddpm_inference_steps(num_steps=model_steps)
-            if seed >= 0:
-                torch.manual_seed(seed)  # the diffusion head draws its noise from torch's global generator
-            proc, model = _tts["proc"], _tts["model"]
-            inputs = proc.process_input_with_cached_prompt(text=text, cached_prompt=prefill, padding=True,
-                                                           return_tensors="pt", return_attention_mask=True)
-            for k, v in inputs.items():
-                if torch.is_tensor(v):
-                    inputs[k] = v.to(DEVICE)
-            t0 = time.time()
-            model.generate(**inputs, max_new_tokens=None, cfg_scale=TTS_SETTINGS["cfg"],
-                           tokenizer=proc.tokenizer, generation_config={"do_sample": False}, verbose=False,
-                           audio_streamer=streamer, all_prefilled_outputs=copy.deepcopy(prefill),
-                           stop_check_fn=(stop.is_set if stop is not None else None))
-            log.info("TTS done in %.2fs: %r", time.time() - t0, text[:80])
+            with tts_health.generation():
+                if stop is not None and stop.is_set():
+                    return
+                prefill = _voice(voice)
+                model_steps, seed = TTS_SETTINGS["steps"], TTS_SETTINGS["seed"]
+                _tts["model"].set_ddpm_inference_steps(num_steps=model_steps)
+                if seed >= 0:
+                    torch.manual_seed(seed)  # the diffusion head draws its noise from torch's global generator
+                proc, model = _tts["proc"], _tts["model"]
+                inputs = proc.process_input_with_cached_prompt(text=text, cached_prompt=prefill, padding=True,
+                                                               return_tensors="pt", return_attention_mask=True)
+                for k, v in inputs.items():
+                    if torch.is_tensor(v):
+                        inputs[k] = v.to(DEVICE)
+                t0 = time.time()
+                model.generate(**inputs, max_new_tokens=None, cfg_scale=TTS_SETTINGS["cfg"],
+                               tokenizer=proc.tokenizer, generation_config={"do_sample": False}, verbose=False,
+                               audio_streamer=streamer, all_prefilled_outputs=copy.deepcopy(prefill),
+                               stop_check_fn=(stop.is_set if stop is not None else None))
+                log.info("TTS done in %.2fs: %r", time.time() - t0, text[:80])
     except Exception:
         log.exception("TTS failed")
     finally:
@@ -129,6 +132,8 @@ def startup():
 
 @app.get("/health")
 def health():
+    if tts_health.stalled():
+        return PlainTextResponse("speech generation stalled", status_code=503)
     return PlainTextResponse("ok")
 
 @app.get("/v1/voices")

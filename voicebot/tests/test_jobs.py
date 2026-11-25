@@ -19,6 +19,7 @@ class JobsTest(unittest.TestCase):
         self.assertIn("job 12", warning)
         self.assertIn("stopped", warning)
         self.assertIn("conversation ends", warning)
+        self.assertIn("restarts after a service failure", warning)
         self.assertIn("cannot be resumed", warning)
 
     def test_quick_command_finishes_with_output_and_exit_code(self):
@@ -55,7 +56,7 @@ class JobsTest(unittest.TestCase):
             with tempfile.TemporaryDirectory() as home:
                 jobs = Jobs(home)
                 job = await jobs.start("sleep 30")
-                jobs.stop_all()
+                self.assertEqual(jobs.stop_all(), [1])
                 await asyncio.wait_for(job.task, 5)
                 self.assertTrue(job.quiet)
         asyncio.run(run())
