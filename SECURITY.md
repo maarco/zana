@@ -31,6 +31,7 @@ Treat these as high risk:
 - accessibility permissions
 - paste-at-cursor automation
 - clipboard and screenshot context
+- optional rewrite provider requests
 - Terminal Tool shell commands
 - AppleScript app automation
 - key presses sent to the active app
