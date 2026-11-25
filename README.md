@@ -308,24 +308,32 @@ export APPLE_APP_PASSWORD="app-specific-password"
 export APPLE_TEAM_ID="TEAMID"
 ./scripts/release-macos.sh
 
-# Cut a GitHub release from a clean tree.
-./scripts/cut-release.sh v0.1.1
 ```
 
-Pushing an annotated `vX.Y.Z` tag on a `main` commit starts the release:
-`.github/workflows/release.yml` checks that `Cargo.toml` and `tauri.conf.json`
-carry the tag's version, builds, signs, notarizes and staples the Apple silicon
-DMG, and publishes the GitHub release; it refuses to replace an existing
-release. `cut-release.sh` runs the same checks locally first and pushes the
-tag. To re-run a release for a tag that already exists:
+To ship, open a version-bump PR that updates `Cargo.toml`, `Cargo.lock`,
+`src-tauri/tauri.conf.json`, and `CHANGELOG.md`. **Merging the PR approves
+publication.** After CI passes on `main`, the Release workflow builds, signs,
+notarizes, and verifies an Apple silicon DMG and its checksum. Only then does
+it create the annotated tag and publish the GitHub release. An already
+published version is skipped; existing releases are never overwritten.
+
+To test packaging without signing credentials, tagging, or publishing, run:
 
 ```bash
-gh workflow run release.yml --ref main -f tag=v0.1.2
+gh workflow run release.yml --ref main -f preview=true
 ```
 
-Signing mode `developer-id` (default) signs, notarizes and staples the DMG and
-fails before the build if a secret is missing. `-f signing=unsigned` ships an
-ad-hoc sealed build with quarantine instructions in the release notes.
+Download the ad-hoc sealed DMG from the preview run's Actions artifacts.
+For recovery only, if the release failed after creating the tag, rerun the
+workflow for that exact existing tag from `main`:
+
+```bash
+gh workflow run release.yml --ref main -f tag=v0.1.7
+```
+
+Normal releases always use Developer ID signing and notarization. A manual
+tagged run with `-f signing=unsigned` publishes an ad-hoc sealed build
+instead; use `preview=true` for non-publishing tests.
 
 Repository secrets for `developer-id`:
 `APPLE_CERTIFICATE` (base64 .p12), `APPLE_CERTIFICATE_PASSWORD`,
