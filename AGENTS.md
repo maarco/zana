@@ -22,11 +22,23 @@ The root `Cargo.toml` currently declares only `src-tauri` as a workspace member,
 
 ## Before Editing
 
-1. Run `git status --short` and preserve unrelated local changes.
-2. Read the live codepath before changing it; some docs describe planned or migrated designs.
-3. Keep edits scoped to the requested behavior. Do not clean up unrelated files opportunistically.
-4. Do not commit generated build outputs, Whisper models, `.DS_Store`, `target/`, or local app data.
-5. Avoid changing `Cargo.lock` unless dependencies actually change.
+1. Run `git --no-optional-locks status --short --branch` before editing. Identify the active branch and any existing changes; preserve work you did not create.
+2. Treat `main` as read-only for implementation. Use a task branch based on `origin/main`, or a dedicated worktree if the current checkout is shared or dirty. If no suitable branch exists and branch creation is not authorized, stop and ask before editing. Do not switch a dirty checkout, stash or move its changes, or reset it without approval.
+3. Read the live codepath before changing it; some docs describe planned or migrated designs. Keep edits scoped to the requested behavior.
+4. Do not commit generated build outputs, Whisper models, `.DS_Store`, `target/`, or local app data. Change `Cargo.lock` only when dependencies or the workspace package version change.
+
+## Branch and Pull Request Policy
+
+- Never commit directly to `main`, push directly to `main`, force-push a shared branch, or bypass required checks. Apply changes to `main` through a pull request with passing required CI and maintainer approval.
+- Local edits, commits, pushes, opening a PR, and merging are separate actions. Only perform the actions the user authorized. If the task is only to inspect or prepare, leave Git history and GitHub untouched.
+- If you discover work started on `main`, stop, report the exact files affected, and ask where to continue. Do not silently revert the edits or carry them into another branch.
+
+## CI/CD and Releases
+
+1. Land changes to release automation in a separate PR from the version bump, unless the maintainer explicitly approves combining them. Verify the trigger, source commit, permissions, skip and failure paths, and artifact checks. Test packaging in a non-publishing run where available. Keep PR CI free of signing secrets and publishing permissions; never run untrusted PR code with those privileges.
+2. Prepare a release in a version-bump PR. Keep `Cargo.toml`, `src-tauri/tauri.conf.json`, the workspace version entry in `Cargo.lock`, and `CHANGELOG.md` in sync. Confirm required CI passed on the commit being released. If merging the version bump automatically publishes, tell the maintainer before merge and treat merge approval as release approval.
+3. Do not push release tags, dispatch a publishing run, or publish assets without explicit release authorization. Check the current workflow before acting; do not assume an unmerged automation change is live. Never move or reuse a published tag or overwrite release assets to recover from a failure.
+4. Before reporting a release shipped, verify the completed release run, its source commit and tag, and the published artifact. Before replacing an installed app, confirm the installation target is authorized, check the DMG checksum, expected Developer ID and notarization, and preserve the previous app for rollback. After installing, verify the bundle version at the target path. Do not treat a green build as proof of publication or installation.
 
 ## Common Commands
 

@@ -1,17 +1,24 @@
 name: Release
 
-# Release controller. Pushing an annotated
-# vX.Y.Z tag on a main commit starts it; it can also be run by hand from main
-# for an existing tag (a re-run). scripts/cut-release.sh checks and pushes the tag.
+# A new version on main ships after CI passes. Existing annotated tags can
+# still be pushed or dispatched for recovery.
 on:
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
   push:
     tags: ["v*.*.*"]
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing annotated release tag (vX.Y.Z)
-        required: true
+        description: Existing annotated release tag (required unless preview is selected)
+        required: false
         type: string
+      preview:
+        description: Build an ad-hoc sealed DMG from main without tagging or publishing
+        type: boolean
+        default: false
       signing:
         description: developer-id signs and notarizes (fails if a secret is missing); unsigned ad-hoc seals only
         type: choice
@@ -19,7 +26,7 @@ on:
         default: developer-id
 
 concurrency:
-  group: release
+  group: ${{ inputs.preview && 'release-preview' || 'release' }}
   cancel-in-progress: false
 
 permissions:
@@ -31,9 +38,15 @@ env:
 
 jobs:
   validate:
-    name: Validate tag and versions
+    name: Validate release source and versions
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     outputs:
+      ready: ${{ steps.source.outputs.ready }}
       tag: ${{ steps.source.outputs.tag }}
       tag_object: ${{ steps.source.outputs.tag_object }}
       sha: ${{ steps.source.outputs.sha }}
@@ -42,7 +55,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -50,38 +63,71 @@ jobs:
         id: source
         env:
           TAG: ${{ inputs.tag || github.ref_name }}
+          PREVIEW: ${{ inputs.preview || false }}
+          CI_SHA: ${{ github.event.workflow_run.head_sha }}
           GH_TOKEN: ${{ github.token }}
         run: |
+          if [ "$GITHUB_EVENT_NAME" = workflow_run ]; then
+            sha="$CI_SHA"
+            if [ "$sha" != "$(git rev-parse refs/remotes/origin/main)" ]; then
+              echo "Skipping stale main CI run: $sha"
+              exit 0
+            fi
+            version="$(git show "$sha:Cargo.toml" | sed -n 's/^version = "\(.*\)"/\1/p' | head -1)"
+            TAG="v$version"
+            tag_object=""
+          elif [ "$PREVIEW" = true ]; then
+            sha="$GITHUB_SHA"
+            version="$(git show "$sha:Cargo.toml" | sed -n 's/^version = "\(.*\)"/\1/p' | head -1)"
+            TAG="v$version"
+            tag_object=""
+          else
+            sha="$(git rev-parse "refs/tags/$TAG^{commit}")" || { echo "::error::$TAG does not resolve to a commit"; exit 1; }
+          fi
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             [ "$GITHUB_REF" = "refs/tags/$TAG" ] || { echo "::error::Unexpected ref $GITHUB_REF for tag $TAG"; exit 1; }
-          else
+          elif [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
             [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::Run this workflow from main (got $GITHUB_REF)"; exit 1; }
           fi
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]] || { echo "::error::Tag must look like v1.2.3: $TAG"; exit 1; }
-          [ "$(git cat-file -t "refs/tags/$TAG" 2>/dev/null)" = tag ] || { echo "::error::$TAG is not an existing annotated tag"; exit 1; }
-          tag_object="$(git rev-parse "refs/tags/$TAG")"
-          sha="$(git rev-parse "refs/tags/$TAG^{commit}")" || { echo "::error::$TAG does not resolve to a commit"; exit 1; }
-          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main || { echo "::error::Commit $GITHUB_SHA is not on origin/main"; exit 1; }
-          git merge-base --is-ancestor "$sha" "$GITHUB_SHA" || { echo "::error::$TAG is not an ancestor of $GITHUB_SHA"; exit 1; }
-          remote_tag_object="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq 'select(.object.type == "tag") | .object.sha')" || { echo "::error::Could not read the remote tag $TAG"; exit 1; }
-          [ "$remote_tag_object" = "$tag_object" ] || { echo "::error::Remote tag $TAG changed since checkout"; exit 1; }
+          if [ "$GITHUB_EVENT_NAME" != workflow_run ] && [ "$PREVIEW" != true ]; then
+            [ "$(git cat-file -t "refs/tags/$TAG" 2>/dev/null)" = tag ] || { echo "::error::$TAG is not an existing annotated tag"; exit 1; }
+            tag_object="$(git rev-parse "refs/tags/$TAG")"
+            git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main || { echo "::error::Commit $GITHUB_SHA is not on origin/main"; exit 1; }
+            git merge-base --is-ancestor "$sha" "$GITHUB_SHA" || { echo "::error::$TAG is not an ancestor of $GITHUB_SHA"; exit 1; }
+            remote_tag_object="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq 'select(.object.type == "tag") | .object.sha')" || { echo "::error::Could not read the remote tag $TAG"; exit 1; }
+            [ "$remote_tag_object" = "$tag_object" ] || { echo "::error::Remote tag $TAG changed since checkout"; exit 1; }
+          fi
           want="${TAG#v}"
           cargo_version="$(git show "$sha:Cargo.toml" | sed -n 's/^version = "\(.*\)"/\1/p' | head -1)"
           tauri_version="$(git show "$sha:src-tauri/tauri.conf.json" | jq -r .version)"
           [ "$cargo_version" = "$want" ] || { echo "::error::Cargo.toml version $cargo_version != $want"; exit 1; }
           [ "$tauri_version" = "$want" ] || { echo "::error::tauri.conf.json version $tauri_version != $want"; exit 1; }
+          if [ "$PREVIEW" = true ]; then
+            { echo "ready=true"; echo "tag=$TAG"; echo "sha=$sha"; } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if response="$(gh api --include "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" 2>&1)"; then
+            if [ "$GITHUB_EVENT_NAME" = workflow_run ]; then
+              echo "Skipping already published version $TAG"
+              exit 0
+            fi
             echo "::error::A GitHub release for $TAG already exists"; exit 1
           elif [[ ! "$response" =~ ^HTTP/[^[:space:]]+[[:space:]]+404([[:space:]]|$) ]]; then
             echo "::error::Could not check for an existing release: ${response%%$'\n'*}"; exit 1
           fi
+          if [ "$GITHUB_EVENT_NAME" = workflow_run ] && git show-ref --verify --quiet "refs/tags/$TAG"; then
+            echo "::error::$TAG already exists without a release; dispatch this workflow with that tag to recover"
+            exit 1
+          fi
           case "$TAG" in *alpha*|*beta*|*rc*) pre=true ;; *) pre=false ;; esac
-          { echo "tag=$TAG"; echo "tag_object=$tag_object"; echo "sha=$sha"; echo "prerelease=$pre"; } >> "$GITHUB_OUTPUT"
+          { echo "ready=true"; echo "tag=$TAG"; echo "tag_object=$tag_object"; echo "sha=$sha"; echo "prerelease=$pre"; } >> "$GITHUB_OUTPUT"
 
   verify:
     name: Verify release candidate
     needs: validate
-    runs-on: macos-15-intel
+    if: needs.validate.outputs.ready == 'true'
+    runs-on: macos-15
     env:
       WHISPER_DONT_GENERATE_BINDINGS: "1"
     steps:
@@ -122,7 +168,7 @@ jobs:
   preflight:
     name: Check signing secrets and notary login
     needs: validate
-    if: (inputs.signing || 'developer-id') == 'developer-id'
+    if: needs.validate.outputs.ready == 'true' && !inputs.preview && (inputs.signing || 'developer-id') == 'developer-id'
     runs-on: macos-15
     steps:
       - name: Check signing secrets before the long build
@@ -170,10 +216,10 @@ jobs:
   build-macos:
     name: Build Apple silicon app
     needs: [validate, verify, preflight]
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ needs.validate.outputs.ready == 'true' && !failure() && !cancelled() }}
     runs-on: macos-15
     env:
-      SIGNING: ${{ inputs.signing || 'developer-id' }}
+      SIGNING: ${{ (inputs.preview && 'unsigned') || inputs.signing || 'developer-id' }}
       TAG: ${{ needs.validate.outputs.tag }}
       APP_PATH: target/aarch64-apple-darwin/release/bundle/macos/Zana.app
       WHISPER_DONT_GENERATE_BINDINGS: "1"
@@ -210,7 +256,7 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Contents/Info.plist")" = "${TAG#v}"
 
       - name: Import Developer ID certificate
-        if: (inputs.signing || 'developer-id') == 'developer-id'
+        if: env.SIGNING == 'developer-id'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -229,7 +275,7 @@ jobs:
           rm -f "$CERTIFICATE_PATH"
 
       - name: Sign Apple silicon app (Developer ID)
-        if: (inputs.signing || 'developer-id') == 'developer-id'
+        if: env.SIGNING == 'developer-id'
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
@@ -251,7 +297,7 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
       - name: Seal Apple silicon app (ad-hoc, unsigned mode)
-        if: (inputs.signing || 'developer-id') == 'unsigned'
+        if: env.SIGNING == 'unsigned'
         run: |
           # Unsigned arm64 binaries are killed at load; an ad-hoc seal lets the
           # app start after the user clears quarantine.
@@ -271,7 +317,7 @@ jobs:
           echo "DMG_PATH=$DMG_PATH" >> "$GITHUB_ENV"
 
       - name: Sign, notarize and staple DMG
-        if: (inputs.signing || 'developer-id') == 'developer-id'
+        if: env.SIGNING == 'developer-id'
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -328,7 +374,7 @@ jobs:
           shasum -a 256 "$DMG_PATH" > "$DMG_PATH.sha256"
 
       - name: Clean up signing keychain
-        if: always() && (inputs.signing || 'developer-id') == 'developer-id'
+        if: always() && env.SIGNING == 'developer-id'
         run: security delete-keychain "$RUNNER_TEMP/zana-signing.keychain-db" || true
 
       - name: Upload macOS artifact
@@ -341,6 +387,7 @@ jobs:
   release:
     name: Publish GitHub release
     needs: [validate, build-macos]
+    if: ${{ !inputs.preview }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -355,9 +402,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.validate.outputs.tag }}
           TAG_OBJECT: ${{ needs.validate.outputs.tag_object }}
+          RELEASE_SHA: ${{ needs.validate.outputs.sha }}
           PRERELEASE: ${{ needs.validate.outputs.prerelease }}
-          SIGNING: ${{ inputs.signing || 'developer-id' }}
+          SIGNING: ${{ (inputs.preview && 'unsigned') || inputs.signing || 'developer-id' }}
         run: |
+          DMG="Zana-$TAG-apple-silicon.dmg"
+          test -s "$DMG"
+          test -s "$DMG.sha256"
+          sha256sum --check --strict "$DMG.sha256"
+          if [ "$GITHUB_EVENT_NAME" = workflow_run ]; then
+            # Create an annotated tag only after the signed package has passed verification.
+            main_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+            if [ "$main_sha" != "$RELEASE_SHA" ]; then
+              echo "Skipping stale release candidate $RELEASE_SHA; main is now $main_sha"
+              exit 0
+            fi
+            TAG_OBJECT="$(gh api --method POST "repos/$GITHUB_REPOSITORY/git/tags" \
+              -f tag="$TAG" -f message="Release $TAG" -f object="$RELEASE_SHA" -f type=commit --jq .sha)"
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$TAG" -f sha="$TAG_OBJECT" --silent
+          fi
           remote_tag_object="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq 'select(.object.type == "tag") | .object.sha')" || { echo "::error::Could not read the remote tag $TAG before publishing"; exit 1; }
           [ -n "$TAG_OBJECT" ] && [ "$remote_tag_object" = "$TAG_OBJECT" ] || { echo "::error::Remote tag $TAG changed after validation; refusing to publish"; exit 1; }
           args=(--repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes --title "Zana $TAG")
@@ -369,4 +433,4 @@ jobs:
           2. Right-click Zana, choose **Open**, then **Open** again (once), or run:
              \`xattr -dr com.apple.quarantine /Applications/Zana.app\`")
           fi
-          gh release create "$TAG" Zana-*.dmg Zana-*.dmg.sha256 "${args[@]}"
+          gh release create "$TAG" "$DMG" "$DMG.sha256" "${args[@]}"
