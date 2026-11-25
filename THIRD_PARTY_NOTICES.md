@@ -62,6 +62,8 @@ them as legal clearance for commercial redistribution.
 
 Model card: https://huggingface.co/microsoft/VibeVoice-Realtime-0.5B
 License field: https://huggingface.co/microsoft/VibeVoice-Realtime-0.5B/raw/main/README.md
+Observed model revision: 6bce5f06044837fe6d2c5d7a71a84f0416bd57e4. The loader
+follows the repository's default revision rather than pinning that snapshot.
 
 ### Parakeet speech-to-text model
 
