@@ -212,7 +212,7 @@ pub fn screenshot() -> Result<PathBuf, String> {
         .map(|s| s.success())
         .unwrap_or(false);
     if !ok || !path.is_file() {
-        return Err("Screen capture failed; Zana may need Screen Recording permission".into());
+        return Err("Screen capture failed because Screen Recording permission is off. Open Settings > Privacy & Security > Screen Recording, allow Zana, then retry; no relaunch is required.".into());
     }
     let _ = std::process::Command::new("/usr/bin/sips")
         .args(["-Z", "1600"])

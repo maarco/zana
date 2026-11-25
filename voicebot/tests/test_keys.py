@@ -26,6 +26,10 @@ class KeyScriptTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 key_script(bad)
 
+    def test_apple_event_failures_explain_permission_recovery(self):
+        self.assertIn("Automation permission", SOURCE)
+        self.assertIn("Privacy & Security > Automation", SOURCE)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -108,6 +108,13 @@ Grant access in System Settings > Privacy & Security > Accessibility
 3. Find **Zana-app** in the list and toggle it **ON**
 4. Restart Zana
 
+The onboarding permission screen also checks Screen Recording and Automation.
+Screen Recording is only needed for the Voicebot screen tool; if a screenshot
+fails, return to that screen and use its **Open Settings** action, then retry
+after allowing Zana. Automation is requested the first time Voicebot types,
+pastes, or runs an AppleScript; if it was denied, enable Zana under **System
+Settings** > **Privacy & Security** > **Automation** and retry without relaunching.
+
 ### 2. Download Whisper Model
 
 On first transcription, Zana will automatically download the Whisper model:
@@ -233,6 +240,12 @@ Zana
 ### "Accessibility permissions not granted"
 
 **Fix:** Grant access in System Settings > Privacy & Security > Accessibility
+
+### Screen capture or AppleScript permission errors
+
+Use the onboarding **Open Settings** action for Screen Recording, or enable Zana
+under System Settings > Privacy & Security > Automation for typing, pasting, and
+AppleScript actions. Return to the app and retry; a relaunch is not required.
 
 ### Fn key not working
 

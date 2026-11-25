@@ -586,7 +586,11 @@ fn main() {
             // Onboarding commands
             commands::is_first_run,
             commands::check_accessibility_permission,
+            commands::check_screen_recording_permission,
+            commands::check_automation_permission,
             commands::open_accessibility_settings,
+            commands::open_screen_recording_settings,
+            commands::open_automation_settings,
             commands::open_microphone_settings,
             commands::open_preferences_window,
             commands::mark_onboarding_complete,
@@ -1347,7 +1351,9 @@ fn stop_recording(app: &tauri::AppHandle) {
                             }
 
                             if !final_text.trim().is_empty() {
-                                paste_text(&final_text);
+                                if let Err(error) = paste_text(&final_text) {
+                                    log::error!("Paste failed: {error}");
+                                }
                             }
                         }
                     } else {
@@ -1520,8 +1526,7 @@ static VOICEBOT_DEBUG_PANEL: StdMutex<Option<tauri_nspanel::PanelHandle<tauri::W
 fn voicebot_paste(text: String) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        paste_text(&text);
-        Ok(())
+        paste_text(&text)
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -1544,29 +1549,43 @@ fn voicebot_dictation(app: &tauri::AppHandle, active: bool) {
 /// Paste text to active input using clipboard + Cmd+V
 /// Transcription stays in clipboard (not restored to original)
 #[cfg(target_os = "macos")]
-fn paste_text(text: &str) {
+fn paste_text(text: &str) -> Result<(), String> {
     use arboard::Clipboard;
 
     log::info!("Pasting {} chars", text.len());
 
     // Set text to clipboard (keeps transcription available even if paste fails)
-    if let Ok(mut clipboard) = Clipboard::new() {
-        if clipboard.set_text(text).is_err() {
-            log::error!("Failed to set clipboard");
-            return;
-        }
-    }
+    let mut clipboard =
+        Clipboard::new().map_err(|error| format!("Failed to access clipboard: {error}"))?;
+    clipboard
+        .set_text(text)
+        .map_err(|error| format!("Failed to set clipboard: {error}"))?;
 
     // Small delay
     std::thread::sleep(std::time::Duration::from_millis(50));
 
     // Simulate Cmd+V using AppleScript
     let script = r#"tell application "System Events" to keystroke "v" using command down"#;
-    let _ = std::process::Command::new("osascript")
+    let output = std::process::Command::new("osascript")
         .args(["-e", script])
-        .output();
+        .output()
+        .map_err(|error| format!("Failed to run osascript: {error}"))?;
+
+    if !output.status.success() {
+        let detail = String::from_utf8_lossy(&output.stderr);
+        let detail = detail.trim();
+        return Err(format!(
+            "Apple Events permission is required to paste. Open Settings > Privacy & Security > Automation and allow Zana to control System Events{}",
+            if detail.is_empty() {
+                ".".to_string()
+            } else {
+                format!(": {detail}")
+            }
+        ));
+    }
 
     // Transcription stays in clipboard - user can paste again if needed
+    Ok(())
 }
 
 // =============================================================================

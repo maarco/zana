@@ -114,3 +114,23 @@ test('completion marker failure is shown in onboarding', async () => {
   assert.equal(completionError.hidden, false);
   assert.match(completionError.textContent, /permission denied/);
 });
+
+test('macOS permission recovery checks and settings actions stay wired', () => {
+  const html = fs.readFileSync(onboardingPath, 'utf8');
+
+  for (const command of [
+    'check_accessibility_permission',
+    'check_screen_recording_permission',
+    'check_automation_permission',
+    'open_accessibility_settings',
+    'open_screen_recording_settings',
+    'open_automation_settings',
+  ]) {
+    assert.match(html, new RegExp(`['"]${command}['"]`), `${command} is wired`);
+  }
+
+  assert.match(html, /Screen Recording: awaiting permission/);
+  assert.match(html, /Automation: allow on first use/);
+  assert.match(html, /openScreenRecordingSettings/);
+  assert.match(html, /openAutomationSettings/);
+});

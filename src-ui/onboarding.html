@@ -264,7 +264,7 @@
     .permission-orb {
       width: 180px;
       height: 180px;
-      margin: 50px 0;
+      margin: 24px 0;
       border-radius: 50%;
       background: radial-gradient(circle at 30% 30%,
         rgba(249, 115, 22, 0.4) 0%,
@@ -338,6 +338,34 @@
 
     .permission-status.granted .dot {
       animation: none;
+    }
+
+    .permission-checks {
+      display: grid;
+      gap: 10px;
+      width: min(100%, 620px);
+    }
+
+    .permission-check {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .permission-check .permission-status {
+      min-width: 0;
+      padding: 10px 18px;
+      font-size: 12px;
+      text-align: left;
+    }
+
+    .permission-settings {
+      margin-top: 0;
+      padding: 10px 14px;
+      font-size: 11px;
+      letter-spacing: 1px;
+      white-space: nowrap;
     }
 
     @keyframes dot-pulse {
@@ -654,11 +682,11 @@
       <button class="skip-voice" onclick="skipVoiceTest()">Continue without testing</button>
     </div>
 
-    <!-- PHASE 2: ACCESSIBILITY -->
+    <!-- PHASE 2: PERMISSIONS -->
     <div class="phase" id="phase-permission">
       <div class="title">Let Voicebot type for you</div>
       <div class="subtitle" id="permission-subtitle">
-        Accessibility lets Voicebot type or paste a reply at your cursor when you ask. You can allow it now or continue and enable it later.
+        Accessibility lets Voicebot type or paste a reply. Screen Recording is used only when you ask it to look at your screen. Automation is requested when Voicebot first controls System Events.
       </div>
       <div class="permission-orb">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--nebula-core)">
@@ -666,11 +694,29 @@
           <path d="M9 12l2 2 4-4"/>
         </svg>
       </div>
-      <div class="permission-status pending" id="permission-status">
-        <span class="dot"></span>
-        <span id="permission-text">Awaiting permission</span>
+      <div class="permission-checks" aria-live="polite">
+        <div class="permission-check">
+          <div class="permission-status pending" id="permission-status">
+            <span class="dot"></span>
+            <span id="permission-text">Accessibility: awaiting permission</span>
+          </div>
+          <button class="btn-permission permission-settings" onclick="openAccessibilitySettings()">Open Settings</button>
+        </div>
+        <div class="permission-check">
+          <div class="permission-status pending" id="screen-recording-status">
+            <span class="dot"></span>
+            <span id="screen-recording-text">Screen Recording: awaiting permission</span>
+          </div>
+          <button class="btn-permission permission-settings" onclick="openScreenRecordingSettings()">Open Settings</button>
+        </div>
+        <div class="permission-check">
+          <div class="permission-status pending" id="automation-status">
+            <span class="dot"></span>
+            <span id="automation-text">Automation: allow on first use</span>
+          </div>
+          <button class="btn-permission permission-settings" onclick="openAutomationSettings()">Open Settings</button>
+        </div>
       </div>
-      <button class="btn-permission" onclick="openAccessibilitySettings()">Open Accessibility Settings</button>
       <button class="btn-continue" onclick="continueToSetup()">Continue anyway</button>
     </div>
 
@@ -702,6 +748,8 @@
       audioLevel: 0,
       isListening: false,
       permissionGranted: false,
+      screenRecordingGranted: false,
+      automationGranted: false,
       genesisProgress: 0, // 0.0 to 1.0 - controls shader evolution
     };
 
@@ -1149,6 +1197,22 @@
       }
     };
 
+    window.openScreenRecordingSettings = async function() {
+      try {
+        await window.__TAURI__.core.invoke('open_screen_recording_settings');
+      } catch (e) {
+        console.error('[Genesis] Failed to open Screen Recording settings:', e);
+      }
+    };
+
+    window.openAutomationSettings = async function() {
+      try {
+        await window.__TAURI__.core.invoke('open_automation_settings');
+      } catch (e) {
+        console.error('[Genesis] Failed to open Automation settings:', e);
+      }
+    };
+
     window.openMicrophoneSettings = async function() {
       try {
         await window.__TAURI__.core.invoke('open_microphone_settings');
@@ -1333,26 +1397,63 @@
     let permissionCheckInterval = null;
 
     async function checkPermissionLoop() {
+      const checks = [
+        {
+          command: 'check_accessibility_permission',
+          statusId: 'permission-status',
+          textId: 'permission-text',
+          label: 'Accessibility',
+          pending: 'open Settings to allow',
+        },
+        {
+          command: 'check_screen_recording_permission',
+          statusId: 'screen-recording-status',
+          textId: 'screen-recording-text',
+          label: 'Screen Recording',
+          pending: 'open Settings to allow',
+        },
+        {
+          command: 'check_automation_permission',
+          statusId: 'automation-status',
+          textId: 'automation-text',
+          label: 'Automation',
+          pending: 'allow on first use or open Settings',
+        },
+      ];
+
+      const updateStatus = (check, granted) => {
+        const statusEl = document.getElementById(check.statusId);
+        const textEl = document.getElementById(check.textId);
+        statusEl.classList.toggle('pending', !granted);
+        statusEl.classList.toggle('granted', granted);
+        textEl.textContent = `${check.label}: ${granted ? 'permission granted' : check.pending}`;
+      };
+
       const check = async () => {
-        try {
-          const granted = await window.__TAURI__.core.invoke('check_accessibility_permission');
-          const statusEl = document.getElementById('permission-status');
-          const textEl = document.getElementById('permission-text');
-
-          if (granted && !state.permissionGranted) {
-            state.permissionGranted = true;
-            state.genesisProgress = 0.5;
-            statusEl.classList.remove('pending');
-            statusEl.classList.add('granted');
-            textEl.textContent = 'Permission granted';
-
-            // Auto-advance after a moment
-            setTimeout(() => {
-              goToPhase(3);
-            }, 2000);
+        const results = await Promise.all(checks.map(async (permission) => {
+          try {
+            return await window.__TAURI__.core.invoke(permission.command);
+          } catch (e) {
+            console.error(`[Genesis] ${permission.label} permission check failed:`, e);
+            return null;
           }
-        } catch (e) {
-          console.error('[Genesis] Permission check failed:', e);
+        }));
+        results.forEach((granted, index) => {
+          if (typeof granted === 'boolean') updateStatus(checks[index], granted);
+        });
+
+        const granted = results[0] === true;
+
+        if (granted && !state.permissionGranted) {
+          state.permissionGranted = true;
+          state.screenRecordingGranted = results[1] === true;
+          state.automationGranted = results[2] === true;
+          state.genesisProgress = 0.5;
+
+          // Auto-advance after a moment
+          setTimeout(() => {
+            goToPhase(3);
+          }, 2000);
         }
       };
 

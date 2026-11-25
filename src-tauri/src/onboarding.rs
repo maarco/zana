@@ -8,6 +8,44 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 
+pub const ACCESSIBILITY_SETTINGS_URL: &str =
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
+pub const SCREEN_RECORDING_SETTINGS_URL: &str =
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture";
+pub const AUTOMATION_SETTINGS_URL: &str =
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation";
+
+#[cfg(target_os = "macos")]
+#[link(name = "CoreGraphics", kind = "framework")]
+extern "C" {
+    fn CGPreflightScreenCaptureAccess() -> bool;
+}
+
+#[cfg(target_os = "macos")]
+#[repr(C)]
+struct AppleEventDescriptor {
+    _descriptor_type: u32,
+    _data_handle: *mut std::ffi::c_void,
+}
+
+#[cfg(target_os = "macos")]
+#[link(name = "ApplicationServices", kind = "framework")]
+extern "C" {
+    fn AECreateDesc(
+        type_code: u32,
+        data_ptr: *const std::ffi::c_void,
+        data_size: std::os::raw::c_long,
+        result: *mut AppleEventDescriptor,
+    ) -> i16;
+    fn AEDisposeDesc(desc: *mut AppleEventDescriptor) -> i16;
+    fn AEDeterminePermissionToAutomateTarget(
+        target: *const AppleEventDescriptor,
+        event_class: u32,
+        event_id: u32,
+        ask_user_if_needed: u8,
+    ) -> i32;
+}
+
 /// Get the Zana config directory
 fn config_dir() -> PathBuf {
     dirs::config_dir()
@@ -67,6 +105,68 @@ pub fn check_accessibility() -> bool {
     }
 }
 
+/// Check Screen Recording without prompting the user.
+pub fn check_screen_recording() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        // CGPreflightScreenCaptureAccess is deliberately non-prompting. A denied TCC entry
+        // must be repaired from System Settings, not by repeatedly asking the user.
+        unsafe { CGPreflightScreenCaptureAccess() }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        true
+    }
+}
+
+/// Check whether Zana may send the representative Apple Event used by System Events.
+///
+/// The check does not prompt. The actual first typing, pasting, or AppleScript action still
+/// goes through `osascript`, which is what lets macOS present its Automation consent prompt.
+pub fn check_automation() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        const TYPE_APPLICATION_BUNDLE_ID: u32 = u32::from_be_bytes(*b"bund");
+        const K_AE_CORE_SUITE: u32 = u32::from_be_bytes(*b"core");
+        const K_AE_GET_DATA: u32 = u32::from_be_bytes(*b"getd");
+        let target_bundle_id = b"com.apple.systemevents";
+        let mut target = AppleEventDescriptor {
+            _descriptor_type: 0,
+            _data_handle: std::ptr::null_mut(),
+        };
+
+        let create_status = unsafe {
+            AECreateDesc(
+                TYPE_APPLICATION_BUNDLE_ID,
+                target_bundle_id.as_ptr().cast(),
+                target_bundle_id.len() as std::os::raw::c_long,
+                &mut target,
+            )
+        };
+        if create_status != 0 {
+            log::warn!(
+                "[Onboarding] Could not create the System Events Apple Event target: status {}",
+                create_status
+            );
+            return false;
+        }
+
+        // ask_user_if_needed = false keeps onboarding status checks from consuming the first
+        // Automation prompt. The real osascript action remains the consent boundary.
+        let status = unsafe {
+            AEDeterminePermissionToAutomateTarget(&target, K_AE_CORE_SUITE, K_AE_GET_DATA, 0)
+        };
+        let _ = unsafe { AEDisposeDesc(&mut target) };
+        status == 0
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        true
+    }
+}
+
 /// Open the platform's Microphone privacy settings pane where supported.
 pub fn open_microphone_settings() {
     #[cfg(target_os = "macos")]
@@ -101,7 +201,7 @@ pub fn open_accessibility_settings() {
 
         // This URL scheme works across all recent macOS versions
         match Command::new("open")
-            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+            .arg(ACCESSIBILITY_SETTINGS_URL)
             .output()
         {
             Ok(output) => {
@@ -128,6 +228,32 @@ pub fn open_accessibility_settings() {
     }
 }
 
+/// Open System Settings to the Screen Recording pane (macOS only).
+pub fn open_screen_recording_settings() {
+    #[cfg(target_os = "macos")]
+    {
+        if let Err(error) = std::process::Command::new("open")
+            .arg(SCREEN_RECORDING_SETTINGS_URL)
+            .spawn()
+        {
+            log::error!("Failed to open Screen Recording privacy settings: {error}");
+        }
+    }
+}
+
+/// Open System Settings to the Automation pane (macOS only).
+pub fn open_automation_settings() {
+    #[cfg(target_os = "macos")]
+    {
+        if let Err(error) = std::process::Command::new("open")
+            .arg(AUTOMATION_SETTINGS_URL)
+            .spawn()
+        {
+            log::error!("Failed to open Automation privacy settings: {error}");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -143,5 +269,12 @@ mod tests {
         let marker = marker_path();
         assert!(marker.ends_with(".onboarding_complete"));
         assert!(marker.ends_with("Zana/.onboarding_complete"));
+    }
+
+    #[test]
+    fn privacy_settings_urls_target_the_expected_panes() {
+        assert!(ACCESSIBILITY_SETTINGS_URL.ends_with("Privacy_Accessibility"));
+        assert!(SCREEN_RECORDING_SETTINGS_URL.ends_with("Privacy_ScreenCapture"));
+        assert!(AUTOMATION_SETTINGS_URL.ends_with("Privacy_Automation"));
     }
 }
