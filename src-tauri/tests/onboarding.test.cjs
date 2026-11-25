@@ -134,3 +134,13 @@ test('macOS permission recovery checks and settings actions stay wired', () => {
   assert.match(html, /openScreenRecordingSettings/);
   assert.match(html, /openAutomationSettings/);
 });
+
+test('screenshot permission denial opens the Screen Recording settings pane', () => {
+  const voicebotPath = path.join(__dirname, '../src/voicebot.rs');
+  const source = fs.readFileSync(voicebotPath, 'utf8');
+
+  assert.match(
+    source,
+    /if !crate::onboarding::check_screen_recording\(\)\s*\{\s*crate::onboarding::open_screen_recording_settings\(\);/,
+  );
+});
