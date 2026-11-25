@@ -69,6 +69,33 @@ pub fn home_dir() -> PathBuf {
         .join("voicebot")
 }
 
+/// Cache roots owned by this Voicebot installation. Keeping model and uv
+/// caches below the app-owned folder prevents cleanup from guessing which
+/// entries in a shared user cache belong to Zana.
+pub fn cache_dir(home: &Path) -> PathBuf {
+    home.join("cache")
+}
+
+pub fn huggingface_cache_dir(home: &Path) -> PathBuf {
+    cache_dir(home).join("huggingface")
+}
+
+pub fn uv_cache_dir(home: &Path) -> PathBuf {
+    cache_dir(home).join("uv")
+}
+
+fn set_cache_environment(command: &mut std::process::Command, home: &Path) {
+    let cache = cache_dir(home);
+    let huggingface = huggingface_cache_dir(home);
+    let huggingface_hub = huggingface.join("hub");
+    let uv = uv_cache_dir(home);
+    command
+        .env("XDG_CACHE_HOME", &cache)
+        .env("HF_HOME", &huggingface)
+        .env("HF_HUB_CACHE", &huggingface_hub)
+        .env("UV_CACHE_DIR", &uv);
+}
+
 /// Where the agent code lives: `ZANA_VOICEBOT_DIR` for development, else the bundled resources.
 pub fn code_dir(resource_dir: Option<PathBuf>) -> PathBuf {
     std::env::var_os("ZANA_VOICEBOT_DIR")
@@ -439,6 +466,7 @@ fn run(code: &Path) -> Result<(), String> {
             .env("PYTHONUNBUFFERED", "1")
             // never write bytecode next to the code: in a signed .app that breaks the seal
             .env("PYTHONPYCACHEPREFIX", home.join("pycache"));
+        set_cache_environment(cmd, &home);
     };
     let voice_port_file = home.join("voice-server.port");
     let _ = std::fs::remove_file(&voice_port_file);
@@ -551,6 +579,10 @@ fn bootstrap_for_arch(
             .args(args)
             .current_dir(code)
             .env("PATH", child_path())
+            .env("XDG_CACHE_HOME", cache_dir(home))
+            .env("HF_HOME", huggingface_cache_dir(home))
+            .env("HF_HUB_CACHE", huggingface_cache_dir(home).join("hub"))
+            .env("UV_CACHE_DIR", uv_cache_dir(home))
             .stdout(log.try_clone().map_err(|e| e.to_string())?)
             .stderr(log)
             .status()
@@ -597,6 +629,9 @@ fn bootstrap_for_arch(
         .current_dir(code)
         .env("VOICEBOT_HOME", home)
         .env("PYTHONPYCACHEPREFIX", home.join("pycache"))
+        .env("XDG_CACHE_HOME", cache_dir(home))
+        .env("HF_HOME", huggingface_cache_dir(home))
+        .env("HF_HUB_CACHE", huggingface_cache_dir(home).join("hub"))
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false);

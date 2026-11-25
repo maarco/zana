@@ -593,6 +593,9 @@ fn main() {
             commands::complete_onboarding_and_restart,
             // Diagnostics
             commands::run_diagnostics,
+            // Data cleanup
+            commands::get_zana_data_inventory,
+            commands::remove_all_zana_data,
             // Settings
             commands::set_orb_style,
             commands::get_orb_style,

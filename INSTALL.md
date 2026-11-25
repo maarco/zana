@@ -55,6 +55,39 @@ This can take several minutes. Keep the app open until the Voicebot status is
 Ready. Its files and setup logs are in
 `~/Library/Application Support/Zana/voicebot/`.
 
+## Where Zana stores data
+
+On macOS, Zana's persistent, app-owned locations are:
+
+- `~/Library/Application Support/Zana/`: settings, the local API key, the
+  onboarding marker, plugins, legacy Whisper models, and the Voicebot folder.
+- `~/Library/Application Support/Zana/voicebot/`: the transcript, prompt,
+  MCP configuration, optional `.env`, voice print, voices, thinking sounds,
+  Python environment, process logs, update state, and screenshots.
+- `~/Library/Application Support/Zana/voicebot/cache/huggingface/`: the
+  Hugging Face model cache used by Voicebot.
+- `~/Library/Application Support/Zana/voicebot/cache/uv/`: the package cache
+  used while Voicebot's environment is installed or refreshed.
+- `~/Library/Application Support/app.zana/`: Tauri/WebView application data.
+- `~/Library/Caches/app.zana/`: Tauri/WebView cache data.
+- `~/Library/Logs/app.zana/`: Zana's Rust application logs.
+- `~/.cache/huggingface/` and `~/Library/Caches/uv/`: legacy Zana cache
+  locations that may be shared with other applications; current Zana does not
+  write there.
+
+Audio request files are created briefly in macOS's temporary directory and are
+deleted after transcription. The current app scopes Hugging Face and uv to the
+Voicebot folder so it does not claim ownership of shared caches. Older Zana
+versions may have left data in `~/.cache/huggingface/` or
+`~/Library/Caches/uv/`; those locations can be shared by other applications and
+are deliberately not removed automatically.
+
+Preferences > Data & Privacy > Remove All Zana Data asks for confirmation,
+stops Zana, and moves the app-owned locations above to the user's Trash. The
+API key and transcript remain recoverable until the Trash is emptied. Shared
+legacy caches require separate, user-confirmed cleanup after checking their
+other users.
+
 ## Configure an answering model
 
 1. Open Preferences and select Model.

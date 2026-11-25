@@ -112,6 +112,66 @@ fn preferences_save_uses_backend_save_command() {
 }
 
 #[test]
+fn data_cleanup_requires_confirmation_and_stays_on_owned_roots() {
+    let html = read_repo_file("src-ui/preferences.html");
+    let command = read_repo_file("src-tauri/src/commands/cleanup.rs");
+    let cleanup = read_repo_file("src-tauri/src/cleanup.rs");
+    let main = read_repo_file("src-tauri/src/main.rs");
+
+    for marker in [
+        "Remove All Zana Data",
+        "window.confirm(",
+        "get_zana_data_inventory",
+        "remove_all_zana_data",
+        "{ confirmed: true }",
+        "Shared Hugging Face and uv caches are not touched",
+    ] {
+        assert!(
+            html.contains(marker),
+            "Preferences must keep cleanup marker {marker}"
+        );
+    }
+    let install = read_repo_file("INSTALL.md");
+    for marker in [
+        "~/Library/Application Support/Zana/voicebot/cache/huggingface/",
+        "~/Library/Application Support/Zana/voicebot/cache/uv/",
+        "~/.cache/huggingface/",
+        "~/Library/Caches/uv/",
+    ] {
+        assert!(
+            install.contains(marker),
+            "INSTALL.md must inventory {marker}"
+        );
+    }
+
+    assert!(
+        command.contains("if !confirmed"),
+        "the backend cleanup command must reject missing confirmation"
+    );
+    assert!(
+        command.contains("voicebot::stop"),
+        "cleanup must stop Voicebot before moving its files"
+    );
+    assert!(
+        main.contains("commands::remove_all_zana_data"),
+        "the cleanup command must be registered with Tauri"
+    );
+    for marker in ["symlink_metadata", "fs::rename", "TAURI_APP_IDENTIFIER"] {
+        assert!(
+            cleanup.contains(marker),
+            "cleanup must keep its safe-Trash boundary marker {marker}"
+        );
+    }
+    let voicebot = read_repo_file("src-tauri/src/voicebot.rs");
+    for marker in ["HF_HOME", "HF_HUB_CACHE", "UV_CACHE_DIR"] {
+        assert!(
+            voicebot.contains(marker),
+            "Voicebot must scope cache writes with {marker}"
+        );
+    }
+}
+
+#[test]
 fn preferences_exposes_rewrite_provider_fields() {
     let html = read_repo_file("src-ui/preferences.html");
     let settings = read_repo_file("src-tauri/src/commands/settings.rs");
