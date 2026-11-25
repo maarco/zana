@@ -2,7 +2,6 @@
 //!
 //! Health check and troubleshooting commands.
 
-use crate::audio::AudioCapture;
 use crate::onboarding;
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
@@ -23,7 +22,7 @@ pub struct DiagnosticCheck {
 
 /// Run full diagnostics
 ///
-/// Checks accessibility, audio devices and Voicebot.
+/// Checks accessibility, Voicebot and platform state.
 #[tauri::command]
 pub async fn run_diagnostics(
     _state: State<'_, AppState>,
@@ -77,47 +76,7 @@ pub async fn run_diagnostics(
         );
     }
 
-    // 2. Audio devices
-    match AudioCapture::list_devices() {
-        Ok(devices) if !devices.is_empty() => {
-            checks.insert(
-                "audio".to_string(),
-                DiagnosticCheck {
-                    name: "Audio Input".to_string(),
-                    status: "ok".to_string(),
-                    message: format!("Found {} audio device(s)", devices.len()),
-                    fix: None,
-                    fix_action: None,
-                },
-            );
-        }
-        Ok(_) => {
-            checks.insert(
-                "audio".to_string(),
-                DiagnosticCheck {
-                    name: "Audio Input".to_string(),
-                    status: "error".to_string(),
-                    message: "No audio devices found".to_string(),
-                    fix: Some("Connect a microphone".to_string()),
-                    fix_action: None,
-                },
-            );
-        }
-        Err(e) => {
-            checks.insert(
-                "audio".to_string(),
-                DiagnosticCheck {
-                    name: "Audio Input".to_string(),
-                    status: "error".to_string(),
-                    message: format!("Error: {}", e),
-                    fix: None,
-                    fix_action: None,
-                },
-            );
-        }
-    }
-
-    // 3. Voicebot (Zana is the Voicebot app; Whisper and Fn dictation are retired)
+    // 2. Voicebot
     let voicebot = crate::voicebot::status();
     checks.insert(
         "voicebot".to_string(),
@@ -135,7 +94,7 @@ pub async fn run_diagnostics(
         },
     );
 
-    // 4. Platform info
+    // 3. Platform info
     checks.insert(
         "platform".to_string(),
         DiagnosticCheck {

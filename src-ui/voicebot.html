@@ -43,7 +43,6 @@
     let agentState = 'starting';
     let agentOrbState = null;
     let muted = false;
-    let dictating = false;
     let leaving = false;
     let asleep = false;
     let voicePrint = null; // { seconds, needed } while voice print mode records
@@ -224,7 +223,7 @@
     }
 
     async function applyMic() {
-      if (room) await room.localParticipant.setMicrophoneEnabled(!muted && !dictating);
+      if (room) await room.localParticipant.setMicrophoneEnabled(!muted);
       showState();
     }
 
@@ -257,7 +256,7 @@
     setInterval(() => {
       const track = liveMicTrack();
       if (track) meterFor(track);
-      if (!room || muted || dictating || track) lastMicSignal = Date.now();
+      if (!room || muted || track) lastMicSignal = Date.now();
       const silent = Date.now() - lastMicSignal > micCheckMinutes * 60000;
       if (silent !== micSilent) { micSilent = silent; showState(); }
     }, 1000);
@@ -279,19 +278,15 @@
       return Math.min(1, Math.sqrt(s / micMeter.buf.length) * 7);
     }
 
-    // Zana calls this while its own dictation records, so the agent ignores it.
-    window.zanaDictation = (active) => { dictating = active; applyMic(); };
-
     function visualState() {
       return Orb.resolveState({
-        connected: !!room, muted, dictating, asleep, voicePrint, preview, agentOrbState, agentState,
+        connected: !!room, muted, asleep, voicePrint, preview, agentOrbState, agentState,
         userSpeaking: !!(room && room.localParticipant && room.localParticipant.isSpeaking), micSilent,
       });
     }
 
     function showState() {
       if (preview) return setStatus(Orb.styleForState(visualState()).label);
-      if (dictating) return setStatus('Paused', 'Zana is dictating');
       if (visualState() === 'nomic') return setStatus('No Microphone', `No working microphone for ${micCheckMinutes} minutes: check System Settings, Privacy and Security, Microphone, for Zana`);
       if (pendingRestart && agentState === 'listening') { pendingRestart = false; setTimeout(newConversation, 800); }
       if (muted) return setStatus('Muted', 'Click the orb to unmute');
@@ -355,7 +350,7 @@
     orb.addEventListener('contextmenu', (event) => { event.preventDefault(); invoke('open_voicebot_debug'); });
 
     // The orb: LiveKit's Aura visualizer, driven by the resolved state and
-    // the agent's voice level. Muted, paused, and sleeping use a dim idle look.
+    // the agent's voice level. Muted and sleeping use a dim idle look.
     let aura = null;
     try {
       aura = window.createAura(orb, { color: Orb.styleForState('idle').color, colorShift: 0.05, themeMode: 'dark' });

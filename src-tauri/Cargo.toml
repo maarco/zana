@@ -26,25 +26,12 @@ serde.workspace = true
 serde_json.workspace = true
 base64 = "0.22"
 sha2 = "0.10"
-toml.workspace = true
 anyhow.workspace = true
-thiserror.workspace = true
 log.workspace = true
-env_logger.workspace = true
-cpal.workspace = true
-hound.workspace = true
-whisper-rs.workspace = true
-audiopus.workspace = true
-symphonia.workspace = true
-webm-iterable.workspace = true
-futures-util.workspace = true
-async-trait.workspace = true
 reqwest.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 dirs.workspace = true
-notify.workspace = true
-wasmtime.workspace = true
 
 # Cross-platform clipboard
 arboard = "3"

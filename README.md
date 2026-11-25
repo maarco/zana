@@ -5,11 +5,10 @@
 Zana transcribes speech with Parakeet and speaks replies with VibeVoice locally
 by default. Recognized text and tool results go to the chat model you configure.
 When requested, the front window title or a screenshot can also be sent to your
-configured chat or vision model. Fn-key dictation and Whisper are retired.
+configured chat or vision model. The retired Fn-key dictation and Whisper stack
+is not part of the current app.
 
-Sections below that describe Fn-key dictation, Whisper, the old architecture,
-installation, usage, status, or troubleshooting are historical. Use
-[INSTALL.md](INSTALL.md) for the current Voicebot setup.
+See [INSTALL.md](INSTALL.md) for the current Voicebot setup.
 
 ## Features
 
@@ -33,8 +32,8 @@ installation, usage, status, or troubleshooting are historical. Use
 
 - **macOS**: 13 Ventura or newer recommended
 - **Processor**: Apple silicon only (M-series)
-- **RAM**: 8GB minimum (16GB recommended for larger Whisper models)
-- **Storage**: ~2GB for app + Whisper models
+- **RAM**: 8GB minimum (16GB recommended for local speech models)
+- **Storage**: several GB for the app, Voicebot runtime, and local models
 
 ## Installation
 
@@ -43,7 +42,7 @@ installation, usage, status, or troubleshooting are historical. Use
 1. Download the Zana DMG from GitHub Releases once releases are published
 2. Open the DMG and drag Zana to Applications
 3. Launch Zana from Applications folder
-4. Grant accessibility permissions (required for Fn key monitoring)
+4. Grant the macOS permissions requested by Voicebot as needed
 
 ### Option 2: Build from Source
 
@@ -88,74 +87,21 @@ The compiled binary will be at:
 
 ## First Run Setup
 
-On first launch, Zana opens a short onboarding window that walks you through the
-permissions and model download below. You can revisit any of these later from the
-**Preferences** window (tray menu → Preferences...).
+On first launch, Zana opens onboarding for the local Voicebot runtime. Keep the
+app open while it installs its local dependencies and speech models. Then open
+**Preferences** to configure the answering model and optional Voicebot tools.
 
-### 1. Grant Accessibility Permissions
-
-Zana needs accessibility access to monitor the Fn key globally.
-
-**On first launch, you'll see:**
-```
-Accessibility permissions not granted - Fn key monitoring disabled
-Grant access in System Settings > Privacy & Security > Accessibility
-```
-
-**To grant access:**
-1. Open **System Settings** > **Privacy & Security** > **Accessibility**
-2. Click the **lock icon** and authenticate
-3. Find **Zana-app** in the list and toggle it **ON**
-4. Restart Zana
-
-### 2. Download Whisper Model
-
-On first transcription, Zana will automatically download the Whisper model:
-- **Small model** (~500MB) - Default, best balance of speed and accuracy
-- **Tiny model** (~75MB) - Faster, less accurate
-- **Base/Medium/Large** - Available via settings when downloaded
-
-Models are cached in: `~/Library/Application Support/Zana/models/`
+See [INSTALL.md](INSTALL.md) for prerequisites, permissions, model setup, and a
+first conversation check.
 
 ## Usage
 
-### Basic Recording (Hold Mode)
-
-1. **Press and hold Fn key** → Orb appears, recording starts
-2. **Speak your message** → Orb pulses with audio level
-3. **Release Fn key** → Recording stops, transcription begins
-4. **Text auto-pastes** → Transcription appears at cursor
-
-### Hands-Free Recording (Double-Tap Mode)
-
-1. **Double-tap Fn key** (two quick taps within 300ms) → Recording starts and stays on
-2. **Speak your message** → Orb stays visible while recording
-3. **Tap Fn once** → Recording stops, transcription begins
-4. **Text auto-pastes** → Transcription appears at cursor
-
-### Minimum Hold Duration
-
-Quick taps (<300ms) are ignored to prevent accidental triggers. This is helpful since macOS uses Fn for system functions (emoji picker, dictation, etc.).
-
-### Optional AI Rewrite
-
-Zana can pass a transcript through an AI model to clean it up before pasting.
-This is **off by default**. To enable it, open **Preferences** and provide an
-API key and endpoint for any OpenAI-compatible chat-completions provider, then
-edit the **System** and **User** prompts to shape the output. The User prompt
-must include the `{captured}` variable; other supported variables include
-`{time}`, `{clipboard}`, `{screen_shot}`, `{dictionary}`, `{history}`,
-`{style_memory}`, and `{project_memory}`.
-
-When rewrite is enabled, your transcript (plus any context you include, such as
-clipboard or a screenshot) is sent to the provider you configured. Transcription
-itself always stays local. See [PRIVACY.md](PRIVACY.md) for details.
-
-### Transcript History
-
-Every transcription is saved locally, whether or not AI rewrite is used. Open
-the **Transcriptions** window from the tray menu (or from Preferences) to review
-past transcripts. History never leaves your Mac.
+1. Launch Zana and wait for Voicebot to show **Ready**.
+2. Speak normally. With no wake word configured, Voicebot answers every turn;
+   with a wake word configured, say it before the request.
+3. Use the floating orb to mute, start a new conversation, or open Debug.
+4. Use Preferences to change the chat model, voice, wake word, tools, and other
+   Voicebot settings.
 
 ## Configuration
 
@@ -164,105 +110,57 @@ past transcripts. History never leaves your Mac.
 Zana is now a hands-free voice agent with a floating orb: local Parakeet
 speech-to-text and VibeVoice speech, the chat model you set in Preferences >
 Model, and tools to see your screen, type for you, run commands and use MCP
-servers. Fn dictation and Whisper are retired. The older Fn/Whisper installation,
-usage and troubleshooting notes in this README are historical, not instructions
-for the current app. Follow [INSTALL.md](INSTALL.md) to set up Voicebot; see
+servers. Follow [INSTALL.md](INSTALL.md) to set up Voicebot; see
 [voicebot/README.md](voicebot/README.md) for its runtime details.
 
 The Voicebot orb uses Aura and LiveKit activity states: dim idle, green
 listening, pulsing teal thinking, blue talking, and orange working while a tool
 is executing. Talking takes precedence when speech and tool activity overlap.
-Its appearance is separate from the legacy `src-ui/orb_config.json`.
-
-### Legacy Orb Appearance
-
-Edit `src-ui/orb_config.json` to customize the legacy dictation orb:
-
-```json
-{
-  "style": "nebula-aura",
-  "scale": 1.0,
-  "colors": {
-    "primary": "#00ffff",
-    "accent": "#ff00ff"
-  }
-}
-```
-
-See [ORB_CONFIG.md](src-ui/ORB_CONFIG.md) for full options.
-
-### Plugin System
-
-Place plugins in `plugins/` directory:
-
-```
-plugins/
-├── nebula-aura/
-│   └── plugin.toml
-└── my-custom-orb/
-    └── plugin.toml
-```
-
-Plugins are automatically loaded on startup. See [docs/HOOK_HANDLER_GUIDE.md](docs/HOOK_HANDLER_GUIDE.md) for plugin development.
 
 ## Architecture
 
 ```
 Zana
-├── src-tauri/          Rust backend (Tauri app)
-│   ├── src/
-│   │   ├── audio/      Audio capture via cpal
-│   │   ├── stt/        Whisper transcription
-│   │   ├── hooks/      Event system
-│   │   ├── plugins/    Plugin loader
-│   │   ├── commands/   Tauri commands (UI <-> backend)
-│   │   ├── state/      Settings and writing profile
-│   │   ├── panel/      macOS NSPanel orb window
-│   │   └── onboarding/ First-run flow
-│   └── Cargo.toml
-├── src-ui/             Frontend (vanilla HTML/CSS/JS)
-│   ├── orb.html            Floating orb interface
-│   ├── preferences.html    Settings and rewrite prompts
-│   ├── transcriptions.html Local transcript history
-│   └── orb_config.json     Orb configuration
-└── plugins/            Orb style plugins
+├── src-tauri/          Rust backend and Tauri commands
+│   ├── src/commands/   Preferences, Voicebot, onboarding, update, diagnostics
+│   ├── src/state.rs    Live settings
+│   ├── src/voicebot.rs Voicebot supervisor and IPC
+│   └── src/panel.rs    macOS floating panel
+├── src-ui/             Vanilla HTML/CSS/JS windows and Voicebot orb
+│   ├── preferences.html
+│   ├── onboarding.html
+│   ├── voicebot.html
+│   └── vendor/         Bundled UI libraries
+└── voicebot/           Bundled local agent and runtime
 ```
 
 ## Troubleshooting
 
-### "Accessibility permissions not granted"
+### Voicebot is not ready
 
-**Fix:** Grant access in System Settings > Privacy & Security > Accessibility
+Open Preferences > Voicebot > Open Folder and inspect `logs/install.log` and
+the process logs. Keep the app open while the local runtime and speech models
+finish installing.
 
-### Fn key not working
+### Voicebot cannot hear you
 
-1. Check if Fn is mapped to system functions:
-   - System Settings > Keyboard > Keyboard Shortcuts > Function Keys
-2. Restart Zana after granting accessibility permissions
-3. Check logs: `tail -f /tmp/Zana-run.log`
+Allow Zana microphone access in System Settings > Privacy & Security >
+Microphone, then restart Voicebot from the app.
 
-### Orb disappears immediately after double-tap
+### Paste or key tools do not work
 
-**Expected behavior.** macOS may be intercepting the Fn key for dictation. Try:
-- System Settings > Keyboard > Dictation
-- Change shortcut from "Press Fn Key Twice" to something else
+Grant Accessibility access if you want Voicebot to type or press keys. macOS
+may also ask to let Zana control System Events.
 
-### Audio not recording
+### Screen tools do not work
 
-1. Check microphone permissions:
-   - System Settings > Privacy & Security > Microphone
-   - Enable for Zana-app
-2. Check audio device in logs
+Grant Screen Recording access if you ask Voicebot to capture a screenshot. A
+front-window title lookup does not require screen capture permission.
 
-### Transcription is inaccurate
+### Test AI fails
 
-- Default model is "Small" (good balance of speed and accuracy)
-- For better accuracy, use Medium or Large model from Preferences
-- Ensure good audio quality (quiet environment, close to mic)
-
-### App crashes on hide
-
-**Fixed in v0.1.0** - Panel now moves offscreen instead of hiding to prevent WebKit throttling crash.
+Check the API URL, model ID, credentials, and provider access in Preferences >
+Model. Use **Test AI** after saving the endpoint details.
 
 ## Development
 
@@ -286,8 +184,11 @@ tmux attach -t Zana
 # Run all tests
 cargo test
 
-# Run specific test
-cargo test test_plugin_loading
+# Run the Preferences and retired-stack contract tests
+cargo test --test app_contracts
+
+# Run the Voicebot orb behavior tests
+node --test src-tauri/tests/voicebot_orb.test.cjs
 
 # Run with output
 cargo test -- --nocapture
@@ -348,25 +249,16 @@ Connect API key, preferred) or `APPLE_ID` and `APPLE_APP_PASSWORD`.
 See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 **Completed:**
-- [x] Local Whisper transcription
-- [x] Fn key monitoring (hold to record)
-- [x] Double-tap toggle mode
-- [x] Floating orb with animations
-- [x] Plugin system (orb styles)
-- [x] Hook event system
-- [x] Auto-paste transcription
-- [x] Fullscreen support
-- [x] Optional AI rewrite (OpenAI-compatible, editable prompts)
-- [x] Local transcript history (Transcriptions window)
-- [x] First-run onboarding flow
+- [x] Local Parakeet speech recognition and VibeVoice playback
+- [x] Voicebot conversation, wake word, and floating orb
+- [x] Optional local transcript history for Voicebot
+- [x] Screen, paste, keyboard, terminal, and MCP tools
+- [x] Preferences and first-run Voicebot onboarding
 - [x] Single-instance protection
 
 **Roadmap:**
-- [x] Model selection UI
-- [x] Settings panel
 - [ ] Keyboard shortcuts customization
 - [ ] Multi-language support
-- [ ] GPU acceleration for Whisper
 - [x] Signed macOS app bundle
 - [ ] Auto-update
 - [x] System tray icon
@@ -379,11 +271,10 @@ Contributions welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guideli
 
 ### Key Areas
 
-- **Audio processing**: Improve noise reduction, audio preprocessing
-- **Whisper optimization**: Faster transcription, GPU support
-- **Plugins**: Create new orb styles, audio processors, integrations
-- **UI/UX**: Improve orb animations, add settings panel
-- **Testing**: Add more unit/integration tests
+- **Voicebot runtime**: Local speech, playback, wake word, and conversation
+- **Tools**: Screen, paste, keyboard, terminal, and MCP integrations
+- **UI/UX**: Preferences, onboarding, orb states, and Debug
+- **Testing**: Add focused contract and runtime coverage
 
 ## License
 
@@ -391,9 +282,9 @@ MIT License - see [LICENSE](LICENSE) for details
 
 ## Acknowledgments
 
-- **Whisper.cpp** - Fast local transcription by Georgi Gerganov
 - **Tauri** - Lightweight desktop app framework
-- **cpal** - Cross-platform audio library
+- **LiveKit** - Local room and media transport
+- **Parakeet and VibeVoice** - Local speech recognition and playback
 
 ## Support
 

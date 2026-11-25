@@ -15,7 +15,7 @@ fn read_repo_file(path: &str) -> String {
 }
 
 #[test]
-fn onboarding_is_voicebot_setup_without_whisper_download() {
+fn onboarding_is_voicebot_setup_without_retired_dictation() {
     let onboarding = read_repo_file("src-ui/onboarding.html");
     let command_module = read_repo_file("src-tauri/src/commands/onboarding.rs");
     let main = read_repo_file("src-tauri/src/main.rs");
@@ -116,7 +116,6 @@ fn preferences_exposes_rewrite_provider_fields() {
     let html = read_repo_file("src-ui/preferences.html");
     let settings = read_repo_file("src-tauri/src/commands/settings.rs");
     let state = read_repo_file("src-tauri/src/state.rs");
-    let transcription = read_repo_file("src-tauri/src/commands/transcription.rs");
 
     // Preferences > Model: the provider fields are Voicebot's chat model now.
     for field in ["rewrite-api-key", "rewrite-model", "rewrite-api-url"] {
@@ -141,109 +140,6 @@ fn preferences_exposes_rewrite_provider_fields() {
     assert!(
         state.contains("CloudRewriteSettings"),
         "settings must persist rewrite provider config"
-    );
-    assert!(
-        transcription.contains("cloud_rewrite_config(&rewrite_settings)"),
-        "rewrite pipeline must read persisted provider config before env fallback"
-    );
-}
-
-#[test]
-fn transcriptions_live_in_their_own_window() {
-    let prefs = read_repo_file("src-ui/preferences.html");
-    let window = read_repo_file("src-ui/transcriptions.html");
-    let settings = read_repo_file("src-tauri/src/commands/settings.rs");
-    let main = read_repo_file("src-tauri/src/main.rs");
-
-    // Zana is the Voicebot app: Preferences no longer shows dictation history.
-    assert!(
-        !prefs.contains("transcript-history-list"),
-        "the transcript history list must not be rendered inline in preferences"
-    );
-
-    // The transcript history list itself lives in the dedicated window.
-    for marker in ["transcript-history-list", "get_transcript_history"] {
-        assert!(
-            window.contains(marker),
-            "transcriptions window must render local history via marker {marker}"
-        );
-    }
-
-    assert!(
-        settings.contains("pub async fn get_transcript_history"),
-        "settings commands must expose transcript history to the transcriptions window"
-    );
-    assert!(
-        settings.contains("pub async fn open_transcriptions_window"),
-        "settings commands must expose a command to open the transcriptions window"
-    );
-    for handler in [
-        "commands::get_transcript_history",
-        "commands::open_transcriptions_window",
-    ] {
-        assert!(
-            main.contains(handler),
-            "Tauri command handler must register {handler}"
-        );
-    }
-}
-
-#[test]
-fn transcripts_persist_in_local_only_mode() {
-    let src = read_repo_file("src-tauri/src/commands/transcription.rs");
-
-    // Regression guard: transcript history must be recorded for every dictation,
-    // not only when cloud rewrite is enabled. Local-only dictation used to hit the
-    // `else` branch and silently drop the transcript.
-    assert!(
-        src.contains("Persist every transcription locally"),
-        "transcribe flow must record history regardless of AI-polish mode"
-    );
-
-    let else_branch = src
-        .find("state.clear_recording_context().await;")
-        .expect("local-only branch must clear recording context");
-    let save_call = src
-        .find("record_transcript_history(")
-        .expect("transcribe flow must call record_transcript_history");
-    assert!(
-        save_call > else_branch,
-        "record_transcript_history must run after the rewrite if/else so local-only dictation is saved too"
-    );
-}
-
-#[test]
-fn rewrite_pipeline_sends_only_its_visible_messages() {
-    let transcription = read_repo_file("src-tauri/src/commands/transcription.rs");
-    let state = read_repo_file("src-tauri/src/state.rs");
-
-    assert!(
-        !transcription.contains("Technical contract:"),
-        "rewrite pipeline must not append hidden system instructions outside the visible template"
-    );
-    assert!(
-        !transcription.contains("Response contract:\\n"),
-        "rewrite pipeline must not append a hidden response contract outside the visible template"
-    );
-    assert!(
-        state.contains("Submit exactly one submit_result tool call"),
-        "default system prompt should include the tool-call instruction users can edit"
-    );
-}
-
-#[test]
-fn set_model_persists_selected_model() {
-    let source = read_repo_file("src-tauri/src/commands/transcription.rs");
-    let start = source.find("pub async fn set_model").unwrap();
-    let end = source[start..]
-        .find("/// Transcribe")
-        .map(|offset| start + offset)
-        .unwrap_or(source.len());
-    let body = &source[start..end];
-
-    assert!(
-        body.contains("save_settings().await"),
-        "set_model must persist the selected model instead of only mutating in-memory settings"
     );
 }
 
@@ -413,119 +309,6 @@ fn preferences_exposes_update_check_banner() {
 }
 
 #[test]
-fn mac_orb_panel_uses_compact_geometry() {
-    let source = read_repo_file("src-tauri/src/main.rs");
-    let start = source.find("fn create_orb_window").unwrap();
-    let end = source[start..]
-        .find("/// Show the orb window")
-        .map(|offset| start + offset)
-        .unwrap_or(source.len());
-    let body = &source[start..end];
-
-    assert!(
-        !body.contains("screen_width / 2.0") && !body.contains("screen_height / 2.0"),
-        "macOS orb panel should use compact visual geometry, not a half-screen transparent hitbox"
-    );
-}
-
-#[test]
-fn orb_markup_exposes_explicit_drag_target() {
-    let html = read_repo_file("src-ui/orb.html");
-
-    assert!(
-        html.contains("id=\"drag-region\"") && html.contains("startDragging"),
-        "orb markup must expose an explicit drag target that calls Tauri startDragging"
-    );
-}
-
-#[test]
-fn orb_window_has_start_dragging_capability() {
-    let tauri_config: Value =
-        serde_json::from_str(&read_repo_file("src-tauri/tauri.conf.json")).unwrap();
-    let capabilities = tauri_config
-        .pointer("/app/security/capabilities")
-        .and_then(Value::as_array)
-        .expect("tauri config must declare capabilities");
-
-    let can_start_dragging = capabilities.iter().any(|capability| {
-        let includes_orb = capability
-            .get("windows")
-            .and_then(Value::as_array)
-            .is_some_and(|windows| windows.iter().any(|window| window == "orb"));
-
-        let allows_dragging = capability
-            .get("permissions")
-            .and_then(Value::as_array)
-            .is_some_and(|permissions| {
-                permissions
-                    .iter()
-                    .any(|permission| permission == "core:window:allow-start-dragging")
-            });
-
-        includes_orb && allows_dragging
-    });
-
-    assert!(
-        can_start_dragging,
-        "orb window must have Tauri startDragging permission"
-    );
-}
-
-#[test]
-fn orb_runtime_parks_animation_when_hidden() {
-    let html = read_repo_file("src-ui/orb.html");
-    let runtime = read_repo_file("src-ui/orb-runtime.js");
-
-    assert!(
-        html.contains("orb-runtime.js")
-            && html.find("orb-runtime.js") < html.find("orb-lifecycle.js"),
-        "orb runtime must load before lifecycle and legacy renderers patch requestAnimationFrame"
-    );
-    assert!(
-        runtime.contains("window.requestAnimationFrame")
-            && runtime.contains("pausedFrames")
-            && runtime.contains("sleepSoon")
-            && runtime.contains("installControlBridge"),
-        "orb runtime must park animation frames while the hidden panel is inactive"
-    );
-}
-
-#[test]
-fn mac_and_windows_hotkey_start_failures_clear_recording_state() {
-    let source = read_repo_file("src-tauri/src/main.rs");
-
-    assert!(
-        source.contains("fn handle_recording_start_failed"),
-        "hotkey recording paths need a shared rollback helper for failed audio starts"
-    );
-    assert!(
-        source.matches("handle_recording_start_failed(&app_clone").count() >= 2,
-        "both macOS Fn and Windows Ctrl start paths must clear native recording state on start failure"
-    );
-}
-
-#[test]
-fn short_hotkey_release_cancels_pending_capture() {
-    let source = read_repo_file("src-tauri/src/main.rs");
-
-    assert!(
-        source.contains("cancel_recording_without_transcription(app)"),
-        "short hotkey release must cancel pending capture instead of only hiding the orb"
-    );
-    assert!(
-        source.contains("Recording start skipped because the trigger was released"),
-        "delayed capture start must re-check the native recording flag before opening the microphone"
-    );
-    assert!(
-        source
-            .matches("Recording start completed after the trigger was released")
-            .count()
-            >= 2,
-        "both hotkey paths must cancel capture if release races with async microphone start"
-    );
-}
-
-#[test]
 fn voicebot_debug_clear_opens_its_lock_without_truncating_it() {
     let source = read_repo_file("src-tauri/src/commands/voicebot.rs");
     let clear = source
@@ -543,16 +326,6 @@ fn voicebot_debug_clear_opens_its_lock_without_truncating_it() {
             && clear.contains(".truncate(false)")
             && clear.contains(".open(lock_path)"),
         "debug clear must create/open the lock without truncating it"
-    );
-}
-
-#[test]
-fn failed_stop_does_not_transcribe_stale_audio() {
-    let source = read_repo_file("src-tauri/src/main.rs");
-
-    assert!(
-        source.matches("return;").count() >= 2 && source.contains("Failed to stop recording"),
-        "hotkey stop paths must return before transcribe when stop_recording_inner fails"
     );
 }
 
@@ -593,17 +366,83 @@ fn app_registers_single_instance_guard() {
 }
 
 #[test]
-fn whisper_full_runs_on_blocking_thread() {
-    let source = read_repo_file("src-tauri/src/stt/whisper.rs");
+fn retired_dictation_stack_is_absent_from_live_app() {
+    let root_cargo = read_repo_file("Cargo.toml");
+    let app_cargo = read_repo_file("src-tauri/Cargo.toml");
+    let commands = read_repo_file("src-tauri/src/commands/mod.rs");
+    let lib = read_repo_file("src-tauri/src/lib.rs");
+    let main = read_repo_file("src-tauri/src/main.rs");
+    let settings = read_repo_file("src-tauri/src/commands/settings.rs");
+    let diagnostics = read_repo_file("src-tauri/src/commands/diagnostics.rs");
+    let preferences = read_repo_file("src-ui/preferences.html");
+    let config = read_repo_file("src-tauri/tauri.conf.json");
 
-    assert!(
-        source.contains("tokio::task::spawn_blocking"),
-        "Whisper full() must run on a blocking thread, not inline on an async runtime worker"
+    assert_eq!(
+        root_cargo.matches("members = [\"src-tauri\"]").count(),
+        1,
+        "the workspace must contain only the live Tauri crate"
     );
+    for dependency in [
+        "cpal",
+        "hound",
+        "whisper-rs",
+        "audiopus",
+        "symphonia",
+        "webm-iterable",
+        "wasmtime",
+    ] {
+        assert!(
+            !root_cargo.contains(dependency) && !app_cargo.contains(dependency),
+            "retired dependency remains declared: {dependency}"
+        );
+    }
+    for marker in [
+        "mod audio",
+        "mod plugins",
+        "mod transcription",
+        "start_recording",
+        "stop_recording",
+        "list_models",
+        "voicebot_dictation",
+        "get_transcript_history",
+        "open_transcriptions_window",
+        "set_orb_style",
+        "get_orb_style",
+    ] {
+        assert!(
+            !commands.contains(marker)
+                && !main.contains(marker)
+                && !settings.contains(marker)
+                && !lib.contains(marker),
+            "retired command or module remains reachable: {marker}"
+        );
+    }
+    assert!(!diagnostics.contains("AudioCapture"));
+    for marker in ["Show in Menu Bar", "list_audio_devices", "Whisper Model"] {
+        assert!(
+            !preferences.contains(marker),
+            "retired Preferences control remains visible: {marker}"
+        );
+    }
     assert!(
-        source.contains(".full(params, &samples)") || source.contains(".full(params, samples"),
-        "the blocking task must own or borrow audio samples inside the blocking closure"
+        !config.contains("\"transcriptions\"")
+            && !config.contains("\"main\"")
+            && !config.contains("\"orb\""),
+        "retired windows remain in Tauri capabilities"
     );
+    for path in [
+        "src",
+        "tests",
+        "plugins",
+        "src-ui/index.html",
+        "src-ui/orb.html",
+        "src-ui/transcriptions.html",
+    ] {
+        assert!(
+            !repo_file(path).exists(),
+            "retired source or UI path still exists: {path}"
+        );
+    }
 }
 
 #[test]
@@ -660,14 +499,13 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
             && read_repo_file("src-ui/orb-designs.js").contains("window.ZanaOrbDesigns"),
         "the orb must load its designs"
     );
-    for rpc in [
-        "zana.paste",
-        "zana.screen",
-        "voicebot_join",
-        "zanaDictation",
-    ] {
+    for rpc in ["zana.paste", "zana.screen", "voicebot_join"] {
         assert!(orb.contains(rpc), "the Voicebot orb must handle {rpc}");
     }
+    assert!(
+        !orb.contains("zanaDictation") && !orb.contains("dictating"),
+        "the Voicebot orb must not retain the retired dictation bridge"
+    );
     // Zana is the Voicebot app: no on/off switch, and Preferences > Model reaches the agent.
     assert!(
         !preferences.contains("voicebot-mode-toggle") && !main_rs.contains("set_voicebot_mode"),

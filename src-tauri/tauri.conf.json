@@ -87,8 +87,8 @@
       "capabilities": [
         {
           "identifier": "main-capability",
-          "description": "Main window capabilities",
-          "windows": ["main", "preferences", "about", "transcriptions", "voicebot", "voicebot-debug"],
+          "description": "Application window capabilities",
+          "windows": ["preferences", "about", "voicebot", "voicebot-debug"],
           "permissions": [
             "core:event:allow-listen",
             "core:event:allow-emit",
@@ -104,21 +104,6 @@
             "dialog:allow-open",
             "dialog:default",
             "shell:allow-open"
-          ]
-        },
-        {
-          "identifier": "orb-capability",
-          "description": "Orb window display capabilities",
-          "windows": ["orb"],
-          "permissions": [
-            "core:event:allow-listen",
-            "core:event:allow-emit",
-            "core:window:allow-show",
-            "core:window:allow-hide",
-            "core:window:allow-close",
-            "core:window:allow-start-dragging",
-            "core:window:allow-set-position",
-            "core:window:allow-outer-position"
           ]
         },
         {

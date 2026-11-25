@@ -1,23 +1,17 @@
-//! Zana Main Entry Point
-//!
-//! Initializes the Tauri application with NSPanel overlay for fullscreen support.
+//! Zana main entry point.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![allow(deprecated)]
 #![allow(unexpected_cfgs)]
 
-use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(target_os = "macos")]
 use std::sync::Mutex as StdMutex;
-use std::time::Instant;
 use tauri::menu::{
     Menu, MenuBuilder, MenuItem, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder,
 };
-#[allow(unused_imports)]
-use tauri::Emitter;
 use tauri::Listener;
 use tauri::Manager;
 use Zana_app::state::AppState;
-use Zana_app::HookEvent;
 
 #[cfg(target_os = "macos")]
 mod panel;
@@ -25,134 +19,11 @@ mod panel;
 #[cfg(target_os = "macos")]
 use tauri_nspanel::WebviewWindowExt;
 
-#[cfg(target_os = "macos")]
-#[allow(unused_imports)]
-use tauri_nspanel::Panel; // for as_panel()
-
-/// The app handle, so code on any thread can hop to the main thread.
-#[cfg(target_os = "macos")]
-static APP_HANDLE: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
-
-/// Evaluate JavaScript directly in the panel's WKWebView
-/// This bypasses Tauri's IPC which doesn't work with NSPanel.
-/// WebKit kills the app when evaluateJavaScript runs off the main thread (it did on
-/// every Preferences save: save_preferences emits orb-style-changed from a tokio
-/// worker), so calls from other threads are handed to the main thread.
-#[cfg(target_os = "macos")]
-fn eval_js_in_panel(panel: &tauri_nspanel::PanelHandle<tauri::Wry>, js: &str) {
-    use objc::{class, msg_send, sel, sel_impl};
-    // SAFETY: +[NSThread isMainThread] has no side effects.
-    let on_main: bool = unsafe { msg_send![class!(NSThread), isMainThread] };
-    if on_main {
-        return eval_js_now(panel, js);
-    }
-    let Some(app) = APP_HANDLE.get() else {
-        return log::warn!("[eval_js] called off the main thread before setup; skipped");
-    };
-    let (panel, js) = (panel.clone(), js.to_string());
-    if let Err(e) = app.run_on_main_thread(move || eval_js_now(&panel, &js)) {
-        log::warn!("[eval_js] could not reach the main thread: {e}");
-    }
-}
-
-#[cfg(target_os = "macos")]
-fn eval_js_now(panel: &tauri_nspanel::PanelHandle<tauri::Wry>, js: &str) {
-    use cocoa::base::{id, nil};
-    use cocoa::foundation::NSString;
-    use objc::{msg_send, sel, sel_impl};
-
-    unsafe {
-        // Get the NSPanel pointer via raw casting
-        let ns_panel = panel.as_panel();
-        let ns_panel_ptr = ns_panel as *const _ as id;
-
-        // Get content view
-        let content_view: id = msg_send![ns_panel_ptr, contentView];
-        if content_view == nil {
-            log::warn!("[eval_js] contentView is null");
-            return;
-        }
-
-        // Find WKWebView in subviews (it's usually nested)
-        if let Some(webview) = find_wkwebview_cocoa(content_view) {
-            // Create NSString from the JavaScript
-            let js_nsstring = NSString::alloc(nil).init_str(js);
-
-            // Call evaluateJavaScript:completionHandler:
-            let _: () = msg_send![webview, evaluateJavaScript:js_nsstring completionHandler:nil];
-        } else {
-            log::warn!("[eval_js] WKWebView not found in panel");
-        }
-    }
-}
-
-/// Recursively find WKWebView in view hierarchy using cocoa types
-#[cfg(target_os = "macos")]
-unsafe fn find_wkwebview_cocoa(view: cocoa::base::id) -> Option<cocoa::base::id> {
-    use cocoa::base::{id, nil};
-    use objc::{class, msg_send, sel, sel_impl};
-
-    if view == nil {
-        return None;
-    }
-
-    // Check if this view is a WKWebView
-    let wkwebview_class = class!(WKWebView);
-    let is_wkwebview: bool = msg_send![view, isKindOfClass:wkwebview_class];
-
-    if is_wkwebview {
-        log::debug!("[eval_js] Found WKWebView!");
-        return Some(view);
-    }
-
-    // Check subviews
-    let subviews: id = msg_send![view, subviews];
-    if subviews == nil {
-        return None;
-    }
-
-    let count: usize = msg_send![subviews, count];
-    for i in 0..count {
-        let subview: id = msg_send![subviews, objectAtIndex:i];
-        if let Some(webview) = find_wkwebview_cocoa(subview) {
-            return Some(webview);
-        }
-    }
-
-    None
-}
-
-// Re-export commands for tauri::generate_handler! macro
 mod commands {
     pub use Zana_app::commands::*;
 }
 
-// Global state for Fn key handling
-static FN_KEY_PRESSED: AtomicBool = AtomicBool::new(false);
-static LAST_FN_PRESS: StdMutex<Option<Instant>> = StdMutex::new(None);
-static LAST_FN_RELEASE: StdMutex<Option<Instant>> = StdMutex::new(None);
-static IS_RECORDING: AtomicBool = AtomicBool::new(false);
-static LATCHED_RECORDING: AtomicBool = AtomicBool::new(false); // Recording started by double-tap
-
-#[cfg(target_os = "macos")]
-static ORB_PANEL: StdMutex<Option<tauri_nspanel::PanelHandle<tauri::Wry>>> = StdMutex::new(None);
-
-// Store event monitor handles as usize (can't store raw id pointers directly in static)
-// Cast to/from id when needed: id as usize to store, stored_value as id to use
-#[cfg(target_os = "macos")]
-static FN_KEY_MONITORS: StdMutex<Option<(usize, usize)>> = StdMutex::new(None);
-
-// Cancel flag for pending hide operations
-#[cfg(target_os = "macos")]
-static HIDE_CANCELLED: AtomicBool = AtomicBool::new(false);
-
-// Windows orb window label
-#[cfg(target_os = "windows")]
-static WIN_ORB_VISIBLE: AtomicBool = AtomicBool::new(false);
-
-/// Create application menu with standard shortcuts
 fn create_app_menu(app: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, tauri::Error> {
-    // App menu (macOS standard)
     let app_menu = SubmenuBuilder::new(app, "Zana")
         .item(&PredefinedMenuItem::about(app, Some("About Zana"), None)?)
         .separator()
@@ -171,7 +42,6 @@ fn create_app_menu(app: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, tauri::Er
         .item(&PredefinedMenuItem::quit(app, Some("Quit Zana"))?)
         .build()?;
 
-    // Edit menu with standard editing commands
     let edit_menu = SubmenuBuilder::new(app, "Edit")
         .item(&PredefinedMenuItem::undo(app, None)?)
         .item(&PredefinedMenuItem::redo(app, None)?)
@@ -182,7 +52,6 @@ fn create_app_menu(app: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, tauri::Er
         .item(&PredefinedMenuItem::select_all(app, None)?)
         .build()?;
 
-    // Window menu
     let window_menu = SubmenuBuilder::new(app, "Window")
         .item(&PredefinedMenuItem::minimize(app, None)?)
         .item(&PredefinedMenuItem::maximize(app, None)?)
@@ -190,7 +59,6 @@ fn create_app_menu(app: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, tauri::Er
         .item(&PredefinedMenuItem::close_window(app, None)?)
         .build()?;
 
-    // Help menu
     let help_menu = SubmenuBuilder::new(app, "Help")
         .item(
             &MenuItemBuilder::with_id("show_help", "Zana Help")
@@ -199,18 +67,15 @@ fn create_app_menu(app: &tauri::AppHandle) -> Result<Menu<tauri::Wry>, tauri::Er
         )
         .build()?;
 
-    let menu = MenuBuilder::new(app)
+    MenuBuilder::new(app)
         .item(&app_menu)
         .item(&edit_menu)
         .item(&window_menu)
         .item(&help_menu)
-        .build()?;
-
-    Ok(menu)
+        .build()
 }
 
 fn main() {
-    // Setup crash handler to log panics
     std::panic::set_hook(Box::new(|panic_info| {
         let crash_log = dirs::data_local_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
@@ -225,7 +90,6 @@ fn main() {
             panic_info
         );
 
-        // Try to write crash log
         if let Some(parent) = crash_log.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
@@ -233,23 +97,14 @@ fn main() {
             .create(true)
             .append(true)
             .open(&crash_log)
-            .and_then(|mut f| std::io::Write::write_all(&mut f, message.as_bytes()));
+            .and_then(|mut file| std::io::Write::write_all(&mut file, message.as_bytes()));
 
-        eprintln!("{}", message);
-        eprintln!("Crash log written to: {:?}", crash_log);
+        eprintln!("{message}");
+        eprintln!("Crash log written to: {crash_log:?}");
     }));
-
-    // Suppress whisper.cpp verbose logs (they go directly to stderr)
-    std::env::set_var("GGML_LOG_LEVEL", "error");
-    std::env::set_var("WHISPER_LOG_LEVEL", "error");
-    std::env::set_var("GGML_METAL_LOG_LEVEL", "error");
-
-    // Redirect whisper.cpp logs to Rust logging (suppresses stderr output)
-    whisper_rs::install_logging_hooks();
 
     let mut builder = tauri::Builder::default();
 
-    // Register macOS NSPanel plugin
     #[cfg(target_os = "macos")]
     {
         builder = builder.plugin(tauri_nspanel::init());
@@ -270,7 +125,6 @@ fn main() {
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(log::LevelFilter::Info)
-                .level_for("whisper_rs", log::LevelFilter::Warn)
                 .targets([
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
@@ -279,37 +133,25 @@ fn main() {
                 ])
                 .build(),
         )
-        // Auto-updater disabled until signing keys are configured
+        // Auto-updater disabled until signing keys are configured.
         // .plugin(tauri_plugin_updater::Builder::new().build())
         .menu(create_app_menu)
         .setup(|app| {
             let is_first_run = Zana_app::onboarding::is_first_run();
-            #[cfg(target_os = "macos")]
-            let _ = APP_HANDLE.set(app.handle().clone());
 
-            // ALWAYS create application state (needed for commands)
             log::info!("Initializing application state...");
             let state = AppState::new().expect("Failed to initialize app state");
-            let event_bus = state.event_bus.clone();
-            let event_bus_for_emit = event_bus.clone();
-            let plugin_manager = state.plugin_manager.clone();
-
-            // Store state for commands
             app.manage(state);
 
-            // Voicebot mode: Zana supervises the voice agent and shows its orb.
             let settings = Zana_app::state::Settings::load();
-            if settings.voicebot_mode {
-                start_voicebot(app.handle(), &settings);
-            }
+            start_voicebot(app.handle(), &settings);
 
-            // Check if first run - show onboarding window
             if is_first_run {
                 log::info!("First run detected - showing onboarding window");
 
                 use tauri::{WebviewUrl, WebviewWindowBuilder};
 
-                let _onboarding_window = WebviewWindowBuilder::new(
+                let onboarding_window = WebviewWindowBuilder::new(
                     app,
                     "onboarding",
                     WebviewUrl::App("onboarding.html".into()),
@@ -324,266 +166,90 @@ fn main() {
                 .build()
                 .expect("Failed to create onboarding window");
 
-                // Enable dev tools in debug mode
                 #[cfg(debug_assertions)]
-                {
-                    _onboarding_window.open_devtools();
-                }
+                onboarding_window.open_devtools();
 
-                // Don't setup Fn key monitor during onboarding
-                log::info!("Onboarding mode - skipping Fn key monitor");
                 return Ok(());
             }
 
-            // Normal startup (not first run) - setup everything
-            log::info!("Normal startup - loading plugins and setting up monitors");
-
-            // Load plugins
-            tauri::async_runtime::spawn(async move {
-                if let Err(e) = plugin_manager.lock().await.load_all().await {
-                    log::error!("Failed to load plugins: {}", e);
+            let app_handle = app.handle().clone();
+            app.listen("voicebot-config-changed", move |_| {
+                if let Some(window) = app_handle.get_webview_window("voicebot") {
+                    let _ =
+                        window.eval("typeof newConversation === 'function' && newConversation()");
                 }
             });
 
-            // Forward audio level events to frontend
-            use Zana_app::hooks::HookEventType;
-            #[cfg(not(target_os = "macos"))]
-            let app_handle_for_events = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let mut receiver = event_bus.subscribe(HookEventType::AudioLevelChange).await;
-                let mut _event_count = 0u64;
-                while let Ok(event) = receiver.recv().await {
-                    if let HookEvent::AudioLevelChange { level, peak } = event {
-                        _event_count += 1;
+            let quit = MenuItem::with_id(app, "quit", "Quit Zana", true, Some("CmdOrCtrl+Q"))?;
+            let about = MenuItem::with_id(app, "about", "About Zana", true, None::<&str>)?;
+            let preferences = MenuItem::with_id(
+                app,
+                "preferences",
+                "Preferences...",
+                true,
+                Some("CmdOrCtrl+,"),
+            )?;
+            let separator = tauri::menu::PredefinedMenuItem::separator(app)?;
+            let separator2 = tauri::menu::PredefinedMenuItem::separator(app)?;
+            let menu =
+                Menu::with_items(app, &[&about, &separator, &preferences, &separator2, &quit])?;
 
-                        // Inject audio level directly into panel's WKWebView
-                        // Tauri IPC doesn't work with NSPanel - use direct ObjC calls
-                        #[cfg(target_os = "macos")]
-                        {
-                            let panel_guard = ORB_PANEL.lock().unwrap();
-                            if let Some(ref panel) = *panel_guard {
-                                let js = format!(
-                                    "window.setAudioLevel && window.setAudioLevel({}, {})",
-                                    level, peak
-                                );
-                                eval_js_in_panel(panel, &js);
-                            }
-                            drop(panel_guard);
-                        }
-
-                        // Fallback: also emit for non-macOS or regular windows
-                        #[cfg(not(target_os = "macos"))]
-                        {
-                            let _ = app_handle_for_events.emit(
-                                "audio-level",
-                                serde_json::json!({
-                                    "level": level,
-                                    "peak": peak
-                                }),
-                            );
+            if let Some(tray) = app.tray_by_id("main") {
+                let _ = tray.set_menu(Some(menu));
+                tray.on_menu_event(move |app, event| match event.id.as_ref() {
+                    "quit" => app.exit(0),
+                    "about" => {
+                        use tauri::{WebviewUrl, WebviewWindowBuilder};
+                        if app.get_webview_window("about").is_none() {
+                            let _ = WebviewWindowBuilder::new(
+                                app,
+                                "about",
+                                WebviewUrl::App("about.html".into()),
+                            )
+                            .title("About Zana")
+                            .decorations(false)
+                            .transparent(true)
+                            .shadow(true)
+                            .inner_size(400.0, 440.0)
+                            .center()
+                            .resizable(false)
+                            .build();
+                        } else if let Some(window) = app.get_webview_window("about") {
+                            let _ = window.set_focus();
                         }
                     }
-                }
-            });
-
-            // Emit app started event
-            tauri::async_runtime::spawn(async move {
-                event_bus_for_emit.emit(HookEvent::AppStarted).await;
-            });
-
-            // Setup Fn key monitor (macOS). Voicebot Mode replaces dictation: no Fn
-            // hold, no Whisper and no recording orb while it is on (one mic user).
-            #[cfg(target_os = "macos")]
-            if !settings.voicebot_mode {
-                let app_handle = app.handle().clone();
-                setup_fn_key_monitor(app_handle);
+                    "preferences" => {
+                        use tauri::{WebviewUrl, WebviewWindowBuilder};
+                        if app.get_webview_window("preferences").is_none() {
+                            let _ = WebviewWindowBuilder::new(
+                                app,
+                                "preferences",
+                                WebviewUrl::App("preferences.html".into()),
+                            )
+                            .title("Zana Preferences")
+                            .decorations(false)
+                            .transparent(true)
+                            .shadow(true)
+                            .inner_size(500.0, 680.0)
+                            .center()
+                            .resizable(false)
+                            .build();
+                        } else if let Some(window) = app.get_webview_window("preferences") {
+                            let _ = window.set_focus();
+                        }
+                    }
+                    _ => {}
+                });
+                log::info!("System tray menu attached");
             } else {
-                log::info!("Voicebot Mode is on: Fn dictation is off");
-            }
-
-            // Setup Ctrl key monitor (Windows)
-            #[cfg(target_os = "windows")]
-            {
-                let app_handle = app.handle().clone();
-                setup_ctrl_key_monitor(app_handle);
-            }
-
-            // Setup config file watcher for hot reload
-            {
-                setup_config_watcher(app.handle().clone());
-            }
-
-            // A new model or voice in Preferences: start a fresh Voicebot conversation so it applies now.
-            {
-                let app_handle = app.handle().clone();
-                app.listen("voicebot-config-changed", move |_| {
-                    if let Some(window) = app_handle.get_webview_window("voicebot") {
-                        let _ = window
-                            .eval("typeof newConversation === 'function' && newConversation()");
-                    }
-                });
-            }
-
-            // Listen for orb style changes and relay to the orb panel/window
-            {
-                #[cfg(not(target_os = "macos"))]
-                let app_handle = app.handle().clone();
-                app.listen("orb-style-changed", move |event: tauri::Event| {
-                    let style = event.payload().trim_matches('"').to_string();
-                    log::info!("[OrbStyle] Style change received: {}", style);
-
-                    // macOS: push directly to NSPanel via eval_js
-                    #[cfg(target_os = "macos")]
-                    {
-                        let panel_guard = ORB_PANEL.lock().unwrap();
-                        if let Some(ref panel) = *panel_guard {
-                            let escaped = style.replace('\\', "\\\\").replace('"', "\\\"");
-                            let js = format!(
-                                "localStorage.setItem('Zana_orb_style', '{}'); location.reload()",
-                                escaped
-                            );
-                            eval_js_in_panel(panel, &js);
-                            log::info!("[OrbStyle] Pushed style to NSPanel");
-                        }
-                    }
-
-                    // Windows: emit to the orb window
-                    #[cfg(not(target_os = "macos"))]
-                    {
-                        let _ = app_handle.emit("apply-orb-style", &style);
-                    }
-                });
-            }
-
-            // Setup system tray menu (tray icon created via config in tauri.conf.json)
-            {
-                let quit = MenuItem::with_id(app, "quit", "Quit Zana", true, Some("CmdOrCtrl+Q"))?;
-                let about = MenuItem::with_id(app, "about", "About Zana", true, None::<&str>)?;
-                let preferences = MenuItem::with_id(
-                    app,
-                    "preferences",
-                    "Preferences...",
-                    true,
-                    Some("CmdOrCtrl+,"),
-                )?;
-                let separator = tauri::menu::PredefinedMenuItem::separator(app)?;
-                let separator2 = tauri::menu::PredefinedMenuItem::separator(app)?;
-
-                let menu =
-                    Menu::with_items(app, &[&about, &separator, &preferences, &separator2, &quit])?;
-
-                // Try to get the config-created tray icon and add menu
-                if let Some(tray) = app.tray_by_id("main") {
-                    let _ = tray.set_menu(Some(menu));
-                    log::info!("System tray menu attached to config tray icon");
-
-                    // Set up menu event handler on the tray icon
-                    tray.on_menu_event(move |app, event| match event.id.as_ref() {
-                        "quit" => {
-                            log::info!("Quit requested from tray menu");
-                            app.exit(0);
-                        }
-                        "about" => {
-                            log::info!("About requested from tray menu");
-                            use tauri::{WebviewUrl, WebviewWindowBuilder};
-                            if app.get_webview_window("about").is_none() {
-                                let _ = WebviewWindowBuilder::new(
-                                    app,
-                                    "about",
-                                    WebviewUrl::App("about.html".into()),
-                                )
-                                .title("About Zana")
-                                .decorations(false)
-                                .transparent(true)
-                                .shadow(true)
-                                .inner_size(400.0, 440.0)
-                                .center()
-                                .resizable(false)
-                                .build();
-                            } else if let Some(window) = app.get_webview_window("about") {
-                                let _ = window.set_focus();
-                            }
-                        }
-                        "preferences" => {
-                            log::info!("Preferences requested from tray menu");
-                            use tauri::{WebviewUrl, WebviewWindowBuilder};
-                            if app.get_webview_window("preferences").is_none() {
-                                let _ = WebviewWindowBuilder::new(
-                                    app,
-                                    "preferences",
-                                    WebviewUrl::App("preferences.html".into()),
-                                )
-                                .title("Zana Preferences")
-                                .decorations(false)
-                                .transparent(true)
-                                .shadow(true)
-                                .inner_size(500.0, 680.0)
-                                .center()
-                                .resizable(false)
-                                .build();
-                            } else if let Some(window) = app.get_webview_window("preferences") {
-                                let _ = window.set_focus();
-                            }
-                        }
-                        "transcriptions" => {
-                            log::info!("Transcriptions requested from tray menu");
-                            use tauri::{WebviewUrl, WebviewWindowBuilder};
-                            if let Some(window) = app.get_webview_window("transcriptions") {
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            } else {
-                                let _ = WebviewWindowBuilder::new(
-                                    app,
-                                    "transcriptions",
-                                    WebviewUrl::App("transcriptions.html".into()),
-                                )
-                                .title("Zana Transcriptions")
-                                .decorations(false)
-                                .transparent(true)
-                                .shadow(true)
-                                .inner_size(560.0, 640.0)
-                                .center()
-                                .build();
-                            }
-                        }
-                        _ => {}
-                    });
-                } else {
-                    log::warn!("Could not find tray icon by id 'main'");
-                }
-
-                log::info!("System tray configured");
+                log::warn!("Could not find tray icon by id 'main'");
             }
 
             log::info!("Zana initialized successfully");
-
-            // Warm up orb window (create, show, hide to preload NSPanel and webview)
-            #[cfg(target_os = "macos")]
-            if !settings.voicebot_mode {
-                warmup_orb(app.handle());
-            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            // Audio commands
-            commands::list_audio_devices,
-            commands::start_recording,
-            commands::stop_recording,
-            commands::get_audio_metrics,
-            commands::is_recording,
-            // Transcription commands
-            commands::list_models,
-            commands::download_model,
-            commands::set_model,
-            commands::transcribe,
-            commands::transcribe_preview,
-            // Plugin commands
-            commands::list_plugins,
-            commands::enable_plugin,
-            commands::disable_plugin,
-            commands::install_plugin,
-            commands::uninstall_plugin,
-            // Onboarding commands
+            // Onboarding
             commands::is_first_run,
             commands::check_accessibility_permission,
             commands::open_accessibility_settings,
@@ -593,13 +259,10 @@ fn main() {
             commands::complete_onboarding_and_restart,
             // Diagnostics
             commands::run_diagnostics,
-            // Settings
-            commands::set_orb_style,
-            commands::get_orb_style,
+            // Preferences and Voicebot
             commands::get_preferences,
-            commands::get_transcript_history,
-            commands::open_transcriptions_window,
             commands::save_preferences,
+            commands::test_ai_connection,
             commands::get_voicebot_config,
             commands::set_voicebot_terminal,
             commands::set_voicebot_context_command,
@@ -620,7 +283,6 @@ fn main() {
             commands::clear_voicebot_debug,
             open_voicebot_debug,
             voicebot_paste,
-            commands::test_ai_connection,
             // Updates
             commands::check_for_updates,
         ])
@@ -633,773 +295,27 @@ fn main() {
         });
 }
 
-/// Create the orb window as an NSPanel (macOS only)
-#[cfg(target_os = "macos")]
-fn create_orb_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-    use cocoa::appkit::NSScreen;
-    use panel::OrbPanel;
-    use tauri::{WebviewUrl, WebviewWindowBuilder};
-    use tauri_nspanel::panel::{NSWindowCollectionBehavior, NSWindowStyleMask};
-
-    log::info!("Creating orb window as NSPanel...");
-
-    // Get screen dimensions for fullscreen
-    let (screen_width, screen_height) = unsafe {
-        let main_screen = NSScreen::mainScreen(std::ptr::null_mut());
-        let frame = NSScreen::frame(main_screen);
-        (frame.size.width, frame.size.height)
-    };
-
-    log::info!(
-        "[CreateOrb] Screen size: {}x{}",
-        screen_width,
-        screen_height
-    );
-
-    // Keep the native hitbox close to the visible orb. Transparent NSPanels still
-    // intercept pointer events anywhere inside their rectangular frame.
-    let orb_width = 320.0;
-    let orb_height = 320.0;
-
-    // Position in bottom-right corner with padding
-    let padding = 20.0;
-    let pos_x = (screen_width - orb_width - padding).floor();
-    let pos_y = padding; // macOS Y is from bottom, so small Y = bottom
-
-    log::info!(
-        "[CreateOrb] Orb size: {}x{}, position: {},{}",
-        orb_width,
-        orb_height,
-        pos_x,
-        pos_y
-    );
-
-    // Create WebviewWindow - compact, positioned bottom-right
-    let orb = WebviewWindowBuilder::new(app, "orb", WebviewUrl::App("orb.html".into()))
-        .title("Zana Orb")
-        .inner_size(orb_width, orb_height)
-        .position(pos_x, pos_y)
-        .resizable(false)
-        .decorations(false)
-        .transparent(true)
-        .always_on_top(true)
-        .skip_taskbar(true)
-        .visible_on_all_workspaces(true)
-        .visible(false)
-        .shadow(false)
-        .build()?;
-
-    // Convert to NSPanel for fullscreen support
-    let panel = orb.to_panel::<OrbPanel>()?;
-
-    // Configure NSPanel
-    panel.set_floating_panel(true);
-    panel.set_hides_on_deactivate(false);
-
-    // Make NSPanel draggable and set position
-    {
-        use cocoa::base::id;
-        use cocoa::foundation::{NSPoint, NSRect};
-        use objc::{msg_send, sel, sel_impl};
-        let ns_panel = panel.as_panel();
-        let ns_panel_ptr = ns_panel as *const _ as id;
-
-        unsafe {
-            // Enable dragging by window background
-            let _: () = msg_send![ns_panel_ptr, setMovable: true];
-            let _: () = msg_send![ns_panel_ptr, setMovableByWindowBackground: true];
-
-            // Get current frame and set new origin
-            let frame: NSRect = msg_send![ns_panel_ptr, frame];
-            let new_origin = NSPoint::new(pos_x, pos_y);
-            let new_frame = NSRect::new(new_origin, frame.size);
-            let _: () = msg_send![ns_panel_ptr, setFrame:new_frame display: false];
-        }
-        log::info!(
-            "[CreateOrb] NSPanel draggable, position set to {},{}",
-            pos_x,
-            pos_y
-        );
-    }
-
-    // NonactivatingPanel prevents focus stealing
-    panel.set_style_mask(NSWindowStyleMask::NonactivatingPanel | NSWindowStyleMask::Resizable);
-
-    // FullScreenAuxiliary allows appearing over fullscreen apps
-    panel.set_collection_behavior(
-        NSWindowCollectionBehavior::MoveToActiveSpace
-            | NSWindowCollectionBehavior::FullScreenAuxiliary,
-    );
-
-    // Window level 1000 = above fullscreen
-    panel.set_level(1000);
-
-    // Store panel reference (clone for storage)
-    *ORB_PANEL.lock().unwrap() = Some(panel.clone());
-
-    log::info!("Orb NSPanel created successfully");
-    Ok(())
-}
-
-/// Show the orb window with fade in
-#[cfg(target_os = "macos")]
-fn show_orb(app: &tauri::AppHandle) {
-    // Cancel any pending hide operations
-    HIDE_CANCELLED.store(true, Ordering::SeqCst);
-    log::info!("[ShowOrb] Cancelled any pending hide operations");
-
-    // Create orb if not exists
-    if ORB_PANEL.lock().unwrap().is_none() {
-        log::info!("[ShowOrb] Creating new orb window");
-        if let Err(e) = create_orb_window(app) {
-            log::error!("Failed to create orb window: {}", e);
-            return;
-        }
-        log::info!("[ShowOrb] Orb window created successfully");
-    } else {
-        log::info!("[ShowOrb] Orb window already exists");
-    }
-
-    // Show panel (position is set during creation and restored from localStorage)
-    if let Some(ref panel) = *ORB_PANEL.lock().unwrap() {
-        log::info!("[ShowOrb] Showing orb panel");
-
-        // Reset orb state and trigger fade in
-        eval_js_in_panel(panel, "window.resetOrb && window.resetOrb()");
-        eval_js_in_panel(panel, "window.fadeIn && window.fadeIn()");
-
-        panel.show();
-        panel.order_front_regardless();
-        log::info!("[ShowOrb] Orb panel shown with fade in");
-    }
-}
-
-/// Hide the orb window with fade out (saves position first)
-#[cfg(target_os = "macos")]
-fn hide_orb(app: &tauri::AppHandle) {
-    use cocoa::base::id;
-
-    log::info!("[HideOrb] Starting fade out (fullscreen mode)");
-
-    // Reset cancel flag at start of hide
-    HIDE_CANCELLED.store(false, Ordering::SeqCst);
-
-    // Trigger fade out (for fullscreen, we just fade to opacity 0)
-    {
-        let panel_guard = ORB_PANEL.lock().unwrap();
-        if let Some(ref panel) = *panel_guard {
-            eval_js_in_panel(panel, "window.fadeOut && window.fadeOut()");
-            log::info!("[HideOrb] Triggered fade out");
-        }
-    }
-
-    // For fullscreen overlay, after fade we order the panel out
-    let app_clone = app.clone();
-    std::thread::spawn(move || {
-        // Wait for fade out animation
-        std::thread::sleep(std::time::Duration::from_millis(1500));
-
-        // Check if hide was cancelled (user started new recording)
-        if HIDE_CANCELLED.load(Ordering::SeqCst) {
-            log::info!("[HideOrb] Hide cancelled - new recording started");
-            return;
-        }
-
-        // Order panel out (hide it) after fade completes
-        let _ = app_clone.run_on_main_thread(move || {
-            use objc::{msg_send, sel, sel_impl};
-
-            // Double-check cancel flag on main thread
-            if HIDE_CANCELLED.load(Ordering::SeqCst) {
-                log::info!("[HideOrb] Hide cancelled on main thread");
-                return;
-            }
-
-            if let Some(ref panel) = *ORB_PANEL.lock().unwrap() {
-                let ns_panel = panel.as_panel();
-                let ns_panel_ptr = ns_panel as *const _ as id;
-
-                // Order out the panel (hide it)
-                unsafe {
-                    let _: () = msg_send![ns_panel_ptr, orderOut: std::ptr::null::<objc::runtime::Object>()];
-                }
-
-                log::info!("[HideOrb] Orb panel ordered out (fullscreen mode)");
-            }
-        });
-    });
-}
-
-/// Warm up the orb window by creating, showing, and hiding it during startup
-/// This ensures the NSPanel and webview are fully initialized before first use
-#[cfg(target_os = "macos")]
-fn warmup_orb(app: &tauri::AppHandle) {
-    log::info!("[OrbWarmup] Starting orb warmup");
-
-    let app1 = app.clone();
-    let app2 = app.clone();
-    let app3 = app.clone();
-    let app4 = app.clone();
-
-    std::thread::spawn(move || {
-        // Step 1: Create the orb window (on main thread)
-        let app1a = app1.clone();
-        let _ = app1.run_on_main_thread(move || {
-            if let Err(e) = create_orb_window(&app1a) {
-                log::warn!("[OrbWarmup] Failed to create orb: {}", e);
-                return;
-            }
-            log::info!("[OrbWarmup] Orb created");
-        });
-
-        // Wait for creation
-        std::thread::sleep(std::time::Duration::from_millis(200));
-
-        // Step 2: Show the orb (on main thread)
-        let _ = app2.run_on_main_thread(move || {
-            if let Some(ref panel) = *ORB_PANEL.lock().unwrap() {
-                eval_js_in_panel(panel, "window.resetOrb && window.resetOrb()");
-                eval_js_in_panel(panel, "window.fadeIn && window.fadeIn()");
-                panel.show();
-                panel.order_front_regardless();
-                log::info!("[OrbWarmup] Orb shown for warmup");
-            }
-        });
-
-        // Wait for fade in
-        std::thread::sleep(std::time::Duration::from_millis(1200));
-
-        // Step 3: Trigger fade out (on main thread)
-        let _ = app3.run_on_main_thread(move || {
-            if let Some(ref panel) = *ORB_PANEL.lock().unwrap() {
-                eval_js_in_panel(panel, "window.fadeOut && window.fadeOut()");
-                log::info!("[OrbWarmup] Orb fade out triggered");
-            }
-        });
-
-        // Wait for fade out
-        std::thread::sleep(std::time::Duration::from_millis(1500));
-
-        // Step 4: Hide the panel (on main thread)
-        let _ = app4.run_on_main_thread(move || {
-            use cocoa::base::id;
-            use objc::{msg_send, sel, sel_impl};
-
-            if let Some(ref panel) = *ORB_PANEL.lock().unwrap() {
-                let ns_panel = panel.as_panel();
-                let ns_panel_ptr = ns_panel as *const _ as id;
-                unsafe {
-                    let _: () = msg_send![ns_panel_ptr, orderOut: std::ptr::null::<objc::runtime::Object>()];
-                }
-                log::info!("[OrbWarmup] Orb warmup complete, panel hidden");
-            }
-        });
-    });
-}
-
-/// Setup config file watcher for hot reload
-#[allow(unused_variables)]
-fn setup_config_watcher(app: tauri::AppHandle) {
-    use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
-    use std::sync::mpsc::channel;
-    use std::time::Duration;
-
-    std::thread::spawn(move || {
-        // Try multiple paths to find the config file
-        let possible_paths = [
-            // Development paths
-            std::path::PathBuf::from("src-ui/orb_config.json"),
-            std::path::PathBuf::from("../src-ui/orb_config.json"),
-        ];
-
-        let config_path = possible_paths.into_iter().find(|p| p.exists());
-
-        let config_path = match config_path {
-            Some(p) => p,
-            None => {
-                log::warn!(
-                    "[ConfigWatcher] Config file not found in any location, hot reload disabled"
-                );
-                return;
-            }
-        };
-
-        log::info!("[ConfigWatcher] Watching {:?}", config_path);
-
-        let (tx, rx) = channel();
-
-        let mut watcher = match RecommendedWatcher::new(
-            move |res| {
-                if let Ok(event) = res {
-                    let _ = tx.send(event);
-                }
-            },
-            Config::default().with_poll_interval(Duration::from_secs(2)),
-        ) {
-            Ok(w) => w,
-            Err(e) => {
-                log::error!("[ConfigWatcher] Failed to create watcher: {}", e);
-                return;
-            }
-        };
-
-        if let Err(e) = watcher.watch(&config_path, RecursiveMode::NonRecursive) {
-            log::error!("[ConfigWatcher] Failed to watch file: {}", e);
-            return;
-        }
-
-        // Listen for file changes
-        while let Ok(event) = rx.recv() {
-            if event.kind.is_modify() {
-                log::info!("[ConfigWatcher] Config file changed, reloading...");
-
-                // Read the new config
-                if let Ok(content) = std::fs::read_to_string(&config_path) {
-                    // macOS: push via direct WKWebView eval (NSPanel doesn't support Tauri IPC)
-                    #[cfg(target_os = "macos")]
-                    {
-                        let panel_guard = ORB_PANEL.lock().unwrap();
-                        if let Some(ref panel) = *panel_guard {
-                            let escaped = content
-                                .replace('\\', "\\\\")
-                                .replace('"', "\\\"")
-                                .replace('\n', "\\n");
-                            let js = format!(
-                                "window.updateConfig && window.updateConfig(\"{}\")",
-                                escaped
-                            );
-                            eval_js_in_panel(panel, &js);
-                            log::info!("[ConfigWatcher] Config pushed to webview");
-                        }
-                    }
-
-                    // Windows/Linux: push via Tauri emit
-                    #[cfg(not(target_os = "macos"))]
-                    {
-                        let _ = app.emit("config-changed", content);
-                        log::info!("[ConfigWatcher] Config emitted to frontend");
-                    }
-                }
-            }
-        }
-    });
-}
-
-/// Setup Fn key monitor using NSEvent (macOS only)
-#[cfg(target_os = "macos")]
-fn setup_fn_key_monitor(app: tauri::AppHandle) {
-    use cocoa::base::id;
-    use objc::rc::autoreleasepool;
-    use objc::{class, msg_send, sel, sel_impl};
-
-    log::info!("Setting up Fn key monitor...");
-
-    // Check accessibility permissions
-    let has_permissions = unsafe {
-        extern "C" {
-            fn AXIsProcessTrusted() -> bool;
-        }
-        AXIsProcessTrusted()
-    };
-
-    if !has_permissions {
-        log::warn!("Accessibility permissions not granted - Fn key monitoring disabled");
-        log::warn!("Grant access in System Settings > Privacy & Security > Accessibility");
-        return;
-    }
-
-    log::info!("Accessibility permissions granted");
-
-    let app_clone = app.clone();
-    let app_clone2 = app.clone();
-
-    // NSFlagsChangedMask = 1 << 12
-    let flags_changed_mask: u64 = 1 << 12;
-    const FN_KEY_CODE: u16 = 63;
-
-    unsafe {
-        autoreleasepool(|| {
-            // Global monitor (when app not focused)
-            let block = block::ConcreteBlock::new(move |event: id| {
-                let key_code: u16 = msg_send![event, keyCode];
-                let flags: u64 = msg_send![event, modifierFlags];
-                let fn_flag: u64 = 1 << 23; // NSEventModifierFlagFunction
-                let fn_is_pressed = (flags & fn_flag) != 0;
-                let was_pressed = FN_KEY_PRESSED.load(Ordering::SeqCst);
-
-                // Log all flag change events for debugging
-                log::debug!(
-                    "[FnMonitor] keyCode={}, flags=0x{:x}, fn_pressed={}, was_pressed={}",
-                    key_code,
-                    flags,
-                    fn_is_pressed,
-                    was_pressed
-                );
-
-                if fn_is_pressed && !was_pressed && key_code == FN_KEY_CODE {
-                    FN_KEY_PRESSED.store(true, Ordering::SeqCst);
-                    *LAST_FN_PRESS.lock().unwrap() = Some(Instant::now());
-                    log::info!("Fn key PRESSED (global, keyCode={})", key_code);
-                    handle_fn_press(&app_clone);
-                } else if !fn_is_pressed && was_pressed {
-                    FN_KEY_PRESSED.store(false, Ordering::SeqCst);
-                    log::info!("Fn key RELEASED (global, keyCode={})", key_code);
-                    handle_fn_release(&app_clone);
-                }
-            });
-            let block = block.copy();
-
-            let global_monitor: id = msg_send![
-                class!(NSEvent),
-                addGlobalMonitorForEventsMatchingMask:flags_changed_mask
-                handler:block
-            ];
-
-            // Local monitor (when app focused)
-            let block_local = block::ConcreteBlock::new(move |event: id| -> id {
-                let key_code: u16 = msg_send![event, keyCode];
-                let flags: u64 = msg_send![event, modifierFlags];
-                let fn_flag: u64 = 1 << 23;
-                let fn_is_pressed = (flags & fn_flag) != 0;
-                let was_pressed = FN_KEY_PRESSED.load(Ordering::SeqCst);
-
-                // Log all flag change events for debugging
-                log::debug!(
-                    "[FnMonitor-Local] keyCode={}, flags=0x{:x}, fn_pressed={}, was_pressed={}",
-                    key_code,
-                    flags,
-                    fn_is_pressed,
-                    was_pressed
-                );
-
-                if fn_is_pressed && !was_pressed && key_code == FN_KEY_CODE {
-                    FN_KEY_PRESSED.store(true, Ordering::SeqCst);
-                    *LAST_FN_PRESS.lock().unwrap() = Some(Instant::now());
-                    log::info!("Fn key PRESSED [local, keyCode={}]", key_code);
-                    handle_fn_press(&app_clone2);
-                } else if !fn_is_pressed && was_pressed {
-                    FN_KEY_PRESSED.store(false, Ordering::SeqCst);
-                    log::info!("Fn key RELEASED [local, keyCode={}]", key_code);
-                    handle_fn_release(&app_clone2);
-                }
-
-                event
-            });
-            let block_local = block_local.copy();
-
-            let local_monitor: id = msg_send![
-                class!(NSEvent),
-                addLocalMonitorForEventsMatchingMask:flags_changed_mask
-                handler:block_local
-            ];
-
-            // Store monitor handles as usize (cast from id pointers)
-            *FN_KEY_MONITORS.lock().unwrap() =
-                Some((global_monitor as usize, local_monitor as usize));
-
-            log::info!("Fn key monitors active");
-        });
-    }
-}
-
-fn clear_recording_flags() {
-    IS_RECORDING.store(false, Ordering::SeqCst);
-    LATCHED_RECORDING.store(false, Ordering::SeqCst);
-}
-
-fn clear_recording_buffers(app: tauri::AppHandle) {
-    tauri::async_runtime::spawn(async move {
-        if let Some(state) = app.try_state::<AppState>() {
-            commands::cancel_recording_inner(&state).await;
-        }
-    });
-}
-
-/// Cancel a recording path without transcribing or pasting.
-#[cfg(target_os = "macos")]
-fn cancel_recording_without_transcription(app: &tauri::AppHandle) {
-    log::info!("[RecordingCancel] Cancelling pending/active recording without transcription");
-    clear_recording_flags();
-    voicebot_dictation(app, false);
-    clear_recording_buffers(app.clone());
-    hide_orb(app);
-}
-
-#[cfg(target_os = "macos")]
-fn handle_recording_start_failed(app: &tauri::AppHandle, error: &str) {
-    log::error!("[RecordingStart] Failed to start recording: {}", error);
-    clear_recording_flags();
-    voicebot_dictation(app, false);
-    clear_recording_buffers(app.clone());
-    hide_orb(app);
-}
-
-/// Handle Fn key press - show orb and start recording
-#[cfg(target_os = "macos")]
-fn handle_fn_press(app: &tauri::AppHandle) {
-    // Check timing for double-tap detection
-    let ms_since_release = LAST_FN_RELEASE
-        .lock()
-        .unwrap()
-        .map(|t| t.elapsed().as_millis())
-        .unwrap_or(999999);
-
-    log::info!(
-        "[FnPress] Fn key pressed ({}ms since last release, IS_RECORDING={}, LATCHED={})",
-        ms_since_release,
-        IS_RECORDING.load(Ordering::SeqCst),
-        LATCHED_RECORDING.load(Ordering::SeqCst)
-    );
-
-    // Check for double-tap (tap within 300ms of last release)
-    let is_double_tap = ms_since_release < 300;
-
-    if is_double_tap {
-        log::info!(
-            "[FnPress] *** DOUBLE-TAP DETECTED *** ({}ms)",
-            ms_since_release
-        );
-    }
-
-    // If already recording in latched mode, single tap stops it
-    if IS_RECORDING.load(Ordering::SeqCst) && LATCHED_RECORDING.load(Ordering::SeqCst) {
-        log::info!("[FnPress] Single tap while latched - stopping recording");
-        stop_recording(app);
-        return;
-    }
-
-    // If double-tap, start latched recording mode
-    if is_double_tap && !IS_RECORDING.load(Ordering::SeqCst) {
-        log::info!("[FnPress] *** STARTING LATCHED MODE ***");
-        LATCHED_RECORDING.store(true, Ordering::SeqCst);
-    }
-
-    // Show orb
-    show_orb(app);
-
-    // Start recording
-    if !IS_RECORDING.load(Ordering::SeqCst) {
-        IS_RECORDING.store(true, Ordering::SeqCst);
-        log::info!("[FnPress] IS_RECORDING flag set to true");
-        voicebot_dictation(app, true);
-
-        // Small delay to ensure orb window has loaded
-        let app_clone = app.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(150));
-            if !IS_RECORDING.load(Ordering::SeqCst) {
-                log::info!("[FnPress] Recording start skipped because the trigger was released");
-                return;
-            }
-            log::info!("[FnPress] Delay complete, emitting events");
-
-            // Use direct WKWebView eval - Tauri IPC doesn't work with NSPanel
-            let panel_guard = ORB_PANEL.lock().unwrap();
-            if let Some(ref panel) = *panel_guard {
-                log::info!("[FnPress] Setting recording state via WKWebView eval");
-                eval_js_in_panel(
-                    panel,
-                    "window.setRecordingState && window.setRecordingState(true, false)",
-                );
-                log::info!("[FnPress] setRecordingState(true) called");
-            } else {
-                log::error!("[FnPress] No orb panel available!");
-            }
-            drop(panel_guard);
-
-            // Start audio capture via state
-            tauri::async_runtime::spawn(async move {
-                log::info!("[FnPress] Starting audio capture...");
-                if !IS_RECORDING.load(Ordering::SeqCst) {
-                    log::info!(
-                        "[FnPress] Recording start skipped because the trigger was released"
-                    );
-                    return;
-                }
-
-                let start_result = if let Some(state) = app_clone.try_state::<AppState>() {
-                    commands::start_recording_inner(&state, None).await
-                } else {
-                    log::error!("[FnPress] No app state available!");
-                    Err("No app state available".to_string())
-                };
-
-                match start_result {
-                    Ok(_) if IS_RECORDING.load(Ordering::SeqCst) => {
-                        log::info!("[FnPress] Audio capture started successfully")
-                    }
-                    Ok(_) => {
-                        log::info!(
-                            "[FnPress] Recording start completed after the trigger was released; cancelling capture"
-                        );
-                        cancel_recording_without_transcription(&app_clone);
-                    }
-                    Err(e) => handle_recording_start_failed(&app_clone, &e),
-                }
-            });
-
-            log::info!("[FnPress] Recording started");
-        });
-    } else {
-        log::warn!("[FnPress] Already recording, ignoring");
-    }
-}
-
-/// Handle Fn key release - stop recording, transcribe, paste, hide
-#[cfg(target_os = "macos")]
-fn handle_fn_release(app: &tauri::AppHandle) {
-    log::info!(
-        "[FnRelease] Fn key released, IS_RECORDING={}, LATCHED={}",
-        IS_RECORDING.load(Ordering::SeqCst),
-        LATCHED_RECORDING.load(Ordering::SeqCst)
-    );
-
-    // Save release time for double-tap detection
-    *LAST_FN_RELEASE.lock().unwrap() = Some(Instant::now());
-
-    // If in latched mode, user must tap again to stop - ignore release
-    if LATCHED_RECORDING.load(Ordering::SeqCst) {
-        log::info!("[FnRelease] Latched mode active - ignoring release, tap again to stop");
-        return;
-    }
-
-    // Check minimum hold duration (300ms)
-    let held_long_enough = LAST_FN_PRESS
-        .lock()
-        .unwrap()
-        .map(|t| t.elapsed().as_millis() >= 300)
-        .unwrap_or(false);
-
-    if !held_long_enough {
-        log::info!(
-            "[FnRelease] Released too quickly ({} ms), ignoring",
-            LAST_FN_PRESS
-                .lock()
-                .unwrap()
-                .map(|t| t.elapsed().as_millis())
-                .unwrap_or(0)
-        );
-        cancel_recording_without_transcription(app);
-        return;
-    }
-
-    // Stop recording (hold-mode)
-    if IS_RECORDING.load(Ordering::SeqCst) {
-        log::info!("[FnRelease] Stopping recording (hold mode)");
-        stop_recording(app);
-    }
-}
-
-/// Stop recording, transcribe, and paste
-#[cfg(target_os = "macos")]
-fn stop_recording(app: &tauri::AppHandle) {
-    if !IS_RECORDING.load(Ordering::SeqCst) {
-        return;
-    }
-
-    IS_RECORDING.store(false, Ordering::SeqCst);
-    LATCHED_RECORDING.store(false, Ordering::SeqCst); // Clear latched mode
-    log::info!("[StopRecording] Stopping recording");
-    voicebot_dictation(app, false);
-
-    // Use direct WKWebView eval - Tauri IPC doesn't work with NSPanel
-    {
-        let panel_guard = ORB_PANEL.lock().unwrap();
-        if let Some(ref panel) = *panel_guard {
-            eval_js_in_panel(
-                panel,
-                "window.setRecordingState && window.setRecordingState(false, true)",
-            );
-        }
-    }
-
-    // Stop capture and transcribe
-    let app_clone = app.clone();
-    tauri::async_runtime::spawn(async move {
-        if let Some(state) = app_clone.try_state::<AppState>() {
-            match commands::stop_recording_inner(&state).await {
-                Ok(summary) => log::info!("Recording stopped: {} samples", summary.sample_count),
-                Err(error) => {
-                    log::error!("[StopRecording] Failed to stop recording: {}", error);
-                    hide_orb(&app_clone);
-                    return;
-                }
-            }
-
-            match commands::transcribe(state).await {
-                Ok(response) => {
-                    if response.success {
-                        if let Some(final_text) = response.text {
-                            log::info!(
-                                "[StopRecording] Transcription (rewritten: {})",
-                                response.used_cloud_rewrite
-                            );
-
-                            // Use direct WKWebView eval - Tauri IPC doesn't work with NSPanel
-                            let panel_guard = ORB_PANEL.lock().unwrap();
-                            if let Some(ref panel) = *panel_guard {
-                                let escaped = final_text.replace('\\', "\\\\").replace('"', "\\\"");
-                                let js = format!(
-                                    "window.setTranscriptionComplete && window.setTranscriptionComplete(\"{}\")",
-                                    escaped
-                                );
-                                eval_js_in_panel(panel, &js);
-                            }
-
-                            if !final_text.trim().is_empty() {
-                                paste_text(&final_text);
-                            }
-                        }
-                    } else {
-                        log::error!(
-                            "[StopRecording] Transcription failed: {}",
-                            response
-                                .error
-                                .unwrap_or_else(|| "unknown error".to_string())
-                        );
-                    }
-                }
-                Err(e) => {
-                    log::error!("Transcription command failed: {}", e);
-                }
-            }
-        } else {
-            log::error!("[StopRecording] No app state available");
-        }
-
-        // Wait for poof animation to finish before starting fade out
-        tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
-
-        // Only hide if not recording again (user might have pressed Fn again)
-        if !IS_RECORDING.load(Ordering::SeqCst) {
-            hide_orb(&app_clone);
-        } else {
-            log::info!("[HideOrb] Skipping hide - new recording started");
-        }
-    });
-}
-
-/// Start Voicebot's processes (in the background) and open its orb: an
-/// always-on-top window in the bottom-right corner.
+/// Start Voicebot's processes in the background and open its floating orb.
 fn start_voicebot(app: &tauri::AppHandle, settings: &Zana_app::state::Settings) {
     use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
     let code = Zana_app::voicebot::code_dir(app.path().resource_dir().ok());
-    if let Err(e) = Zana_app::voicebot::write_agent_config(settings) {
-        log::error!("Voicebot config could not be written: {e}");
+    if let Err(error) = Zana_app::voicebot::write_agent_config(settings) {
+        log::error!("Voicebot config could not be written: {error}");
     }
-    log::info!("Voicebot mode on; code in {}", code.display());
+    log::info!("Voicebot starting; code in {}", code.display());
     Zana_app::voicebot::start(code);
+
     #[cfg(target_os = "macos")]
-    if let Err(e) = create_voicebot_debug_panel(app) {
-        log::error!("The Voicebot Debug panel could not be created: {e}");
+    if let Err(error) = create_voicebot_debug_panel(app) {
+        log::error!("The Voicebot Debug panel could not be created: {error}");
     }
 
-    let (w, h) = (220.0, 220.0); // the orb alone; its state shows on hover
+    let (width, height) = (220.0, 220.0);
     let mut builder =
         WebviewWindowBuilder::new(app, "voicebot", WebviewUrl::App("voicebot.html".into()))
             .title("Voicebot")
-            .inner_size(w, h)
+            .inner_size(width, height)
             .resizable(false)
             .decorations(false)
             .transparent(true)
@@ -1408,27 +324,28 @@ fn start_voicebot(app: &tauri::AppHandle, settings: &Zana_app::state::Settings) 
             .focused(false)
             .visible_on_all_workspaces(true)
             .skip_taskbar(true);
+
     if let Ok(Some(monitor)) = app.primary_monitor() {
         let scale = monitor.scale_factor();
         let size = monitor.size().to_logical::<f64>(scale);
-        builder = builder.position(size.width - w - 24.0, size.height - h - 72.0);
+        builder = builder.position(size.width - width - 24.0, size.height - height - 72.0);
     }
+
     let window = match builder.build() {
         Ok(window) => window,
-        Err(e) => return log::error!("Failed to open the Voicebot window: {e}"),
+        Err(error) => return log::error!("Failed to open the Voicebot window: {error}"),
     };
 
-    // Like the recording orb: a non-activating floating panel, so clicking the
-    // orb never takes focus from the app Voicebot pastes into, and it shows over
-    // full-screen apps.
     #[cfg(target_os = "macos")]
     {
         use panel::OrbPanel;
         use tauri_nspanel::panel::{NSWindowCollectionBehavior, NSWindowStyleMask};
+
         match window.to_panel::<OrbPanel>() {
             Ok(panel) => {
                 use cocoa::base::id;
                 use objc::{msg_send, sel, sel_impl};
+
                 panel.set_floating_panel(true);
                 panel.set_hides_on_deactivate(false);
                 panel.set_style_mask(NSWindowStyleMask::NonactivatingPanel);
@@ -1437,19 +354,20 @@ fn start_voicebot(app: &tauri::AppHandle, settings: &Zana_app::state::Settings) 
                         | NSWindowCollectionBehavior::FullScreenAuxiliary,
                 );
                 panel.set_level(1000);
+
                 let ns_panel = panel.as_panel() as *const _ as id;
                 unsafe {
                     let _: () = msg_send![ns_panel, setMovableByWindowBackground: true];
                 }
-                // Panels are not ordered in on creation: show it on the active
-                // Space, over full-screen apps too.
+
                 panel.show();
                 panel.order_front_regardless();
                 *VOICEBOT_PANEL.lock().unwrap() = Some(panel);
             }
-            Err(e) => log::error!("The Voicebot window could not become a panel: {e}"),
+            Err(error) => log::error!("The Voicebot window could not become a panel: {error}"),
         }
     }
+
     #[cfg(not(target_os = "macos"))]
     let _ = window;
 }
@@ -1458,8 +376,7 @@ fn start_voicebot(app: &tauri::AppHandle, settings: &Zana_app::state::Settings) 
 static VOICEBOT_PANEL: StdMutex<Option<tauri_nspanel::PanelHandle<tauri::Wry>>> =
     StdMutex::new(None);
 
-/// The Voicebot Debug window: a live view of what Voicebot hears, says and runs.
-/// Created hidden at startup (same steps as the orb panel); this only shows it.
+/// Open the Voicebot Debug panel.
 #[tauri::command]
 async fn open_voicebot_debug(app: tauri::AppHandle) -> Result<(), String> {
     app.run_on_main_thread(|| {
@@ -1469,11 +386,9 @@ async fn open_voicebot_debug(app: tauri::AppHandle) -> Result<(), String> {
             panel.order_front_regardless();
         }
     })
-    .map_err(|e| e.to_string())
+    .map_err(|error| error.to_string())
 }
 
-/// Build the Debug panel hidden, mirroring create_orb_window, which is proven
-/// to show over full-screen apps without raising Objective-C exceptions.
 #[cfg(target_os = "macos")]
 fn create_voicebot_debug_panel(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     use panel::OrbPanel;
@@ -1495,8 +410,7 @@ fn create_voicebot_debug_panel(app: &tauri::AppHandle) -> Result<(), Box<dyn std
     .focused(false)
     .shadow(true)
     .build()?;
-    // Created visible, like the Voicebot orb: a panel converted while hidden loses
-    // Tauri IPC (see the recording orb), and this page needs invoke().
+
     let panel = window.to_panel::<OrbPanel>()?;
     panel.set_floating_panel(true);
     panel.set_hides_on_deactivate(false);
@@ -1515,7 +429,7 @@ fn create_voicebot_debug_panel(app: &tauri::AppHandle) -> Result<(), Box<dyn std
 static VOICEBOT_DEBUG_PANEL: StdMutex<Option<tauri_nspanel::PanelHandle<tauri::Wry>>> =
     StdMutex::new(None);
 
-/// Voicebot's "type up" tool: put text on the clipboard and paste it at the cursor.
+/// Voicebot's type-up tool: paste text at the active cursor.
 #[tauri::command]
 fn voicebot_paste(text: String) -> Result<(), String> {
     #[cfg(target_os = "macos")]
@@ -1530,26 +444,11 @@ fn voicebot_paste(text: String) -> Result<(), String> {
     }
 }
 
-/// Mute Voicebot's mic while Zana dictation records, so the agent does not
-/// answer dictated speech.
-fn voicebot_dictation(app: &tauri::AppHandle, active: bool) {
-    use tauri::Manager;
-    if let Some(window) = app.get_webview_window("voicebot") {
-        let _ = window.eval(format!(
-            "window.zanaDictation && window.zanaDictation({active})"
-        ));
-    }
-}
-
-/// Paste text to active input using clipboard + Cmd+V
-/// Transcription stays in clipboard (not restored to original)
 #[cfg(target_os = "macos")]
 fn paste_text(text: &str) {
     use arboard::Clipboard;
 
     log::info!("Pasting {} chars", text.len());
-
-    // Set text to clipboard (keeps transcription available even if paste fails)
     if let Ok(mut clipboard) = Clipboard::new() {
         if clipboard.set_text(text).is_err() {
             log::error!("Failed to set clipboard");
@@ -1557,465 +456,9 @@ fn paste_text(text: &str) {
         }
     }
 
-    // Small delay
     std::thread::sleep(std::time::Duration::from_millis(50));
-
-    // Simulate Cmd+V using AppleScript
     let script = r#"tell application "System Events" to keystroke "v" using command down"#;
     let _ = std::process::Command::new("osascript")
         .args(["-e", script])
         .output();
-
-    // Transcription stays in clipboard - user can paste again if needed
-}
-
-// =============================================================================
-// WINDOWS IMPLEMENTATION
-// =============================================================================
-
-/// Cancel a recording path without transcribing or pasting.
-#[cfg(target_os = "windows")]
-fn cancel_recording_without_transcription(app: &tauri::AppHandle) {
-    log::info!("[RecordingCancel] Cancelling pending/active recording without transcription");
-    clear_recording_flags();
-    voicebot_dictation(app, false);
-    clear_recording_buffers(app.clone());
-    win_hide_orb(app);
-}
-
-#[cfg(target_os = "windows")]
-fn handle_recording_start_failed(app: &tauri::AppHandle, error: &str) {
-    log::error!("[RecordingStart] Failed to start recording: {}", error);
-    clear_recording_flags();
-    voicebot_dictation(app, false);
-    clear_recording_buffers(app.clone());
-    win_hide_orb(app);
-}
-
-/// Setup Ctrl key double-tap monitor using Win32 low-level keyboard hook
-#[cfg(target_os = "windows")]
-fn setup_ctrl_key_monitor(app: tauri::AppHandle) {
-    use std::sync::OnceLock;
-    use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
-    use windows::Win32::UI::Input::KeyboardAndMouse::{VK_LCONTROL, VK_RCONTROL};
-    use windows::Win32::UI::WindowsAndMessaging::{
-        CallNextHookEx, GetMessageW, SetWindowsHookExW, HHOOK, KBDLLHOOKSTRUCT, MSG,
-        WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
-    };
-
-    static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
-    APP_HANDLE.get_or_init(|| app);
-
-    unsafe extern "system" fn keyboard_hook_proc(
-        n_code: i32,
-        w_param: WPARAM,
-        l_param: LPARAM,
-    ) -> LRESULT {
-        if n_code >= 0 {
-            let kb = &*(l_param.0 as *const KBDLLHOOKSTRUCT);
-            let vk = kb.vkCode as u16;
-            let is_ctrl = vk == VK_LCONTROL.0 || vk == VK_RCONTROL.0;
-
-            if is_ctrl {
-                let is_keydown =
-                    w_param.0 == WM_KEYDOWN as usize || w_param.0 == WM_SYSKEYDOWN as usize;
-                let is_keyup = w_param.0 == WM_KEYUP as usize || w_param.0 == WM_SYSKEYUP as usize;
-
-                let was_pressed = FN_KEY_PRESSED.load(Ordering::SeqCst);
-
-                if is_keydown && !was_pressed {
-                    FN_KEY_PRESSED.store(true, Ordering::SeqCst);
-                    *LAST_FN_PRESS.lock().unwrap() = Some(Instant::now());
-                    log::info!("[CtrlMonitor] Ctrl PRESSED (vk={})", vk);
-                    if let Some(app) = APP_HANDLE.get() {
-                        handle_ctrl_press(app);
-                    }
-                } else if is_keyup && was_pressed {
-                    FN_KEY_PRESSED.store(false, Ordering::SeqCst);
-                    log::info!("[CtrlMonitor] Ctrl RELEASED (vk={})", vk);
-                    if let Some(app) = APP_HANDLE.get() {
-                        handle_ctrl_release(app);
-                    }
-                }
-            }
-        }
-        unsafe { CallNextHookEx(HHOOK::default(), n_code, w_param, l_param) }
-    }
-
-    log::info!("Setting up Ctrl key monitor (Windows)...");
-
-    std::thread::spawn(move || {
-        unsafe {
-            let hook = SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_hook_proc), None, 0);
-
-            match hook {
-                Ok(h) => {
-                    log::info!("[CtrlMonitor] Low-level keyboard hook installed: {:?}", h);
-                    // Message pump to keep hook alive
-                    let mut msg = MSG::default();
-                    while GetMessageW(&mut msg, None, 0, 0).as_bool() {
-                        // Just pump messages; hook callback does the work
-                    }
-                }
-                Err(e) => {
-                    log::error!("[CtrlMonitor] Failed to install keyboard hook: {}", e);
-                }
-            }
-        }
-    });
-}
-
-/// Handle Ctrl key press on Windows - mirrors macOS handle_fn_press
-#[cfg(target_os = "windows")]
-fn handle_ctrl_press(app: &tauri::AppHandle) {
-    let ms_since_release = LAST_FN_RELEASE
-        .lock()
-        .unwrap()
-        .map(|t| t.elapsed().as_millis())
-        .unwrap_or(999999);
-
-    log::info!(
-        "[CtrlPress] Ctrl pressed ({}ms since last release, IS_RECORDING={}, LATCHED={})",
-        ms_since_release,
-        IS_RECORDING.load(Ordering::SeqCst),
-        LATCHED_RECORDING.load(Ordering::SeqCst)
-    );
-
-    let is_double_tap = ms_since_release < 300;
-
-    if is_double_tap {
-        log::info!("[CtrlPress] DOUBLE-TAP DETECTED ({}ms)", ms_since_release);
-    }
-
-    // If already recording in latched mode, single tap stops it
-    if IS_RECORDING.load(Ordering::SeqCst) && LATCHED_RECORDING.load(Ordering::SeqCst) {
-        log::info!("[CtrlPress] Single tap while latched - stopping recording");
-        win_stop_recording(app);
-        return;
-    }
-
-    // If double-tap, start latched recording mode
-    if is_double_tap && !IS_RECORDING.load(Ordering::SeqCst) {
-        log::info!("[CtrlPress] STARTING LATCHED MODE");
-        LATCHED_RECORDING.store(true, Ordering::SeqCst);
-    }
-
-    // Show orb
-    win_show_orb(app);
-
-    // Start recording
-    if !IS_RECORDING.load(Ordering::SeqCst) {
-        IS_RECORDING.store(true, Ordering::SeqCst);
-        log::info!("[CtrlPress] IS_RECORDING set to true");
-
-        let app_clone = app.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(150));
-            if !IS_RECORDING.load(Ordering::SeqCst) {
-                log::info!("[CtrlPress] Recording start skipped because the trigger was released");
-                return;
-            }
-            log::info!("[CtrlPress] Delay complete, emitting events");
-
-            let _ = app_clone.emit(
-                "recording-state",
-                serde_json::json!({
-                    "recording": true,
-                    "transcribing": false
-                }),
-            );
-
-            // Start audio capture
-            tauri::async_runtime::spawn(async move {
-                log::info!("[CtrlPress] Starting audio capture...");
-                if !IS_RECORDING.load(Ordering::SeqCst) {
-                    log::info!(
-                        "[CtrlPress] Recording start skipped because the trigger was released"
-                    );
-                    return;
-                }
-
-                let start_result = if let Some(state) = app_clone.try_state::<AppState>() {
-                    commands::start_recording_inner(&state, None).await
-                } else {
-                    log::error!("[CtrlPress] No app state available!");
-                    Err("No app state available".to_string())
-                };
-
-                match start_result {
-                    Ok(_) if IS_RECORDING.load(Ordering::SeqCst) => {
-                        log::info!("[CtrlPress] Audio capture started")
-                    }
-                    Ok(_) => {
-                        log::info!(
-                            "[CtrlPress] Recording start completed after the trigger was released; cancelling capture"
-                        );
-                        cancel_recording_without_transcription(&app_clone);
-                    }
-                    Err(e) => handle_recording_start_failed(&app_clone, &e),
-                }
-            });
-        });
-    }
-}
-
-/// Handle Ctrl key release on Windows - mirrors macOS handle_fn_release
-#[cfg(target_os = "windows")]
-fn handle_ctrl_release(app: &tauri::AppHandle) {
-    log::info!(
-        "[CtrlRelease] Ctrl released, IS_RECORDING={}, LATCHED={}",
-        IS_RECORDING.load(Ordering::SeqCst),
-        LATCHED_RECORDING.load(Ordering::SeqCst)
-    );
-
-    *LAST_FN_RELEASE.lock().unwrap() = Some(Instant::now());
-
-    // In latched mode, ignore release
-    if LATCHED_RECORDING.load(Ordering::SeqCst) {
-        log::info!("[CtrlRelease] Latched mode - ignoring release");
-        return;
-    }
-
-    // Check minimum hold duration (300ms)
-    let held_long_enough = LAST_FN_PRESS
-        .lock()
-        .unwrap()
-        .map(|t| t.elapsed().as_millis() >= 300)
-        .unwrap_or(false);
-
-    if !held_long_enough {
-        log::info!("[CtrlRelease] Released too quickly, ignoring");
-        cancel_recording_without_transcription(app);
-        return;
-    }
-
-    if IS_RECORDING.load(Ordering::SeqCst) {
-        log::info!("[CtrlRelease] Stopping recording (hold mode)");
-        win_stop_recording(app);
-    }
-}
-
-/// Create the orb window on Windows as a transparent always-on-top Tauri window
-#[cfg(target_os = "windows")]
-fn win_create_orb_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-    use tauri::{WebviewUrl, WebviewWindowBuilder};
-    use windows::Win32::Foundation::HWND;
-    use windows::Win32::UI::WindowsAndMessaging::{
-        GetWindowLongW, SetWindowLongW, GWL_EXSTYLE, WS_EX_LAYERED, WS_EX_TRANSPARENT,
-    };
-
-    log::info!("[WinOrb] Creating orb window...");
-
-    let orb = WebviewWindowBuilder::new(app, "orb", WebviewUrl::App("orb.html".into()))
-        .title("Zana Orb")
-        .inner_size(400.0, 300.0)
-        .position(880.0, 480.0)
-        .resizable(false)
-        .decorations(false)
-        .transparent(true)
-        .always_on_top(true)
-        .skip_taskbar(true)
-        .visible(false)
-        .build()?;
-
-    log::info!("[WinOrb] Orb window created");
-    Ok(())
-}
-
-/// Show the orb window on Windows
-#[cfg(target_os = "windows")]
-fn win_show_orb(app: &tauri::AppHandle) {
-    // Create if not exists
-    if app.get_webview_window("orb").is_none() {
-        log::info!("[WinOrb] Creating new orb window");
-        if let Err(e) = win_create_orb_window(app) {
-            log::error!("[WinOrb] Failed to create orb: {}", e);
-            return;
-        }
-    }
-
-    if let Some(orb) = app.get_webview_window("orb") {
-        let _ = orb.show();
-        let _ = app.emit("orb-fade-in", ());
-        WIN_ORB_VISIBLE.store(true, Ordering::SeqCst);
-        log::info!("[WinOrb] Orb shown");
-    }
-}
-
-/// Hide the orb window on Windows with fade out
-#[cfg(target_os = "windows")]
-fn win_hide_orb(app: &tauri::AppHandle) {
-    log::info!("[WinOrb] Starting hide");
-    let _ = app.emit("orb-fade-out", ());
-
-    let app_clone = app.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(1500));
-
-        if !IS_RECORDING.load(Ordering::SeqCst) {
-            if let Some(orb) = app_clone.get_webview_window("orb") {
-                let _ = orb.hide();
-                WIN_ORB_VISIBLE.store(false, Ordering::SeqCst);
-                log::info!("[WinOrb] Orb hidden");
-            }
-        }
-    });
-}
-
-/// Stop recording, transcribe, and paste on Windows
-#[cfg(target_os = "windows")]
-fn win_stop_recording(app: &tauri::AppHandle) {
-    if !IS_RECORDING.load(Ordering::SeqCst) {
-        return;
-    }
-
-    IS_RECORDING.store(false, Ordering::SeqCst);
-    LATCHED_RECORDING.store(false, Ordering::SeqCst);
-    log::info!("[WinStopRec] Stopping recording");
-
-    let _ = app.emit(
-        "recording-state",
-        serde_json::json!({
-            "recording": false,
-            "transcribing": true
-        }),
-    );
-
-    let app_clone = app.clone();
-    tauri::async_runtime::spawn(async move {
-        if let Some(state) = app_clone.try_state::<AppState>() {
-            match commands::stop_recording_inner(&state).await {
-                Ok(summary) => log::info!("Recording stopped: {} samples", summary.sample_count),
-                Err(error) => {
-                    log::error!("[WinStopRec] Failed to stop recording: {}", error);
-                    win_hide_orb(&app_clone);
-                    return;
-                }
-            }
-
-            match commands::transcribe(state).await {
-                Ok(response) => {
-                    if response.success {
-                        if let Some(final_text) = response.text {
-                            log::info!(
-                                "[WinStopRec] Transcription (rewritten: {})",
-                                response.used_cloud_rewrite
-                            );
-
-                            let _ = app_clone.emit(
-                                "transcription-complete",
-                                serde_json::json!({
-                                    "text": final_text,
-                                    "rawText": response.raw_text,
-                                    "rewrittenText": response.rewritten_text,
-                                    "rewriteError": response.rewrite_error,
-                                    "usedCloudRewrite": response.used_cloud_rewrite,
-                                }),
-                            );
-
-                            if !final_text.trim().is_empty() {
-                                win_paste_text(&final_text);
-                            }
-                        }
-                    } else {
-                        log::error!(
-                            "[WinStopRec] Transcription failed: {}",
-                            response
-                                .error
-                                .unwrap_or_else(|| "unknown error".to_string())
-                        );
-                    }
-                }
-                Err(e) => {
-                    log::error!("Transcription command failed: {}", e);
-                }
-            }
-        }
-
-        // Wait for animation, then hide
-        tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
-        if !IS_RECORDING.load(Ordering::SeqCst) {
-            win_hide_orb(&app_clone);
-        }
-    });
-}
-
-/// Paste text on Windows using clipboard + SendInput(Ctrl+V)
-#[cfg(target_os = "windows")]
-fn win_paste_text(text: &str) {
-    use arboard::Clipboard;
-    use windows::Win32::UI::Input::KeyboardAndMouse::{
-        SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VK_CONTROL, VK_V,
-    };
-
-    log::info!("[WinPaste] Pasting {} chars", text.len());
-
-    if let Ok(mut clipboard) = Clipboard::new() {
-        if clipboard.set_text(text).is_err() {
-            log::error!("[WinPaste] Failed to set clipboard");
-            return;
-        }
-    }
-
-    std::thread::sleep(std::time::Duration::from_millis(50));
-
-    unsafe {
-        let inputs = [
-            // Ctrl down
-            INPUT {
-                r#type: INPUT_KEYBOARD,
-                Anonymous: INPUT_0 {
-                    ki: KEYBDINPUT {
-                        wVk: VK_CONTROL,
-                        wScan: 0,
-                        dwFlags: Default::default(),
-                        time: 0,
-                        dwExtraInfo: 0,
-                    },
-                },
-            },
-            // V down
-            INPUT {
-                r#type: INPUT_KEYBOARD,
-                Anonymous: INPUT_0 {
-                    ki: KEYBDINPUT {
-                        wVk: VK_V,
-                        wScan: 0,
-                        dwFlags: Default::default(),
-                        time: 0,
-                        dwExtraInfo: 0,
-                    },
-                },
-            },
-            // V up
-            INPUT {
-                r#type: INPUT_KEYBOARD,
-                Anonymous: INPUT_0 {
-                    ki: KEYBDINPUT {
-                        wVk: VK_V,
-                        wScan: 0,
-                        dwFlags: KEYEVENTF_KEYUP,
-                        time: 0,
-                        dwExtraInfo: 0,
-                    },
-                },
-            },
-            // Ctrl up
-            INPUT {
-                r#type: INPUT_KEYBOARD,
-                Anonymous: INPUT_0 {
-                    ki: KEYBDINPUT {
-                        wVk: VK_CONTROL,
-                        wScan: 0,
-                        dwFlags: KEYEVENTF_KEYUP,
-                        time: 0,
-                        dwExtraInfo: 0,
-                    },
-                },
-            },
-        ];
-
-        let sent = SendInput(&inputs, std::mem::size_of::<INPUT>() as i32);
-        log::info!("[WinPaste] SendInput sent {} events", sent);
-    }
 }
