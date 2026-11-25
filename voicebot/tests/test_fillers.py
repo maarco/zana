@@ -15,7 +15,9 @@ RATE = 24000
 
 
 def tone(seconds: float, quiet_before: float = 0.0, quiet_after: float = 0.0) -> bytes:
-    pad = lambda s: array.array("h", [0] * int(s * RATE))
+    def pad(s):
+        return array.array("h", [0] * int(s * RATE))
+
     t = array.array("h", (int(8000 * math.sin(i * 2 * math.pi * 220 / RATE)) for i in range(int(seconds * RATE))))
     return (pad(quiet_before) + t + pad(quiet_after)).tobytes()
 

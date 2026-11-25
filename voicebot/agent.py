@@ -311,7 +311,8 @@ class Voicebot(Agent):
         self.compacting = False
         self.enrolling = False
         self.enroll_audio: list = []
-        threading.Thread(target=self._warm_voiceprint, daemon=True).start()
+        if os.getenv("VOICEBOT_TEST_MODE") != "1":
+            threading.Thread(target=self._warm_voiceprint, daemon=True).start()
         self.base_tools = list(self.tools)
         self.mcp_servers_live: list = []
         self.mcp_tools: list = []
@@ -1334,7 +1335,10 @@ server = AgentServer(port=0, num_idle_processes=1, load_threshold=float("inf"))
 
 
 def prewarm(proc: JobProcess):
-    proc.userdata["vad"] = silero.VAD.load()
+    # CI drives typed turns through the same session, so it does not need to
+    # download or initialize the local speech detector. Production keeps the
+    # real VAD prewarm unchanged.
+    proc.userdata["vad"] = None if os.getenv("VOICEBOT_TEST_MODE") == "1" else silero.VAD.load()
 
 
 server.setup_fnc = prewarm

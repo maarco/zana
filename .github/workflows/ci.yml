@@ -148,11 +148,58 @@ jobs:
         with:
           python-version: "3.12"
 
-      # The live e2e check (voicebot/tests/e2e_probe.py) needs a running Voicebot and stays manual.
       - name: Install Voicebot unit-test dependencies
         run: |
           python -m pip install numpy==2.4.6 scipy==1.18.1 python-dotenv==1.2.4 \
             'livekit-agents[mcp]==1.8.8' livekit-plugins-openai==1.8.8 livekit-plugins-silero==1.8.8
 
+      - name: Install Ruff
+        run: python -m pip install ruff==0.17.3
+
+      - name: Lint Voicebot Python
+        run: ruff check --select E4,E7,E9,F voicebot
+
+      - name: Smoke-test Voicebot tool imports
+        run: python voicebot/tests/agent_smoke.py
+
       - name: Run Voicebot unit tests
         run: python -m unittest discover -s voicebot/tests -p "test_*.py" -v
+
+      - name: Load the Voicebot orb headlessly
+        run: node --test src-tauri/tests/voicebot_orb.test.cjs
+
+  voicebot-loopback-e2e:
+    name: Voicebot loopback end-to-end
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Voicebot e2e dependencies
+        run: |
+          python -m pip install numpy==2.4.6 scipy==1.18.1 python-dotenv==1.2.4 \
+            'livekit-agents[mcp]==1.8.8' livekit-plugins-openai==1.8.8 livekit-plugins-silero==1.8.8
+
+      - name: Install pinned LiveKit server
+        env:
+          LIVEKIT_VERSION: 1.13.10
+          LIVEKIT_SHA256: c25a3e45fb922e9a93c6443d10c0ed041ba64342097e38632331736630283165
+        run: |
+          archive="$RUNNER_TEMP/livekit-server.tar.gz"
+          curl -fsSL --retry 3 -o "$archive" \
+            "https://github.com/livekit/livekit/releases/download/v${LIVEKIT_VERSION}/livekit_${LIVEKIT_VERSION}_linux_amd64.tar.gz"
+          printf '%s  %s\n' "$LIVEKIT_SHA256" "$archive" | sha256sum --check
+          tar -xzf "$archive" -C "$RUNNER_TEMP" livekit-server
+          chmod +x "$RUNNER_TEMP/livekit-server"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Run the loopback Voicebot conversation
+        run: python voicebot/tests/ci_e2e.py

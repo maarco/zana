@@ -3,7 +3,12 @@
 POST /v1/audio/transcriptions  -> NVIDIA Parakeet (parakeet-mlx, Apple Silicon)
 POST /v1/audio/speech          -> Microsoft VibeVoice-Realtime-0.5B (streams raw 24 kHz s16le PCM)
 """
-import asyncio, copy, os, re, tempfile, threading, time, logging
+import copy
+import logging
+import os
+import tempfile
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
@@ -23,10 +28,12 @@ PARAKEET_MODEL = os.getenv("PARAKEET_MODEL", "mlx-community/parakeet-tdt-0.6b-v3
 STOCK_VOICES = os.path.join(VOICEBOT_HOME, "voices", "stock")  # downloaded by Zana on first start
 CUSTOM_VOICES = os.path.join(VOICEBOT_HOME, "voices", "custom")  # extra .pt voice prompts you add
 
-from vibevoice.modular.modeling_vibevoice_streaming_inference import VibeVoiceStreamingForConditionalGenerationInference
-from vibevoice.processor.vibevoice_streaming_processor import VibeVoiceStreamingProcessor
-from vibevoice.modular.streamer import AudioStreamer
-from generation_health import GenerationHealth
+from vibevoice.modular.modeling_vibevoice_streaming_inference import (  # noqa: E402
+    VibeVoiceStreamingForConditionalGenerationInference,
+)
+from vibevoice.processor.vibevoice_streaming_processor import VibeVoiceStreamingProcessor  # noqa: E402
+from vibevoice.modular.streamer import AudioStreamer  # noqa: E402
+from generation_health import GenerationHealth  # noqa: E402
 
 log = logging.getLogger("voice_server")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
