@@ -1,5 +1,8 @@
-"""Live end-to-end check for Zana's Voicebot. Not part of CI: it needs a running
-Voicebot (Voicebot Mode on in Zana) and calls the real chat model.
+"""Live end-to-end check for Zana's Voicebot.
+
+By default it needs a running Voicebot (Voicebot Mode on in Zana) and calls the
+configured chat model. CI supplies LIVEKIT_* values and a loopback model, so
+the same agent-mode probe runs without external services or credentials.
 
 Run with Voicebot's own Python:
   "<Voicebot folder>/venv/bin/python" voicebot/tests/e2e_probe.py zana   # Zana's RPC handlers
@@ -33,10 +36,28 @@ HOME = os.path.join(os.path.expanduser("~/Library/Application Support") if sys.p
 
 
 def livekit_conn():
-    pid = subprocess.run(["pgrep", "-f", "livekit-server --node-ip"], capture_output=True, text=True).stdout.split()[0]
-    env = subprocess.run(["ps", "eww", "-o", "command=", "-p", pid], capture_output=True, text=True).stdout
-    key, secret = re.search(r"LIVEKIT_KEYS=(\S+): (\S+)", env).groups()
-    port = re.search(r"LIVEKIT_CONFIG=port: (\d+)", env).group(1)
+    url = os.getenv("LIVEKIT_URL")
+    if url:
+        http = os.getenv("LIVEKIT_HTTP_URL")
+        key = os.getenv("LIVEKIT_API_KEY")
+        secret = os.getenv("LIVEKIT_API_SECRET")
+        if not http or not key or not secret:
+            raise RuntimeError("LIVEKIT_URL requires LIVEKIT_HTTP_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET")
+        return url, http, key, secret
+
+    result = subprocess.run(["pgrep", "-f", "livekit-server --node-ip"], check=False,
+                            capture_output=True, text=True)
+    pids = result.stdout.split()
+    if not pids:
+        raise RuntimeError("no running livekit-server found; set LIVEKIT_URL for an explicit endpoint")
+    env = subprocess.run(["ps", "eww", "-o", "command=", "-p", pids[0]], check=False,
+                         capture_output=True, text=True).stdout
+    match = re.search(r"LIVEKIT_KEYS=(\S+): (\S+)", env)
+    port_match = re.search(r"LIVEKIT_CONFIG=port: (\d+)", env)
+    if not match or not port_match:
+        raise RuntimeError("could not read LiveKit keys and port from the running server")
+    key, secret = match.groups()
+    port = port_match.group(1)
     return f"ws://127.0.0.1:{port}", f"http://127.0.0.1:{port}", key, secret
 
 
@@ -62,7 +83,9 @@ async def mode_zana():
     await lk.aclose()
     room = rtc.Room()
     await room.connect(URL, token(target, "probe-a"))
-    call = lambda m, p="": room.local_participant.perform_rpc(destination_identity="zana-user", method=m, payload=p, response_timeout=15)
+    async def call(m, p=""):
+        return await room.local_participant.perform_rpc(
+            destination_identity="zana-user", method=m, payload=p, response_timeout=15)
     shot = await call("zana.screenshot")
     print("screenshot:", shot, os.path.getsize(shot) if os.path.isfile(shot) else "MISSING")
     print("screen:", (await call("zana.screen"))[:200])
@@ -110,11 +133,16 @@ async def mode_agent():
                            ("zana.mute", "microphone off")]:
         room.local_participant.register_rpc_method(method)(handler(method, answer))
 
-    for _ in range(60):  # wait for the agent to join
+    agent_wait = int(os.getenv("PROBE_AGENT_WAIT_SECONDS", "30"))
+    for _ in range(agent_wait * 2):  # wait for the agent to join
         if room.remote_participants:
             break
         await asyncio.sleep(0.5)
     print("agent joined:", list(room.remote_participants))
+    require_success = os.getenv("PROBE_REQUIRE_SUCCESS") == "1"
+    if require_success and not room.remote_participants:
+        await room.disconnect()
+        raise RuntimeError("agent did not join the probe room")
     await asyncio.sleep(2)
 
     steps = [
@@ -144,6 +172,14 @@ async def mode_agent():
         print("   replies:", new_r)
         print("   events:", new_e)
         print("   rpcs:", rpcs[n_rpc:])
+        if require_success and label == "wake + unread":
+            expected = os.getenv("PROBE_EXPECTED_REPLY", "").strip()
+            if not new_r:
+                await room.disconnect()
+                raise RuntimeError("agent produced no reply for the wake-word turn")
+            if expected and expected not in " ".join(new_r):
+                await room.disconnect()
+                raise RuntimeError(f"agent reply did not contain expected text: {expected!r}")
     await room.disconnect()
 
 
@@ -207,7 +243,7 @@ async def mode_voiceprint():
     events = []
     with open(debug_log) as f:
         f.seek(start)
-        events = [json.loads(l) for l in f if l.strip()]
+        events = [json.loads(line) for line in f if line.strip()]
     for ev in events:
         if ev["kind"] in ("voiceprint", "heard", "said", "tool"):
             print(ev["kind"], {k: v for k, v in ev.items() if k not in ("t", "kind", "output")})
@@ -242,7 +278,7 @@ async def mode_selfedit():
             await asyncio.sleep(14)
         with open(debug_log) as f:
             f.seek(start)
-            for ev in (json.loads(l) for l in f if l.strip()):
+            for ev in (json.loads(line) for line in f if line.strip()):
                 if ev["kind"] in ("tool", "settings", "prompt"):
                     print(ev["kind"], {k: (str(v)[:300]) for k, v in ev.items() if k not in ("t", "kind")})
         print("prompt changed on disk:", open(prompt_file).read() != saved_prompt)
@@ -275,7 +311,7 @@ async def mode_jobs():
     await asyncio.sleep(10)
     with open(debug_log) as f:
         f.seek(start)
-        for ev in (json.loads(l) for l in f if l.strip()):
+        for ev in (json.loads(line) for line in f if line.strip()):
             if ev["kind"] in ("tool", "job", "said"):
                 print(ev["kind"], {k: str(v)[:220] for k, v in ev.items() if k not in ("t", "kind")})
     await room.disconnect()
@@ -304,7 +340,7 @@ async def mode_memory():
         def events(since):
             with open(debug_log) as f:
                 f.seek(since)
-                return [json.loads(l) for l in f if l.strip()]
+                return [json.loads(line) for line in f if line.strip()]
 
         async def turn(text, wait=45):
             mark = os.path.getsize(debug_log)
@@ -388,7 +424,7 @@ async def mode_modelerror():
     await room.disconnect()
     with open(debug_log) as f:
         f.seek(start)
-        for ev in (json.loads(l) for l in f if l.strip()):
+        for ev in (json.loads(line) for line in f if line.strip()):
             if ev["kind"] in ("said", "error"):
                 print(ev["kind"], str(ev.get("text") or ev.get("error"))[:160])
     print("config.json restored:", open(cfg_path).read() == original)
@@ -447,7 +483,7 @@ async def mode_chain():
     await room.disconnect()
     with open(debug_log) as f:
         f.seek(start)
-        events = [json.loads(l) for l in f if l.strip()]
+        events = [json.loads(line) for line in f if line.strip()]
     t0 = events[0]["t"] if events else 0
     for ev in events:
         if ev["kind"] in ("filler", "said", "tool"):

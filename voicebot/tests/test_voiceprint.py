@@ -22,7 +22,10 @@ class ToMono16kTest(unittest.TestCase):
 class SpeechSecondsTest(unittest.TestCase):
     def test_counts_speech_not_the_silence_around_it(self):
         from voiceprint import RATE, speech_seconds
-        quiet = lambda s: np.full(int(s * RATE), 1e-5, dtype=np.float32)
+
+        def quiet(s):
+            return np.full(int(s * RATE), 1e-5, dtype=np.float32)
+
         tone = 0.3 * np.sin(np.arange(int(0.6 * RATE)) * 2 * np.pi * 220 / RATE).astype(np.float32)
         audio = np.concatenate([quiet(0.3), tone, quiet(0.9)])  # preroll, "go ahead", end-of-turn wait
         self.assertAlmostEqual(speech_seconds(audio), 0.6, delta=0.05)

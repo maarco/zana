@@ -1326,7 +1326,10 @@ server = AgentServer(port=0, num_idle_processes=1, load_threshold=float("inf"))
 
 
 def prewarm(proc: JobProcess):
-    proc.userdata["vad"] = silero.VAD.load()
+    # CI drives typed turns through the same session, so it does not need to
+    # download or initialize the local speech detector. Production keeps the
+    # real VAD prewarm unchanged.
+    proc.userdata["vad"] = None if os.getenv("VOICEBOT_TEST_MODE") == "1" else silero.VAD.load()
 
 
 server.setup_fnc = prewarm
