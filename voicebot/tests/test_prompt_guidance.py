@@ -218,7 +218,7 @@ class PromptGuidanceTest(unittest.TestCase):
         transcript.record("Voicebot", "🙂" * 3000 + " " + prompt_guidance._MIGRATION_OFFER_QUESTION)
         transcript.record("User", "Yes")
         recent = transcript.tail_lines(2)
-        self.assertTrue(recent.startswith("[2026-11-24 "))
+        self.assertRegex(recent, r"^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] Voicebot: ")
         self.assertIn("Voicebot: " + "🙂" * 3000, recent)
         unchanged, changed, _ = prompt_guidance.remove_legacy_guidance_after_consent(
             self.home, prompt, "Yes", recent
