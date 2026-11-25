@@ -341,6 +341,81 @@ fn mac_release_requires_stable_developer_id_signature() {
 }
 
 #[test]
+fn mac_release_entitlements_are_explicitly_scoped() {
+    let entitlements = read_repo_file("src-tauri/entitlements.plist");
+    let evidence = read_repo_file("docs/MACOS_RELEASE_EVIDENCE.md");
+
+    for key in [
+        "com.apple.security.cs.allow-jit",
+        "com.apple.security.cs.allow-unsigned-executable-memory",
+        "com.apple.security.cs.allow-dyld-environment-variables",
+        "com.apple.security.device.audio-input",
+        "com.apple.security.app-sandbox",
+    ] {
+        assert!(
+            entitlements.contains(key),
+            "retained entitlement missing: {key}"
+        );
+        assert!(
+            evidence.contains(key),
+            "entitlement decision missing from evidence: {key}"
+        );
+    }
+
+    for key in [
+        "com.apple.security.device.microphone",
+        "com.apple.security.files.user-selected.read-write",
+        "com.apple.security.files.bookmarks.app-scope",
+        "com.apple.security.network.client",
+    ] {
+        assert!(
+            !entitlements.contains(key),
+            "sandbox-only entitlement must stay out of the unsandboxed app: {key}"
+        );
+        assert!(
+            evidence.contains(key),
+            "removed entitlement missing from evidence: {key}"
+        );
+    }
+
+    assert!(entitlements.contains("<key>com.apple.security.app-sandbox</key>\n    <false/>"));
+    assert!(
+        evidence.contains("No signed or") && evidence.contains("notarized runtime experiment"),
+        "evidence must preserve the unproven-exception boundary"
+    );
+}
+
+#[test]
+fn mac_release_staples_app_before_dmg_and_validates_both() {
+    let workflow = read_repo_file(".github/workflows/release.yml");
+    let app_step = workflow
+        .find("name: Notarize and staple app before creating DMG")
+        .expect("release workflow must notarize the app before creating the DMG");
+    let dmg_step = workflow
+        .find("name: Create DMG with an Applications shortcut")
+        .expect("release workflow must keep an explicit DMG creation step");
+    let app_block = &workflow[app_step..dmg_step];
+
+    assert!(app_block.contains("xcrun notarytool submit \"$APP_ZIP\""));
+    assert!(app_block.contains("xcrun stapler staple \"$APP_PATH\""));
+    assert!(app_block.contains("xcrun stapler validate \"$APP_PATH\""));
+
+    let dmg_notary = workflow
+        .find("xcrun notarytool submit \"$DMG_PATH\"")
+        .expect("release workflow must notarize the DMG");
+    let dmg_staple = workflow[dmg_notary..]
+        .find("xcrun stapler staple \"$DMG_PATH\"")
+        .map(|offset| dmg_notary + offset)
+        .expect("release workflow must staple the DMG");
+    let dmg_validate = workflow[dmg_staple..]
+        .find("xcrun stapler validate \"$DMG_PATH\"")
+        .map(|offset| dmg_staple + offset)
+        .expect("release workflow must validate the DMG ticket");
+    assert!(dmg_notary < dmg_staple && dmg_staple < dmg_validate);
+    assert!(workflow.contains("xcrun stapler validate \"$mount_dir/Zana.app\""));
+}
+
+#[test]
 fn cut_release_is_tag_driven_and_guarded() {
     let workflow = read_repo_file(".github/workflows/release.yml");
     let script = read_repo_file("scripts/cut-release.sh");
