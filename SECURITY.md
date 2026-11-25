@@ -9,9 +9,10 @@ Older prerelease builds are not guaranteed to receive patches.
 
 Please do not open a public issue for vulnerabilities.
 
-Report privately through GitHub Security Advisories after the repository is
-published. If advisories are not available yet, contact the maintainer directly
-through the GitHub profile listed on the repository.
+GitHub private vulnerability reporting is not currently enabled for this
+repository. Contact the maintainer through the [repository owner's GitHub
+profile](https://github.com/maarco) to arrange a private reporting channel. Do
+not include sensitive details in a public issue or comment.
 
 Include:
 
@@ -19,15 +20,19 @@ Include:
 - reproduction steps
 - impact
 - whether the issue involves microphone, accessibility, clipboard, screenshots,
-  rewrite provider calls, updater, signing, or model downloads
+  paste-at-cursor, terminal commands, AppleScript, key presses, MCP servers,
+  updater, signing, or model downloads
 
 ## Privacy-Sensitive Areas
 
 Treat these as high risk:
 
 - microphone capture
-- accessibility permissions and global hotkeys
+- accessibility permissions
 - paste-at-cursor automation
 - clipboard and screenshot context
-- optional rewrite provider requests
+- Terminal Tool shell commands
+- AppleScript app automation
+- key presses sent to the active app
+- configured MCP servers and their tools
 - update checks, signing, and notarization
