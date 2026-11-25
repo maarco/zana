@@ -713,6 +713,22 @@ var(--background);
       </div>
     </div>
 
+    <div class="section" data-section="data" id="data-section">
+      <div class="section-head">
+        <div class="section-title">Data &amp; Privacy</div>
+        <div class="section-meta">Local only</div>
+      </div>
+
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Remove All Zana Data</div>
+          <div class="setting-desc">Stops Zana and moves its settings, API key, Voicebot files, models, caches, and logs to the recoverable Trash. Shared Hugging Face and uv caches are not touched.</div>
+        </div>
+        <button class="btn-secondary" type="button" id="remove-zana-data">Move to Trash</button>
+      </div>
+      <div class="setting-desc" id="zana-data-inventory" role="status">Loading Zana-owned data locations...</div>
+    </div>
+
     <div class="section" data-section="diagnostics">
       <div class="section-head">
         <div class="section-title">Diagnostics</div>
@@ -839,6 +855,47 @@ var(--background);
       }
     });
     loadVoicebot();
+
+    async function loadDataInventory() {
+      const status = document.getElementById('zana-data-inventory');
+      if (!window.__TAURI__) {
+        status.textContent = 'The data action is available in the installed app.';
+        return;
+      }
+      try {
+        const inventory = await window.__TAURI__.core.invoke('get_zana_data_inventory');
+        status.textContent = `Zana-owned locations: ${inventory.map((entry) => entry.label).join(', ')}.`;
+      } catch (e) {
+        status.textContent = `Could not load the data inventory: ${e}`;
+      }
+    }
+
+    document.getElementById('remove-zana-data')?.addEventListener('click', async (event) => {
+      const button = event.currentTarget;
+      if (!window.__TAURI__) {
+        document.getElementById('zana-data-inventory').textContent = 'This action only works in the installed app.';
+        return;
+      }
+      const confirmed = window.confirm(
+        'Move all Zana-owned data to the Trash? This includes the local API key, transcript, Voicebot files, models, caches, and logs. Shared Hugging Face and uv caches will not be touched. Zana will close after the move.'
+      );
+      if (!confirmed) {
+        document.getElementById('zana-data-inventory').textContent = 'Nothing moved.';
+        return;
+      }
+
+      button.disabled = true;
+      document.getElementById('zana-data-inventory').textContent = 'Stopping Zana and moving its data to the Trash...';
+      try {
+        const result = await window.__TAURI__.core.invoke('remove_all_zana_data', { confirmed: true });
+        document.getElementById('zana-data-inventory').textContent = `Moved ${result.moved.length} Zana-owned location(s) to the Trash. Zana is closing.`;
+      } catch (e) {
+        button.disabled = false;
+        document.getElementById('zana-data-inventory').textContent = `Nothing was removed: ${e}`;
+      }
+    });
+
+    loadDataInventory();
 
     function markDirty() {
       setSaveStatus('Unsaved changes', 'dirty');

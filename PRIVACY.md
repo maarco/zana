@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: November 21, 2026
+Last updated: November 24, 2026
 
 Zana is a local-first macOS voice assistant. Voicebot is enabled by default.
 Speech recognition and spoken replies use local models by default, but the text
@@ -62,6 +62,31 @@ is retained until you delete it. Operational history is bounded: `logs/debug.jso
 keeps at most 20 MB, each terminal job log keeps at most 5 MB, and prompt history
 keeps the 20 newest prompt backups. Transcript search reads bounded chunks off the
 agent event loop; it does not truncate the transcript.
+
+The complete macOS write inventory is:
+
+- `~/Library/Application Support/Zana/` for Zana settings, the local API key,
+  onboarding state, plugins, crash output, and legacy Whisper models.
+- `~/Library/Application Support/Zana/voicebot/` for the Voicebot files named
+  above, including `venv/`, `voices/`, `fillers/`, `prompt-history/`, `jobs/`,
+  `pycache/`, `pids`, and port/update state.
+- `~/Library/Application Support/Zana/voicebot/cache/huggingface/` and
+  `~/Library/Application Support/Zana/voicebot/cache/uv/` for app-scoped model
+  and package caches.
+- `~/Library/Application Support/app.zana/` for Tauri/WebView application data,
+  `~/Library/Caches/app.zana/` for its cache, and
+  `~/Library/Logs/app.zana/` for Rust logs.
+- Legacy versions may also have used `~/.cache/huggingface/` and
+  `~/Library/Caches/uv/`; those are shared cache roots, not Zana-owned paths.
+- macOS's temporary directory for short-lived audio request files; those files
+  are deleted after each transcription request.
+
+Preferences > Data & Privacy > Remove All Zana Data requires an explicit
+in-product confirmation, stops Voicebot, and moves only the exact app-owned
+roots to the recoverable Trash. It never deletes recursively and refuses a
+symlinked cleanup root. The shared legacy locations `~/.cache/huggingface/` and
+`~/Library/Caches/uv/` are not cleanup targets because their entries may belong
+to other applications.
 
 On first launch, Zana downloads Python packages, local speech models, and voice
 assets needed to run Voicebot. The app checks GitHub for release information

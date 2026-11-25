@@ -3,6 +3,7 @@
 //! All commands exposed to the frontend.
 
 mod audio;
+mod cleanup;
 mod diagnostics;
 mod onboarding;
 mod plugins;
@@ -12,6 +13,7 @@ mod update;
 mod voicebot;
 
 pub use audio::*;
+pub use cleanup::*;
 pub use diagnostics::*;
 pub use onboarding::*;
 pub use plugins::*;

@@ -51,6 +51,7 @@
 #![allow(non_snake_case)]
 
 pub mod audio;
+pub mod cleanup;
 pub mod commands;
 pub mod hooks;
 pub mod onboarding;

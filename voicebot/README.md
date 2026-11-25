@@ -38,12 +38,18 @@ Everything per-user lives in the Voicebot folder,
 | `logs/` | `debug.jsonl` (most recent 20 MB for the Debug window), plus each process's log |
 | `fillers/` | Cached thinking-sound audio and its manifest |
 | `venv/`, `voices/` | The Python environment and VibeVoice voices |
+| `cache/huggingface/`, `cache/uv/` | Zana-owned model and package caches; scoped here so shared caches are not claimed |
 | `prompt-history/` | The 20 newest saved versions of the system prompt |
 
 Current tool help is bundled with the app in `tool_guidance.md` and is placed before your personal prompt at runtime. It is not copied into `system_prompt.md`; edits to your personal instructions therefore never remove current tool guidance. Existing prompts are preserved, with a one-time opt-in offer to remove only exact unchanged stock tool-guide lines.
 
 Each terminal job log is capped at 5 MB. Searching the transcript scans bounded
 chunks on a worker thread so a large transcript does not delay Voicebot replies.
+
+Older Zana versions could use the shared `~/.cache/huggingface/` and
+`~/Library/Caches/uv/` locations. They may be used by other applications, so
+Preferences cleanup leaves them in place. Check their ownership before removing
+anything there manually.
 
 Preferences > Model sets the chat model (API key, model, OpenAI-compatible API
 URL), its reasoning level and the vision model; Preferences > Voicebot sets the
