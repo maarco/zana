@@ -25,7 +25,11 @@
       "../voicebot/updater.py": "voicebot/updater.py",
       "../voicebot/system_prompt.default.md": "voicebot/system_prompt.default.md",
       "../voicebot/requirements.txt": "voicebot/requirements.txt",
-      "../voicebot/requirements-nodeps.txt": "voicebot/requirements-nodeps.txt"
+      "../voicebot/requirements-nodeps.txt": "voicebot/requirements-nodeps.txt",
+      "../LICENSE": "LICENSE",
+      "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
+      "../LICENSES/Apache-2.0.txt": "LICENSES/Apache-2.0.txt",
+      "../LICENSES/MIT-Third-Party.txt": "LICENSES/MIT-Third-Party.txt"
     },
     "icon": [
       "icons/32x32.png",
