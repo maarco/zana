@@ -613,6 +613,7 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
     let main_rs = read_repo_file("src-tauri/src/main.rs");
     let config = read_repo_file("src-tauri/tauri.conf.json");
     let supervisor = read_repo_file("src-tauri/src/voicebot.rs");
+    let agent = read_repo_file("voicebot/agent.py");
 
     for id in [
         "voicebot-orb-design",
@@ -625,6 +626,8 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
         "voicebot-terminal-toggle",
         "voicebot-context-command",
         "voicebot-wake-word",
+        "voicebot-transcript-retention-days",
+        "voicebot-clear-transcript",
         "voicebot-prompt",
         "voicebot-mcp",
         "voicebot-save",
@@ -648,9 +651,11 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
         "commands::voicebot_join",
         "commands::voicebot_screen_context",
         "commands::set_voicebot_wake_word",
+        "commands::set_voicebot_transcript_retention_days",
         "commands::voicebot_debug_tail",
         "open_voicebot_debug",
         "commands::voicebot_screenshot",
+        "commands::clear_voicebot_transcript",
         "voicebot_paste",
     ] {
         assert!(main_rs.contains(command), "main.rs must register {command}");
@@ -676,6 +681,16 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
     assert!(
         preferences.contains("data-section=\"model\"") && supervisor.contains("\"llm\""),
         "Preferences > Model must be written into the agent's config"
+    );
+    assert!(
+        orb.contains("conversationId: payload") && supervisor.contains("transcript_retention_days"),
+        "the screenshot RPC must pass a conversation id and retention must reach the agent config"
+    );
+    assert!(
+        agent.contains("TRANSCRIPT.prune_old(retention_days)")
+            && agent.contains("await agent.jobs.cleanup()")
+            && agent.contains("remove_conversation_screenshot(HOME, agent.conversation_id)"),
+        "conversation startup and shutdown must prune transcript and clean scoped artifacts"
     );
     // Every file the supervisor needs ships in the bundle.
     assert_eq!(

@@ -9,9 +9,39 @@ import json
 import os
 import re
 
+from retention import file_lock
+
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07|\x1b[@-Z\\-_]")
 # KEY=value anywhere in a name (API_KEY, GH_TOKEN, db_password), plus long token-like strings.
 _SECRETS = [re.compile(r"(?i)\w*(token|key|secret|passw(or)?d|auth)\w*\s*[=:]\s*\S+"), re.compile(r"[A-Za-z0-9_\-]{32,}")]
+_TRANSCRIPT_TIMESTAMP = re.compile(r"^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] ")
+_CONVERSATION_ID = re.compile(r"^[0-9a-f]{32}$")
+DEFAULT_RETENTION_DAYS = 30
+MAX_RETENTION_DAYS = 3650
+
+
+def normalize_retention_days(value, default: int = DEFAULT_RETENTION_DAYS) -> int:
+    """Accept a persisted setting without allowing zero or unbounded retention."""
+    try:
+        days = int(value)
+    except (TypeError, ValueError):
+        days = default
+    return default if days < 1 else min(days, MAX_RETENTION_DAYS)
+
+
+def conversation_screenshot_path(home: str, conversation_id: str) -> str:
+    """Return the only screenshot path a conversation is allowed to own."""
+    if not _CONVERSATION_ID.fullmatch(conversation_id):
+        raise ValueError("invalid conversation id")
+    return os.path.join(home, f"screen-{conversation_id}.jpg")
+
+
+def remove_conversation_screenshot(home: str, conversation_id: str) -> None:
+    """Remove one conversation's screenshot without scanning or deleting the folder."""
+    try:
+        os.remove(conversation_screenshot_path(home, conversation_id))
+    except FileNotFoundError:
+        pass
 
 
 def clean(text: str, limit: int = 2500) -> str:
@@ -204,20 +234,91 @@ def topics(text: str) -> list[str]:
 
 
 class Transcript:
-    """Append-only transcript of everything heard and said, with a read mark."""
+    """Locally retained transcript of everything heard and said, with a read mark."""
 
-    def __init__(self, home: str, unread_limit: int = 6000):
+    def __init__(self, home: str, unread_limit: int = 6000,
+                 retention_days: int = DEFAULT_RETENTION_DAYS, now=None):
         self.path = os.path.join(home, "transcript.md")
         self.mark = os.path.join(home, "transcript.read")
         self.unread_limit = unread_limit
         os.makedirs(home, exist_ok=True)
+        self.retention_days = normalize_retention_days(retention_days)
+        self._now = now
+
+    @staticmethod
+    def _line_timestamp(line: bytes):
+        match = _TRANSCRIPT_TIMESTAMP.match(line.decode(errors="replace"))
+        if not match:
+            return None
+        try:
+            return datetime.datetime.strptime(match.group(1), "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return None
+
+    def prune_old(self, retention_days: int | None = None, now=None) -> int:
+        """Drop only dated lines older than the configured window; preserve unknown lines."""
+        days = normalize_retention_days(
+            self.retention_days if retention_days is None else retention_days
+        )
+        cutoff = (now or self._now or datetime.datetime.now()) - datetime.timedelta(days=days)
+        if not os.path.isfile(self.path):
+            return 0
+
+        try:
+            with file_lock(self.path):
+                try:
+                    with open(self.mark, encoding="utf-8") as f:
+                        old_mark = max(0, int(f.read().strip() or 0))
+                except (OSError, ValueError):
+                    old_mark = 0
+
+                temp_path = self.path + ".tmp"
+                removed = 0
+                old_position = 0
+                new_position = 0
+                translated_mark = 0
+                with open(self.path, "rb") as source, open(temp_path, "wb") as target:
+                    for line in source:
+                        old_position += len(line)
+                        timestamp = self._line_timestamp(line)
+                        if timestamp is not None and timestamp < cutoff:
+                            removed += 1
+                        else:
+                            target.write(line)
+                            new_position += len(line)
+                        if old_position <= old_mark:
+                            translated_mark = new_position
+
+                if not removed:
+                    os.remove(temp_path)
+                    return 0
+
+                os.replace(temp_path, self.path)
+                with open(self.mark, "w", encoding="utf-8") as f:
+                    f.write(str(min(translated_mark, new_position)))
+                return removed
+        except OSError:
+            try:
+                os.remove(self.path + ".tmp")
+            except FileNotFoundError:
+                pass
+            return 0
+
+    def clear(self) -> None:
+        """Remove all transcript text while leaving the app-owned file boundary intact."""
+        with file_lock(self.path):
+            with open(self.path, "wb"):
+                pass
+            with open(self.mark, "w", encoding="utf-8") as f:
+                f.write("0")
 
     def record(self, speaker: str, text: str) -> None:
         if not text.strip():
             return
         stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        with open(self.path, "a") as f:
-            f.write(f"[{stamp}] {speaker}: {' '.join(text.split())}\n")
+        with file_lock(self.path):
+            with open(self.path, "a", encoding="utf-8") as f:
+                f.write(f"[{stamp}] {speaker}: {' '.join(text.split())}\n")
 
     def _size(self) -> int:
         try:
@@ -378,23 +479,25 @@ class Transcript:
         return await asyncio.to_thread(self.search, words, limit)
 
     def mark_read(self) -> None:
-        with open(self.mark, "w") as f:
-            f.write(str(self._size()))
+        with file_lock(self.path):
+            with open(self.mark, "w", encoding="utf-8") as f:
+                f.write(str(self._size()))
 
     def take_unread(self) -> str:
         """Lines added since the last read (the newest `unread_limit` characters); marks them read."""
-        try:
-            with open(self.mark) as f:
-                start = int(f.read().strip() or 0)
-        except (OSError, ValueError):
-            start = 0
-        end = self._size()
-        try:
-            with open(self.path, "rb") as f:
-                f.seek(min(start, end))
-                unread = f.read(end - min(start, end)).decode(errors="replace")
-        except OSError:
-            unread = ""
-        with open(self.mark, "w") as f:
-            f.write(str(end))
-        return unread[-self.unread_limit:]
+        with file_lock(self.path):
+            try:
+                with open(self.mark, encoding="utf-8") as f:
+                    start = int(f.read().strip() or 0)
+            except (OSError, ValueError):
+                start = 0
+            end = self._size()
+            try:
+                with open(self.path, "rb") as f:
+                    f.seek(min(start, end))
+                    unread = f.read(end - min(start, end)).decode(errors="replace")
+            except OSError:
+                unread = ""
+            with open(self.mark, "w", encoding="utf-8") as f:
+                f.write(str(end))
+            return unread[-self.unread_limit:]

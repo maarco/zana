@@ -1,13 +1,15 @@
 """Terminal jobs for Voicebot's run_terminal tool. Standard library only.
 
-A command runs in its own process group with its output written to
-<home>/jobs/<n>.log. Quick commands answer directly; slow ones keep running as a
+A command runs in its own process group with its output written to a unique file
+under <home>/jobs. Quick commands answer directly; slow ones keep running as a
 job the agent can check or stop, and the agent is told when it finishes.
 """
 import asyncio
 import os
+import re
 import signal
 import time
+import uuid
 
 from listening import clean
 from retention import append_bounded
@@ -18,6 +20,7 @@ MAX_JOB_LOG_BYTES = 5 * 1024 * 1024
 LOG_READ_BYTES = 64 * 1024
 OUTPUT_DRAIN_GRACE_SECONDS = 0.1
 OUTPUT_LATE_DRAIN_SECONDS = 0.75
+_SAFE_CONVERSATION_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 def conversation_end_warning(job_id: int) -> str:
@@ -75,6 +78,7 @@ class Job:
             raise
         finally:
             self._output_pending = False
+            self._close_output_pipe()
 
     async def _wait(self) -> None:
         timed_out = False
@@ -97,6 +101,7 @@ class Job:
             drained, _ = await asyncio.wait({self._output_task}, timeout=OUTPUT_DRAIN_GRACE_SECONDS)
             if self._output_task in drained:
                 await self._output_task
+                self._close_output_pipe()
             else:
                 self._output_task.cancel()
                 await asyncio.gather(self._output_task, return_exceptions=True)
@@ -146,27 +151,36 @@ class Job:
 
 
 class Jobs:
-    """Terminal jobs of one agent process; numbers start at 1."""
+    """Terminal jobs of one conversation; numbers are local, log names are unique."""
 
-    def __init__(self, home: str, timeout: float = 900):
+    def __init__(self, home: str, timeout: float = 900, conversation_id: str | None = None):
         self.home, self.timeout = home, timeout
+        self.conversation_id = (conversation_id if conversation_id and _SAFE_CONVERSATION_ID.fullmatch(conversation_id)
+                                else uuid.uuid4().hex)
         self.jobs: dict[int, Job] = {}
         self.next_id = 1
+        self.log_paths: set[str] = set()
 
     async def start(self, command: str):
         folder = os.path.join(self.home, "jobs")
         os.makedirs(folder, exist_ok=True)
         job_id = self.next_id
         self.next_id += 1
-        log_path = os.path.join(folder, f"{job_id}.log")
-        log_fd = os.open(log_path, os.O_CREAT | os.O_TRUNC | os.O_WRONLY, 0o666)
+        log_path = os.path.join(folder, f"{self.conversation_id}-job-{job_id}.log")
+        log_fd = os.open(log_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         os.close(log_fd)
+        self.log_paths.add(log_path)
         try:
             proc = await asyncio.create_subprocess_exec(
                 *SHELL, command, cwd=os.path.expanduser(os.getenv("VOICEBOT_TERMINAL_DIR", "~")),
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
                 start_new_session=True)  # its own process group, so stop() takes pipelines down too
         except OSError as exc:
+            self.log_paths.discard(log_path)
+            try:
+                os.remove(log_path)
+            except FileNotFoundError:
+                pass
             return f"Could not start the terminal: {exc}"
         job = Job(job_id, command, proc, log_path, self.timeout)
         self.jobs[job_id] = job
@@ -177,6 +191,26 @@ class Jobs:
         for job in self.jobs.values():
             if job.ended is None:
                 job.stop(quiet=True)
+
+    async def cleanup(self) -> None:
+        """Stop and drain this conversation, then remove only its tracked artifacts."""
+        self.stop_all()
+        await asyncio.gather(*(job.task for job in self.jobs.values()), return_exceptions=True)
+        # _wait can create the late drain only after the shell exits. Await it
+        # after the main tasks so no descendant can recreate a removed log.
+        late_tasks = [job._late_output_task for job in self.jobs.values()
+                      if job._late_output_task is not None]
+        if late_tasks:
+            await asyncio.gather(*late_tasks, return_exceptions=True)
+        for job in self.jobs.values():
+            job._close_output_pipe()
+        for path in self.log_paths:
+            for artifact in (path, path + ".tmp"):
+                try:
+                    os.remove(artifact)
+                except FileNotFoundError:
+                    pass
+        self.log_paths.clear()
 
     def get(self, job_id) -> "Job | None":
         try:

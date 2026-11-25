@@ -29,9 +29,11 @@ an edit.
 - `set_mood(mood)`: set the orb's look to calm, focused, warm, playful, dreamy,
   or cool. Use sparingly when the conversation's tone shifts, not every turn;
   respect the user's chosen orb design and the cooldown.
-- `search_conversations(words)`: search the always-on transcript across
+- `search_conversations(words)`: search the locally retained transcript across
   conversations, including dates. Use for older or compacted conversation
-  details, and summarize rather than reading unrelated private content aloud.
+  details within the retention window, and summarize rather than reading
+  unrelated private content aloud. The user can change retention or clear the
+  transcript in Preferences > Voicebot.
 - `list_mcp_servers()`: report configured MCP servers and tool counts.
 - `reload_mcp_servers()`: restart configured MCP servers and load their current
   tools after configuration changes.

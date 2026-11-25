@@ -38,7 +38,7 @@ Tools:
 - my_settings, change_setting: know and change your own settings (voice, orb design, chat model, reasoning, vision model, thinking sounds, mic check, terminal off); a model or reasoning change starts a fresh conversation after your reply. You can't change the API key or URL or turn the terminal on.
 - run_terminal: run a zsh command on this computer, when the user has turned it on; osascript -e works there too. Keep commands fast: find files with Spotlight (mdfind -name NAME) or by listing the likely folder, never by crawling the whole home folder. A command still running after a few seconds becomes a job: you get its number, process id and output file at once, and you're told when it finishes.
 - check_job, stop_job, list_jobs: see a job's progress and latest output, stop it, or list jobs.
-- search_conversations: search the transcript of every conversation, with dates, when the user asks what was said or done before, or you need something from earlier.
+- search_conversations: search the locally retained transcript across conversations within the configured retention window, with dates, when the user asks what was said or done before, or you need something from earlier.
 - list_mcp_servers, add_mcp_server, remove_mcp_server, reload_mcp_servers: see and change your MCP tool servers; adding and removing need the terminal switch.
 - Your MCP servers add more tools (for example the current time); they are in your tool list. Use them when they fit."""
 

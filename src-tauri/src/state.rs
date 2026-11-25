@@ -152,6 +152,14 @@ impl Default for CloudRewriteSettings {
 }
 
 /// User settings
+pub const DEFAULT_VOICEBOT_TRANSCRIPT_RETENTION_DAYS: u32 = 30;
+pub const MIN_VOICEBOT_TRANSCRIPT_RETENTION_DAYS: u32 = 1;
+pub const MAX_VOICEBOT_TRANSCRIPT_RETENTION_DAYS: u32 = 3650;
+
+fn default_voicebot_transcript_retention_days() -> u32 {
+    DEFAULT_VOICEBOT_TRANSCRIPT_RETENTION_DAYS
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -215,6 +223,9 @@ pub struct Settings {
     pub voicebot_orb_design: String,
     /// Minutes Voicebot waits between mood changes of its orb
     pub voicebot_mood_minutes: u32,
+    /// Days of Voicebot transcript retained locally; older dated lines are pruned at conversation start
+    #[serde(default = "default_voicebot_transcript_retention_days")]
+    pub voicebot_transcript_retention_days: u32,
 }
 
 impl Settings {
@@ -245,6 +256,13 @@ impl Settings {
         self.writing_profile.migrate_legacy_fields();
         // Zana is the Voicebot app now: Fn dictation and Whisper no longer run.
         self.voicebot_mode = true;
+        self.voicebot_transcript_retention_days =
+            if self.voicebot_transcript_retention_days < MIN_VOICEBOT_TRANSCRIPT_RETENTION_DAYS {
+                DEFAULT_VOICEBOT_TRANSCRIPT_RETENTION_DAYS
+            } else {
+                self.voicebot_transcript_retention_days
+                    .min(MAX_VOICEBOT_TRANSCRIPT_RETENTION_DAYS)
+            };
     }
 
     /// Save to disk
@@ -302,6 +320,7 @@ impl Settings {
             voicebot_mic_check_minutes: 2,
             voicebot_orb_design: "original".to_string(),
             voicebot_mood_minutes: 3,
+            voicebot_transcript_retention_days: DEFAULT_VOICEBOT_TRANSCRIPT_RETENTION_DAYS,
         }
     }
 }
@@ -551,7 +570,33 @@ fn capture_macos_screenshot_data_url() -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Settings, WritingProfile};
+    use super::{
+        Settings, WritingProfile, DEFAULT_VOICEBOT_TRANSCRIPT_RETENTION_DAYS,
+        MAX_VOICEBOT_TRANSCRIPT_RETENTION_DAYS,
+    };
+
+    #[test]
+    fn voicebot_transcript_retention_defaults_and_clamps() {
+        assert_eq!(
+            Settings::default().voicebot_transcript_retention_days,
+            DEFAULT_VOICEBOT_TRANSCRIPT_RETENTION_DAYS
+        );
+        let mut settings = Settings {
+            voicebot_transcript_retention_days: 0,
+            ..Default::default()
+        };
+        settings.hydrate_learned_defaults();
+        assert_eq!(
+            settings.voicebot_transcript_retention_days,
+            DEFAULT_VOICEBOT_TRANSCRIPT_RETENTION_DAYS
+        );
+        settings.voicebot_transcript_retention_days = u32::MAX;
+        settings.hydrate_learned_defaults();
+        assert_eq!(
+            settings.voicebot_transcript_retention_days,
+            MAX_VOICEBOT_TRANSCRIPT_RETENTION_DAYS
+        );
+    }
 
     #[test]
     fn legacy_writing_profile_is_migrated_to_exact_prompt_templates() {

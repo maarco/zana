@@ -166,7 +166,7 @@
           return 'pasted at the cursor';
         });
         activeRoom.registerRpcMethod('zana.screen', async () => invoke('voicebot_screen_context'));
-        activeRoom.registerRpcMethod('zana.screenshot', async () => invoke('voicebot_screenshot'));
+        activeRoom.registerRpcMethod('zana.screenshot', async ({ payload }) => invoke('voicebot_screenshot', { conversationId: payload }));
         activeRoom.registerRpcMethod('zana.mute', async () => { muted = true; await applyMic(); return 'microphone off'; });
         // Test hook: accepts the five wire states and the legacy "speaking" alias.
         activeRoom.registerRpcMethod('zana.preview_state', async ({ payload }) => {

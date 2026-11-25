@@ -543,6 +543,22 @@ var(--background);
 
       <div class="provider-field">
         <div>
+          <div class="setting-label">Transcript Retention</div>
+          <div class="setting-desc">Days of dated Voicebot transcript lines kept locally; default 30, from the next conversation</div>
+        </div>
+        <input type="number" id="voicebot-transcript-retention-days" min="1" max="3650" step="1" value="30">
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-copy">
+          <div class="setting-label">Transcript</div>
+          <div class="setting-desc">Remove all local Voicebot transcript text now; new lines continue while Voicebot runs</div>
+        </div>
+        <button class="btn-secondary" type="button" id="voicebot-clear-transcript">Clear Transcript</button>
+      </div>
+
+      <div class="provider-field">
+        <div>
           <div class="setting-label">Voice</div>
           <div class="setting-desc">How Voicebot sounds; a change starts a fresh conversation</div>
         </div>
@@ -778,6 +794,7 @@ var(--background);
         voicebotEl('voicebot-terminal-toggle').classList.toggle('active', cfg.terminal);
         voicebotEl('voicebot-context-command').value = cfg.context_command;
         voicebotEl('voicebot-wake-word').value = cfg.wake_word;
+        voicebotEl('voicebot-transcript-retention-days').value = cfg.transcript_retention_days;
         const voice = voicebotEl('voicebot-voice');
         voice.textContent = '';
         for (const name of ['', ...cfg.voices]) {
@@ -812,6 +829,15 @@ var(--background);
         loadVoicebot();
       } catch (e) { voicebotSay(String(e)); }
     });
+    voicebotEl('voicebot-clear-transcript')?.addEventListener('click', async (event) => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        await window.__TAURI__.core.invoke('clear_voicebot_transcript');
+        voicebotSay('Transcript cleared');
+      } catch (e) { voicebotSay(String(e)); }
+      finally { button.disabled = false; }
+    });
     voicebotEl('voicebot-debug')?.addEventListener('click', () => window.__TAURI__.core.invoke('open_voicebot_debug').catch((e) => voicebotSay(String(e))));
     voicebotEl('voicebot-open-folder')?.addEventListener('click', () => window.__TAURI__.core.invoke('open_voicebot_folder').catch((e) => voicebotSay(String(e))));
     // Save Voicebot and the footer Save both write these, so an edit here is never lost.
@@ -822,6 +848,9 @@ var(--background);
       await invoke('save_voicebot_prompt', { prompt: voicebotEl('voicebot-prompt').value });
       await invoke('set_voicebot_context_command', { command: voicebotEl('voicebot-context-command').value });
       await invoke('set_voicebot_wake_word', { wakeWord: voicebotEl('voicebot-wake-word').value });
+      await invoke('set_voicebot_transcript_retention_days', {
+        days: Math.min(3650, Math.max(1, parseInt(voicebotEl('voicebot-transcript-retention-days').value, 10) || 30)),
+      });
       await invoke('set_voicebot_voice', { voice: voicebotEl('voicebot-voice').value });
       await invoke('set_voicebot_setting', { name: 'orb_design', value: voicebotEl('voicebot-orb-design').value });
       await invoke('set_voicebot_fillers', {

@@ -1,5 +1,6 @@
 """Wake word, always-on transcript and unread mark. Standard library only (run in CI)."""
 import asyncio
+import datetime
 import os
 import sys
 import tempfile
@@ -8,10 +9,9 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from listening import (ToolCallText, Transcript, clean, heard_wake_word, is_goodbye, parse_text_tool_calls, repeats,
-                       split_say,
-                       topics,
-                       wants_redo,  # noqa: E402
+from listening import (ToolCallText, Transcript, clean, conversation_screenshot_path, heard_wake_word,
+                       is_goodbye, normalize_retention_days, parse_text_tool_calls, remove_conversation_screenshot,
+                       repeats, split_say, topics, wants_redo,  # noqa: E402
                        wants_voiceprint)
 
 
@@ -79,7 +79,69 @@ class TranscriptTest(unittest.TestCase):
             t.record("Voicebot", "")  # blank lines are not recorded
             self.assertEqual(t.take_unread(), "")
             with open(os.path.join(home, "transcript.md")) as f:
-                self.assertEqual(len(f.read().splitlines()), 3)  # always-on: nothing is ever dropped
+                self.assertEqual(len(f.read().splitlines()), 3)  # retention is age-based, not per-write
+
+    def test_retention_drops_only_old_dated_lines_and_preserves_unknown_lines(self):
+        now = datetime.datetime(2026, 11, 24, 12, 0, 0)
+        old = b"[2026-10-24 11:59:59] User: synthetic old line\n"
+        boundary = b"[2026-10-25 12:00:00] User: boundary line\n"
+        recent = b"[2026-11-24 11:00:00] Voicebot: recent line\n"
+        unknown = b"legacy line without a timestamp\n"
+        with tempfile.TemporaryDirectory() as home:
+            t = Transcript(home, retention_days=30, now=now)
+            with open(t.path, "wb") as stream:
+                stream.write(old + boundary + recent + unknown)
+            with open(t.mark, "w") as stream:
+                stream.write(str(len(old)))
+
+            self.assertEqual(t.prune_old(now=now), 1)
+            with open(t.path, "rb") as stream:
+                content = stream.read()
+            self.assertNotIn(old, content)
+            self.assertIn(boundary, content)
+            self.assertIn(recent, content)
+            self.assertIn(unknown, content)
+            self.assertEqual(t.take_unread(), (boundary + recent + unknown).decode())
+
+    def test_clear_resets_transcript_and_unread_marker_without_touching_neighbors(self):
+        with tempfile.TemporaryDirectory() as home:
+            t = Transcript(home)
+            t.record("User", "synthetic private line")
+            t.mark_read()
+            unrelated = os.path.join(home, "config.json")
+            with open(unrelated, "w") as stream:
+                stream.write("keep")
+
+            t.clear()
+
+            with open(t.path) as stream:
+                self.assertEqual(stream.read(), "")
+            with open(t.mark) as stream:
+                self.assertEqual(stream.read(), "0")
+            with open(unrelated) as stream:
+                self.assertEqual(stream.read(), "keep")
+
+    def test_screenshot_cleanup_requires_a_scoped_id(self):
+        conversation_id = "a" * 32
+        with tempfile.TemporaryDirectory() as home:
+            scoped = conversation_screenshot_path(home, conversation_id)
+            unrelated = os.path.join(home, "screen-other.jpg")
+            with open(scoped, "wb") as stream:
+                stream.write(b"synthetic screenshot")
+            with open(unrelated, "wb") as stream:
+                stream.write(b"keep")
+
+            remove_conversation_screenshot(home, conversation_id)
+
+            self.assertFalse(os.path.exists(scoped))
+            self.assertTrue(os.path.exists(unrelated))
+            with self.assertRaises(ValueError):
+                conversation_screenshot_path(home, "../outside")
+
+    def test_retention_setting_is_bounded(self):
+        self.assertEqual(normalize_retention_days(None), 30)
+        self.assertEqual(normalize_retention_days(0), 30)
+        self.assertEqual(normalize_retention_days(99999), 3650)
 
     def test_tail_keeps_whole_newest_lines(self):
         with tempfile.TemporaryDirectory() as home:
