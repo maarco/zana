@@ -25,6 +25,12 @@ const STOCK_VOICES: [&str; 7] = [
     "en-Mike_man",
     "in-Samuel_man",
 ];
+const SETUP_STEPS: u8 = 5;
+const RETRY_DELAYS_SECS: [u64; 6] = [1, 2, 4, 8, 15, 30];
+#[cfg(unix)]
+const GIB: u64 = 1024 * 1024 * 1024;
+#[cfg(unix)]
+const REQUIRED_FREE_SPACE_BYTES: u64 = 10 * GIB;
 #[cfg(unix)]
 const APPLE_SILICON_ARCH: &str = "aarch64";
 #[cfg(unix)]
@@ -42,9 +48,10 @@ fn require_apple_silicon(arch: &str) -> Result<(), &'static str> {
 /// Files the bundle ships (tauri.conf.json bundle.resources maps the same list).
 /// tool_guidance.md is app-owned; Python reads it from this code directory and
 /// never copies it into the user's editable system_prompt.md.
-pub const CODE_FILES: [&str; 16] = [
+pub const CODE_FILES: [&str; 17] = [
     "agent.py",
     "voice_server.py",
+    "startup_retry.py",
     "port_reporting.py",
     "speech.py",
     "listening.py",
@@ -297,10 +304,19 @@ pub fn mint_token(key: &str, secret: &str, identity: &str, room: &str, ttl: Dura
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize)]
+pub struct SetupProgress {
+    pub current: u8,
+    pub total: u8,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct Status {
-    /// off, installing, starting, loading, ready, error
+    /// off, installing, starting, loading, ready, error.
     pub stage: String,
     pub detail: String,
+    pub progress: Option<SetupProgress>,
+    /// A parsed `brew install ...` command for missing Homebrew tools.
+    pub install_command: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -329,18 +345,40 @@ fn state() -> &'static Mutex<Inner> {
 }
 
 fn set_status(stage: &str, detail: impl Into<String>) {
-    let detail = detail.into();
+    set_status_with_progress(stage, detail.into(), None);
+}
+
+fn set_progress(stage: &str, current: u8, total: u8, detail: impl Into<String>) {
+    set_status_with_progress(stage, detail.into(), Some(SetupProgress { current, total }));
+}
+
+fn set_status_with_progress(stage: &str, detail: String, progress: Option<SetupProgress>) {
+    let install_command = install_command_from_detail(&detail);
     log::info!("[Voicebot] {stage}: {detail}");
     state().lock().unwrap().status = Some(Status {
         stage: stage.into(),
         detail,
+        progress,
+        install_command,
     });
+}
+
+fn install_command_from_detail(detail: &str) -> Option<String> {
+    let command = detail
+        .split_once("(brew install ")?
+        .1
+        .split(')')
+        .next()?
+        .trim();
+    (!command.is_empty()).then(|| format!("brew install {command}"))
 }
 
 pub fn status() -> Status {
     state().lock().unwrap().status.clone().unwrap_or(Status {
         stage: "off".into(),
         detail: "Voicebot Mode is off".into(),
+        progress: None,
+        install_command: None,
     })
 }
 
@@ -374,15 +412,29 @@ fn status_text(status: &Option<Status>) -> String {
 }
 
 /// Start everything on a background thread; progress shows through `status()`.
-pub fn start(code: PathBuf) {
-    set_status("starting", "Starting Voicebot");
+pub fn start(code: PathBuf) -> Result<(), String> {
+    {
+        let mut guard = state().lock().unwrap();
+        if let Some(stage) = guard.status.as_ref().map(|status| status.stage.as_str()) {
+            if !matches!(stage, "off" | "error") {
+                return Err(format!("Voicebot is already {stage}"));
+            }
+        }
+        guard.status = Some(Status {
+            stage: "starting".into(),
+            detail: "Starting Voicebot".into(),
+            progress: None,
+            install_command: None,
+        });
+    }
     std::thread::spawn(move || {
         if let Err(e) = run(&code) {
             log::error!("[Voicebot] {e}");
-            set_status("error", e);
             stop();
+            set_status("error", e);
         }
     });
+    Ok(())
 }
 
 #[cfg(unix)]
@@ -393,6 +445,12 @@ fn run(code: &Path) -> Result<(), String> {
     sweep_orphans(&home);
     ensure_prompt(code).map_err(|e| format!("Could not set up {}: {e}", home.display()))?;
 
+    set_progress(
+        "installing",
+        1,
+        SETUP_STEPS,
+        "Checking Voicebot prerequisites",
+    );
     let livekit = find_tool("livekit-server")
         .ok_or("livekit-server is not installed (brew install livekit)")?;
     let python = bootstrap(code, &home, &logs)?;
@@ -410,7 +468,7 @@ fn run(code: &Path) -> Result<(), String> {
     let rtc_udp = free_udp_port()?;
     let url = format!("ws://127.0.0.1:{lk_port}");
 
-    set_status("starting", "Starting LiveKit");
+    set_progress("starting", 4, SETUP_STEPS, "Starting LiveKit");
     let config = format!(
         "port: {lk_port}\nbind_addresses:\n  - 127.0.0.1\nrtc:\n  tcp_port: {rtc_tcp}\n  udp_port: {rtc_udp}\n  use_external_ip: false\nlogging:\n  level: info\n"
     );
@@ -427,8 +485,11 @@ fn run(code: &Path) -> Result<(), String> {
         std::net::TcpStream::connect(("127.0.0.1", lk_port)).is_ok()
     })?;
 
-    set_status(
+    check_free_space(&home, "the local speech models")?;
+    set_progress(
         "loading",
+        SETUP_STEPS,
+        SETUP_STEPS,
         "Loading speech models (first start can take a few minutes)",
     );
     let common = |cmd: &mut std::process::Command| {
@@ -473,7 +534,7 @@ fn run(code: &Path) -> Result<(), String> {
         },
     )?;
 
-    set_status("loading", "Starting the agent");
+    set_progress("loading", SETUP_STEPS, SETUP_STEPS, "Starting the agent");
     let mut agent = std::process::Command::new(&python);
     agent
         .args(["agent.py", "start"])
@@ -535,32 +596,55 @@ fn bootstrap_for_arch(
             .finalize()
     );
     if python.is_file() && std::fs::read_to_string(&marker).ok().as_deref() == Some(want.as_str()) {
+        set_progress("installing", 2, SETUP_STEPS, "Python environment is ready");
         return Ok(python);
     }
 
     let uv = find_tool("uv").ok_or("uv is not installed (brew install uv)")?;
     let log_path = logs.join("install.log");
     let step = |detail: &str, args: &[&str]| -> Result<(), String> {
-        set_status("installing", detail);
-        let log = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&log_path)
-            .map_err(|e| e.to_string())?;
-        let ok = std::process::Command::new(&uv)
-            .args(args)
-            .current_dir(code)
-            .env("PATH", child_path())
-            .stdout(log.try_clone().map_err(|e| e.to_string())?)
-            .stderr(log)
-            .status()
-            .map_err(|e| e.to_string())?
-            .success();
-        if ok {
-            Ok(())
-        } else {
-            Err(format!("{detail} failed; see logs/install.log"))
-        }
+        retry_with_backoff(
+            || {
+                check_free_space(home, detail).map_err(RetryError::Fatal)?;
+                set_progress("installing", 2, SETUP_STEPS, detail);
+                let log = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&log_path)
+                    .map_err(|e| RetryError::Fatal(e.to_string()))?;
+                let ok = std::process::Command::new(&uv)
+                    .args(args)
+                    .current_dir(code)
+                    .env("PATH", child_path())
+                    .stdout(
+                        log.try_clone()
+                            .map_err(|e| RetryError::Fatal(e.to_string()))?,
+                    )
+                    .stderr(log)
+                    .status()
+                    .map_err(|e| RetryError::Transient(e.to_string()))?
+                    .success();
+                if ok {
+                    Ok(())
+                } else {
+                    Err(RetryError::Transient(format!(
+                        "{detail} failed; see logs/install.log"
+                    )))
+                }
+            },
+            |delay, attempt, error| {
+                set_progress(
+                    "installing",
+                    2,
+                    SETUP_STEPS,
+                    format!(
+                        "{detail} failed ({error}); retrying in {}s (attempt {attempt})",
+                        delay.as_secs()
+                    ),
+                );
+            },
+            std::thread::sleep,
+        )
     };
     let venv_s = venv.to_string_lossy().to_string();
     let python_s = python.to_string_lossy().to_string();
@@ -591,18 +675,44 @@ fn bootstrap_for_arch(
             "requirements-nodeps.txt",
         ],
     )?;
-    set_status("installing", "Downloading the turn-detection model");
-    let ok = std::process::Command::new(&python)
-        .args(["agent.py", "download-files"])
-        .current_dir(code)
-        .env("VOICEBOT_HOME", home)
-        .env("PYTHONPYCACHEPREFIX", home.join("pycache"))
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    if !ok {
-        return Err("Downloading the agent's models failed".into());
-    }
+    retry_with_backoff(
+        || {
+            check_free_space(home, "the turn-detection model").map_err(RetryError::Fatal)?;
+            set_progress(
+                "installing",
+                3,
+                SETUP_STEPS,
+                "Downloading the turn-detection model",
+            );
+            let ok = std::process::Command::new(&python)
+                .args(["agent.py", "download-files"])
+                .current_dir(code)
+                .env("VOICEBOT_HOME", home)
+                .env("PYTHONPYCACHEPREFIX", home.join("pycache"))
+                .status()
+                .map_err(|e| RetryError::Transient(e.to_string()))?
+                .success();
+            if ok {
+                Ok(())
+            } else {
+                Err(RetryError::Transient(
+                    "Downloading the agent's models failed".into(),
+                ))
+            }
+        },
+        |delay, attempt, error| {
+            set_progress(
+                "installing",
+                3,
+                SETUP_STEPS,
+                format!(
+                    "Downloading the turn-detection model failed ({error}); retrying in {}s (attempt {attempt})",
+                    delay.as_secs()
+                ),
+            );
+        },
+        std::thread::sleep,
+    )?;
     std::fs::write(&marker, want).map_err(|e| e.to_string())?;
     Ok(python)
 }
@@ -612,28 +722,130 @@ fn bootstrap_for_arch(
 fn fetch_voices(home: &Path) -> Result<(), String> {
     let dir = home.join("voices/stock");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    for name in STOCK_VOICES {
+    for (index, name) in STOCK_VOICES.into_iter().enumerate() {
         let file = dir.join(format!("{name}.pt"));
         if file.is_file() {
             continue;
         }
-        set_status("installing", format!("Downloading voice {name}"));
+        let detail = format!(
+            "Downloading voice {name} ({}/{})",
+            index + 1,
+            STOCK_VOICES.len()
+        );
         let url = format!(
             "https://raw.githubusercontent.com/vibevoice-community/VibeVoice/{VIBEVOICE_COMMIT}/demo/voices/streaming_model/{name}.pt"
         );
         let partial = dir.join(format!("{name}.pt.part"));
-        let ok = std::process::Command::new("curl")
-            .args(["-fsSL", "-m", "120", "-o"])
-            .arg(&partial)
-            .arg(&url)
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
-        if !ok {
-            let _ = std::fs::remove_file(&partial);
-            return Err(format!("Downloading voice {name} failed"));
+        retry_with_backoff(
+            || {
+                check_free_space(home, "the downloaded voices").map_err(RetryError::Fatal)?;
+                set_progress("installing", 4, SETUP_STEPS, detail.clone());
+                let ok = std::process::Command::new("curl")
+                    .args(["-fsSL", "-m", "120", "-o"])
+                    .arg(&partial)
+                    .arg(&url)
+                    .status()
+                    .map(|s| s.success())
+                    .unwrap_or(false);
+                if !ok {
+                    let _ = std::fs::remove_file(&partial);
+                    return Err(RetryError::Transient(format!(
+                        "Downloading voice {name} failed"
+                    )));
+                }
+                std::fs::rename(&partial, &file).map_err(|e| RetryError::Fatal(e.to_string()))?;
+                Ok(())
+            },
+            |delay, attempt, error| {
+                set_progress(
+                    "installing",
+                    4,
+                    SETUP_STEPS,
+                    format!(
+                        "{detail} failed ({error}); retrying in {}s (attempt {attempt})",
+                        delay.as_secs()
+                    ),
+                );
+            },
+            std::thread::sleep,
+        )?;
+    }
+    Ok(())
+}
+
+enum RetryError {
+    Transient(String),
+    Fatal(String),
+}
+
+fn retry_with_backoff<T, F, R, S>(
+    mut operation: F,
+    mut report_retry: R,
+    mut sleep: S,
+) -> Result<T, String>
+where
+    F: FnMut() -> Result<T, RetryError>,
+    R: FnMut(Duration, usize, &str),
+    S: FnMut(Duration),
+{
+    for attempt in 0..=RETRY_DELAYS_SECS.len() {
+        match operation() {
+            Ok(value) => return Ok(value),
+            Err(RetryError::Fatal(error)) => return Err(error),
+            Err(RetryError::Transient(error)) if attempt < RETRY_DELAYS_SECS.len() => {
+                let delay = Duration::from_secs(RETRY_DELAYS_SECS[attempt]);
+                report_retry(delay, attempt + 1, &error);
+                sleep(delay);
+            }
+            Err(RetryError::Transient(error)) => return Err(error),
         }
-        std::fs::rename(&partial, &file).map_err(|e| e.to_string())?;
+    }
+    unreachable!("retry loop always returns")
+}
+
+#[cfg(unix)]
+fn available_space(path: &Path) -> Result<u64, String> {
+    use std::ffi::CString;
+    use std::mem::MaybeUninit;
+    use std::os::unix::ffi::OsStrExt;
+
+    let path = CString::new(path.as_os_str().as_bytes())
+        .map_err(|_| format!("Could not check free disk space at {}", path.display()))?;
+    let mut stats = MaybeUninit::<libc::statvfs>::uninit();
+    // SAFETY: `stats` points to writable storage and `path` is a valid NUL-terminated path.
+    let result = unsafe { libc::statvfs(path.as_ptr(), stats.as_mut_ptr()) };
+    if result != 0 {
+        return Err(format!(
+            "Could not check free disk space: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    // SAFETY: statvfs initialized `stats` when it returned success.
+    let stats = unsafe { stats.assume_init() };
+    Ok((stats.f_bavail as u64).saturating_mul(stats.f_frsize as u64))
+}
+
+#[cfg(unix)]
+fn format_gb(bytes: u64) -> String {
+    format!("{:.1}", bytes as f64 / GIB as f64)
+}
+
+#[cfg(unix)]
+fn free_space_error(available: u64, required: u64, operation: &str) -> Option<String> {
+    (available < required).then(|| {
+        format!(
+            "Voicebot needs at least {} GB free for {operation}; this Mac has {} GB available. Free space and retry.",
+            format_gb(required),
+            format_gb(available),
+        )
+    })
+}
+
+#[cfg(unix)]
+fn check_free_space(home: &Path, operation: &str) -> Result<(), String> {
+    let available = available_space(home)?;
+    if let Some(error) = free_space_error(available, REQUIRED_FREE_SPACE_BYTES, operation) {
+        return Err(error);
     }
     Ok(())
 }
@@ -894,6 +1106,51 @@ mod tests {
         assert_eq!(read_voice_port(&port_file), None);
         std::fs::write(&port_file, "43127\n").unwrap();
         assert_eq!(read_voice_port(&port_file), Some(43127));
+    }
+
+    #[test]
+    fn missing_tool_detail_exposes_a_copyable_homebrew_command() {
+        assert_eq!(
+            install_command_from_detail("uv is not installed (brew install uv)"),
+            Some("brew install uv".into())
+        );
+        assert_eq!(install_command_from_detail("setup failed"), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn low_free_space_error_reports_required_and_available_gb() {
+        let error = free_space_error(
+            2 * GIB,
+            REQUIRED_FREE_SPACE_BYTES,
+            "the local speech models",
+        )
+        .expect("two GB must be below the setup requirement");
+        assert!(error.contains("at least 10.0 GB free"));
+        assert!(error.contains("2.0 GB available"));
+        assert!(error.contains("Free space and retry"));
+    }
+
+    #[test]
+    fn transient_setup_failures_retry_with_capped_backoff() {
+        let mut attempts = 0;
+        let mut delays = Vec::new();
+        let result = retry_with_backoff(
+            || {
+                attempts += 1;
+                if attempts < 3 {
+                    Err(RetryError::Transient("network unavailable".into()))
+                } else {
+                    Ok(())
+                }
+            },
+            |delay, _, _| delays.push(delay.as_secs()),
+            |_| {},
+        );
+
+        assert_eq!(result, Ok(()));
+        assert_eq!(attempts, 3);
+        assert_eq!(delays, vec![1, 2]);
     }
 
     #[cfg(unix)]

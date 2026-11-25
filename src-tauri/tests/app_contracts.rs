@@ -37,6 +37,55 @@ fn onboarding_is_voicebot_setup_without_whisper_download() {
 }
 
 #[test]
+fn voicebot_setup_exposes_progress_prerequisites_disk_and_retry() {
+    let onboarding = read_repo_file("src-ui/onboarding.html");
+    let preferences = read_repo_file("src-ui/preferences.html");
+    let voicebot = read_repo_file("src-tauri/src/voicebot.rs");
+    let commands = read_repo_file("src-tauri/src/commands/voicebot.rs");
+    let main = read_repo_file("src-tauri/src/main.rs");
+    let install = read_repo_file("INSTALL.md");
+
+    for marker in [
+        "voicebot-setup-progress",
+        "retryVoicebotSetup",
+        "voicebot-install-command",
+        "https://brew.sh",
+    ] {
+        assert!(
+            onboarding.contains(marker),
+            "onboarding is missing {marker}"
+        );
+    }
+    for marker in [
+        "voicebot-setup-progress",
+        "voicebot-retry",
+        "retry_voicebot",
+        "voicebot-install-command",
+    ] {
+        assert!(
+            preferences.contains(marker),
+            "preferences is missing {marker}"
+        );
+    }
+    for marker in [
+        "RETRY_DELAYS_SECS",
+        "statvfs",
+        "REQUIRED_FREE_SPACE_BYTES",
+        "brew install uv",
+        "brew install livekit",
+        "Free space and retry",
+        "set_progress(\"starting\", 4",
+        "set_progress(\"loading\", SETUP_STEPS, SETUP_STEPS",
+    ] {
+        assert!(voicebot.contains(marker), "startup is missing {marker}");
+    }
+    assert!(read_repo_file("voicebot/voice_server.py").contains("retry_startup"));
+    assert!(commands.contains("pub async fn retry_voicebot"));
+    assert!(main.contains("commands::retry_voicebot"));
+    assert!(install.contains("at least 10 GB"));
+}
+
+#[test]
 fn preferences_window_has_tauri_capability() {
     let tauri_config: Value =
         serde_json::from_str(&read_repo_file("src-tauri/tauri.conf.json")).unwrap();
@@ -680,7 +729,7 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
     // Every file the supervisor needs ships in the bundle.
     assert_eq!(
         Zana_app::voicebot::CODE_FILES.len(),
-        16,
+        17,
         "the Voicebot bundle file list must include all runtime files"
     );
     for file in [
@@ -688,6 +737,7 @@ fn voicebot_preferences_commands_and_bundle_stay_wired() {
         "prompt_guidance.py",
         "tool_guidance.md",
         "voice_server.py",
+        "startup_retry.py",
         "port_reporting.py",
         "speech.py",
         "listening.py",

@@ -20,7 +20,10 @@ itself and answers the agent's calls: `zana.paste`, `zana.screen`,
 leaves a `pids` file that the next launch cleans up.
 
 Prerequisites: `brew install uv livekit`. The first start creates a Python 3.12
-environment (about 1.5 GB) and downloads the speech models and voices.
+environment (about 1.5 GB) and downloads the speech models and voices, so keep
+at least 10 GB free. Zana checks free space before each download, shows setup
+progress, retries transient network failures with capped backoff, and exposes
+Retry setup in onboarding and Preferences when a start fails.
 
 ## Your files
 

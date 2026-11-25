@@ -612,6 +612,7 @@ fn main() {
             commands::save_voicebot_prompt,
             commands::save_voicebot_mcp,
             commands::voicebot_status,
+            commands::retry_voicebot,
             commands::voicebot_join,
             commands::voicebot_screen_context,
             commands::open_voicebot_folder,
@@ -1389,7 +1390,9 @@ fn start_voicebot(app: &tauri::AppHandle, settings: &Zana_app::state::Settings) 
         log::error!("Voicebot config could not be written: {e}");
     }
     log::info!("Voicebot mode on; code in {}", code.display());
-    Zana_app::voicebot::start(code);
+    if let Err(e) = Zana_app::voicebot::start(code) {
+        log::error!("Could not start Voicebot: {e}");
+    }
     #[cfg(target_os = "macos")]
     if let Err(e) = create_voicebot_debug_panel(app) {
         log::error!("The Voicebot Debug panel could not be created: {e}");

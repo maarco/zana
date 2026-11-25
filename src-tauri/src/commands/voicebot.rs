@@ -425,6 +425,19 @@ pub async fn voicebot_status() -> Result<voicebot::Status, String> {
     Ok(voicebot::status())
 }
 
+/// Retry a failed pre-ready Voicebot setup without restarting Zana.
+#[tauri::command]
+pub async fn retry_voicebot(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<voicebot::Status, String> {
+    let settings = state.settings.read().await.clone();
+    voicebot::write_agent_config(&settings).map_err(|e| e.to_string())?;
+    let code = voicebot::code_dir(app.path().resource_dir().ok());
+    voicebot::start(code)?;
+    Ok(voicebot::status())
+}
+
 /// A token for a fresh room: each call starts a new conversation.
 #[tauri::command]
 pub async fn voicebot_join() -> Result<voicebot::Join, String> {
