@@ -206,6 +206,11 @@ pub fn llm_base_url(api_url: &str) -> String {
 
 /// A fresh screenshot for the agent's vision tool, scaled down to keep it cheap.
 pub fn screenshot() -> Result<PathBuf, String> {
+    if !crate::onboarding::check_screen_recording() {
+        crate::onboarding::open_screen_recording_settings();
+        return Err("Screen Recording permission is off. System Settings is open to Privacy & Security > Screen Recording; allow Zana, then retry without relaunching.".into());
+    }
+
     let path = home_dir().join("screen.jpg");
     let ok = std::process::Command::new("/usr/sbin/screencapture")
         .args(["-x", "-t", "jpg"])
@@ -214,7 +219,7 @@ pub fn screenshot() -> Result<PathBuf, String> {
         .map(|s| s.success())
         .unwrap_or(false);
     if !ok || !path.is_file() {
-        return Err("Screen capture failed because Screen Recording permission is off. Open Settings > Privacy & Security > Screen Recording, allow Zana, then retry; no relaunch is required.".into());
+        return Err("Screen capture failed. Check Screen Recording permission in System Settings, then retry.".into());
     }
     let _ = std::process::Command::new("/usr/bin/sips")
         .args(["-Z", "1600"])
