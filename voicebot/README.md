@@ -16,8 +16,11 @@ Zana supervises three processes (code in this folder, bundled into the app):
 
 The orb joins a fresh room as your mic and speaker. Zana mints the join token
 itself and answers the agent's calls: `zana.paste`, `zana.screen`,
-`zana.screenshot`, `zana.mute`. Quitting Zana stops all three processes; a crash
-leaves a `pids` file that the next launch cleans up.
+`zana.screenshot`, `zana.mute`. After startup, Zana checks all three processes
+and the speech server's health. A dead process or a speech generation stalled
+for more than 60 seconds starts bounded recovery; after three recovery failures
+in ten minutes, the orb shows one error and the loop stops. Quitting Zana stops
+all three processes; a crash leaves a `pids` file that the next launch cleans up.
 
 Prerequisites: `brew install uv livekit`. The first start creates a Python 3.12
 environment (about 1.5 GB) and downloads the speech models and voices.
@@ -97,9 +100,9 @@ OPENROUTER_API_KEY=... OPENROUTER_MODEL=...   # only used when Preferences > Mod
 - **Terminal jobs**: a command still running after three seconds keeps going as
   a job; its output streams to `jobs/<n>.log`, Voicebot gets the job number and
   process id, and it is told when the job ends. Long-job replies warn that the
-  named job stops when the conversation closes (including orb close or Voicebot
-  settings changes) and cannot be resumed later. Jobs also stop after 15 minutes
-  or when explicitly stopped.
+  named job stops when the conversation closes, Voicebot settings change, or
+  Voicebot restarts after a service failure; it cannot be resumed later. Jobs
+  also stop after 15 minutes or when explicitly stopped.
 - **Compaction**: past 12,000 characters (besides the instructions), the older
   part of the conversation is folded into a summary and the last three turns stay
   word for word; the Debug window shows each compaction and every reply shows the

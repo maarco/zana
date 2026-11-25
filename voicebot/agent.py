@@ -1322,6 +1322,14 @@ class Voicebot(Agent):
 JOBS = Jobs(HOME, TERMINAL_TIMEOUT)
 
 
+def stop_jobs(reason: str) -> list[int]:
+    """Stop jobs before a conversation or supervised Voicebot process shutdown."""
+    stopped = JOBS.stop_all()
+    if stopped:
+        debug("job", action="stopped", reason=reason, ids=stopped)
+    return stopped
+
+
 server = AgentServer(port=0, num_idle_processes=1, load_threshold=float("inf"))
 
 
@@ -1344,6 +1352,11 @@ async def entrypoint(ctx: agents.JobContext):
 
     agent = Voicebot(read_json("config.json"), publish)
     await agent.load_mcp()
+
+    async def stop_jobs_on_shutdown():
+        stop_jobs("Voicebot process shutdown or recovery")
+
+    ctx.add_shutdown_callback(stop_jobs_on_shutdown)
     # With a voice print set up, only that voice interrupts (maybe_barge_in): the built-in rule, where any speech
     # pauses Voicebot and cuts the reply and its remaining tool steps, is off, and audio heard while Voicebot
     # talks still reaches speech-to-text. "interrupt": "anyone" in config.json keeps the built-in rule.
@@ -1450,7 +1463,7 @@ async def entrypoint(ctx: agents.JobContext):
 
     @session.on("close")
     def _on_close(_ev):
-        JOBS.stop_all()
+        stop_jobs("conversation close")
         if agent.watch:
             agent.watch.cancel()
         asyncio.create_task(orb.close())
