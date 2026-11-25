@@ -83,3 +83,10 @@ You can review or revoke these permissions in System Settings > Privacy &
 Security. If you delete local transcript or screenshot files, that does not
 remove information already sent to a model provider; contact that provider for
 its data-retention controls.
+
+## Privacy contact
+
+For privacy questions, contact the maintainer through the [repository owner's
+GitHub profile](https://github.com/maarco). GitHub private vulnerability
+reporting is not currently enabled for this repository; use that profile to
+request a private channel before sharing sensitive details.
