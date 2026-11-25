@@ -311,7 +311,8 @@ class Voicebot(Agent):
         self.compacting = False
         self.enrolling = False
         self.enroll_audio: list = []
-        threading.Thread(target=self._warm_voiceprint, daemon=True).start()
+        if os.getenv("VOICEBOT_TEST_MODE") != "1":
+            threading.Thread(target=self._warm_voiceprint, daemon=True).start()
         self.base_tools = list(self.tools)
         self.mcp_servers_live: list = []
         self.mcp_tools: list = []

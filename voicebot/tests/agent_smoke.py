@@ -20,7 +20,9 @@ REQUIRED_TOOLS = {
 def main() -> None:
     with tempfile.TemporaryDirectory(prefix="zana-agent-smoke-") as home:
         previous_home = os.environ.get("VOICEBOT_HOME")
+        previous_test_mode = os.environ.get("VOICEBOT_TEST_MODE")
         os.environ["VOICEBOT_HOME"] = home
+        os.environ["VOICEBOT_TEST_MODE"] = "1"
         os.environ["VOICE_SERVER_URL"] = "http://127.0.0.1:9/v1"
         sys.path.insert(0, str(VOICEBOT))
         try:
@@ -36,6 +38,10 @@ def main() -> None:
                 os.environ.pop("VOICEBOT_HOME", None)
             else:
                 os.environ["VOICEBOT_HOME"] = previous_home
+            if previous_test_mode is None:
+                os.environ.pop("VOICEBOT_TEST_MODE", None)
+            else:
+                os.environ["VOICEBOT_TEST_MODE"] = previous_test_mode
 
     missing = REQUIRED_TOOLS - tool_ids
     if missing:
