@@ -753,4 +753,42 @@ fn voicebot_orb_keeps_the_five_state_frontend_contract_wired() {
         aura.contains("working: {"),
         "working needs its own animation"
     );
+    assert!(
+        aura.contains("Zana original WebGL orb renderer")
+            && !aura.contains("Polyform")
+            && !aura.contains("Unicorn Studio"),
+        "the orb must not ship the unresolved third-party shader"
+    );
+}
+
+#[test]
+fn release_bundle_keeps_license_notices_with_vendored_code() {
+    let config = read_repo_file("src-tauri/tauri.conf.json");
+    for resource in [
+        "LICENSE",
+        "THIRD_PARTY_NOTICES.md",
+        "LICENSES/Apache-2.0.txt",
+        "LICENSES/MIT-Third-Party.txt",
+    ] {
+        assert!(
+            config.contains(&format!("\"../{resource}\": \"{resource}\"")),
+            "Tauri bundle must include {resource}"
+        );
+    }
+
+    let notices = read_repo_file("THIRD_PARTY_NOTICES.md");
+    for marker in [
+        "livekit-client 2.23.0",
+        "three.js r186",
+        "microsoft/VibeVoice-Realtime-0.5B",
+        "mlx-community/parakeet-tdt-0.6b-v3",
+        "speechbrain/spkrec-ecapa-voxceleb",
+        "VibeVoice fork and stock voice prompts",
+        "Silero VAD model",
+    ] {
+        assert!(
+            notices.contains(marker),
+            "third-party notices must record {marker}"
+        );
+    }
 }

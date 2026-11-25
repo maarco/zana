@@ -387,7 +387,9 @@ Contributions welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guideli
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details
+Zana-original code and assets are MIT-licensed; see [LICENSE](LICENSE).
+Third-party components and runtime assets have separate terms in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [LICENSES](LICENSES/).
 
 ## Acknowledgments
 

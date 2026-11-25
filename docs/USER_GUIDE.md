@@ -1010,7 +1010,9 @@ A: Zana uses one at a time. Switch in Settings > Audio Device.
 A: Not currently. Zana is desktop-only.
 
 **Q: Can I use Zana commercially?**
-A: Yes, Zana is released under MIT license. See LICENSE file.
+A: Zana-original code is MIT-licensed. Third-party components, model weights,
+and runtime voice assets have separate terms; review
+THIRD_PARTY_NOTICES.md and LICENSES before distributing a build.
 
 ---
 
@@ -1022,7 +1024,9 @@ See [CHANGELOG.md](../CHANGELOG.md) for version history.
 
 ## License
 
-Zana is released under the MIT License.
+Zana-original code and assets are released under the MIT License. Third-party
+components and runtime assets have separate terms; see
+THIRD_PARTY_NOTICES.md and LICENSES.
 
 ---
 
