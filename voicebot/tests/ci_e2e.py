@@ -145,6 +145,15 @@ def _tail(path: Path, lines: int = 80) -> str:
     return "".join(path.read_text(errors="replace").splitlines(keepends=True)[-lines:])
 
 
+def _wait_for_log(path: Path, text: str, timeout: float = 30) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if path.exists() and text in path.read_text(errors="replace"):
+            return
+        time.sleep(0.1)
+    raise RuntimeError(f"timed out waiting for {text!r} in {path.name}")
+
+
 def run() -> None:
     livekit = shutil.which("livekit-server")
     if not livekit:
@@ -206,6 +215,7 @@ def run() -> None:
         _wait_for_port(livekit_host, livekit_port)
         time.sleep(0.5)
         agent_process = _start("agent", [sys.executable, "voicebot/agent.py", "start"], env, logs, processes)
+        _wait_for_log(logs / "agent.log", "registered worker")
         probe_env = env | {
             "PROBE_STEPS": "2",
             "PROBE_REQUIRE_SUCCESS": "1",
