@@ -23,9 +23,10 @@ OUTPUT_LATE_DRAIN_SECONDS = 0.75
 def conversation_end_warning(job_id: int) -> str:
     """Disclose exactly which long-running job is cancelled when its session ends."""
     return (
-        f"Job {job_id} will be stopped if this conversation ends, including when "
-        "you close the orb or change Voicebot settings. It cannot be resumed in a "
-        "later conversation; keep this conversation open if you want it to finish."
+        f"Job {job_id} will be stopped if this conversation ends, including when you "
+        "close the orb, change Voicebot settings, or Voicebot restarts after a service "
+        "failure. It cannot be resumed in a later conversation; keep this conversation "
+        "open if you want it to finish."
     )
 
 
@@ -172,11 +173,14 @@ class Jobs:
         self.jobs[job_id] = job
         return job
 
-    def stop_all(self) -> None:
-        """Stop every running job (the conversation is closing)."""
+    def stop_all(self) -> list[int]:
+        """Stop every running job and return the ids that were cancelled."""
+        stopped = []
         for job in self.jobs.values():
             if job.ended is None:
                 job.stop(quiet=True)
+                stopped.append(job.id)
+        return stopped
 
     def get(self, job_id) -> "Job | None":
         try:

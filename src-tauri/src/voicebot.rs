@@ -11,6 +11,7 @@
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -42,9 +43,10 @@ fn require_apple_silicon(arch: &str) -> Result<(), &'static str> {
 /// Files the bundle ships (tauri.conf.json bundle.resources maps the same list).
 /// tool_guidance.md is app-owned; Python reads it from this code directory and
 /// never copies it into the user's editable system_prompt.md.
-pub const CODE_FILES: [&str; 16] = [
+pub const CODE_FILES: [&str; 17] = [
     "agent.py",
     "voice_server.py",
+    "generation_health.py",
     "port_reporting.py",
     "speech.py",
     "listening.py",
@@ -314,6 +316,8 @@ struct Running {
     url: String,
     key: String,
     secret: String,
+    livekit_port: u16,
+    voice_port: u16,
 }
 
 #[derive(Default)]
@@ -321,11 +325,25 @@ struct Inner {
     status: Option<Status>,
     running: Option<Running>,
     children: Vec<(String, std::process::Child)>,
+    enabled: bool,
 }
 
 fn state() -> &'static Mutex<Inner> {
     static STATE: OnceLock<Mutex<Inner>> = OnceLock::new();
     STATE.get_or_init(Mutex::default)
+}
+
+fn lifecycle_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(Mutex::default)
+}
+
+fn set_enabled(enabled: bool) {
+    state().lock().unwrap().enabled = enabled;
+}
+
+fn is_enabled() -> bool {
+    state().lock().unwrap().enabled
 }
 
 fn set_status(stage: &str, detail: impl Into<String>) {
@@ -375,13 +393,18 @@ fn status_text(status: &Option<Status>) -> String {
 
 /// Start everything on a background thread; progress shows through `status()`.
 pub fn start(code: PathBuf) {
+    set_enabled(true);
     set_status("starting", "Starting Voicebot");
     std::thread::spawn(move || {
         if let Err(e) = run(&code) {
+            if !is_enabled() {
+                return;
+            }
             log::error!("[Voicebot] {e}");
-            set_status("error", e);
-            stop();
+            fail_permanently(e);
+            return;
         }
+        supervise(&code);
     });
 }
 
@@ -497,7 +520,20 @@ fn run(code: &Path) -> Result<(), String> {
         },
     )?;
 
-    state().lock().unwrap().running = Some(Running { url, key, secret });
+    {
+        let _lifecycle = lifecycle_lock().lock().unwrap();
+        let mut guard = state().lock().unwrap();
+        if !guard.enabled {
+            return Err("Voicebot was stopped".into());
+        }
+        guard.running = Some(Running {
+            url,
+            key,
+            secret,
+            livekit_port: lk_port,
+            voice_port,
+        });
+    }
     set_status("ready", "Ready");
     Ok(())
 }
@@ -646,6 +682,10 @@ fn spawn(
     home: &Path,
 ) -> Result<(), String> {
     use std::os::unix::process::CommandExt;
+    let _lifecycle = lifecycle_lock().lock().unwrap();
+    if !is_enabled() {
+        return Err("Voicebot was stopped".into());
+    }
     let log = std::fs::File::create(logs.join(format!("{name}.log"))).map_err(|e| e.to_string())?;
     let child = cmd
         .stdin(std::process::Stdio::null())
@@ -668,6 +708,12 @@ fn spawn(
 
 /// Stop every child process group (agent first, LiveKit last).
 pub fn stop() {
+    set_enabled(false);
+    stop_children();
+}
+
+fn stop_children() {
+    let _lifecycle = lifecycle_lock().lock().unwrap();
     let mut children: Vec<_> = {
         let mut guard = state().lock().unwrap();
         guard.running = None;
@@ -679,6 +725,12 @@ pub fn stop() {
         log::info!("[Voicebot] stopped {name}");
     }
     let _ = std::fs::remove_file(home_dir().join("pids"));
+}
+
+fn fail_permanently(detail: String) {
+    set_enabled(false);
+    stop_children();
+    set_status("error", detail);
 }
 
 #[cfg(unix)]
@@ -831,10 +883,160 @@ fn wait_until(limit: Duration, error: &str, mut ready: impl FnMut() -> bool) -> 
 
 fn dead_child() -> Option<String> {
     let mut guard = state().lock().unwrap();
-    guard
-        .children
+    dead_child_in(&mut guard.children)
+}
+
+fn dead_child_in(children: &mut [(String, std::process::Child)]) -> Option<String> {
+    children
         .iter_mut()
         .find_map(|(n, c)| matches!(c.try_wait(), Ok(Some(_))).then(|| n.clone()))
+}
+
+const SUPERVISOR_POLL: Duration = Duration::from_secs(1);
+const RECOVERY_WINDOW: Duration = Duration::from_secs(10 * 60);
+const MAX_RECOVERY_FAILURES: usize = 3;
+const RECOVERY_BACKOFF: [Duration; 3] = [
+    Duration::from_secs(1),
+    Duration::from_secs(2),
+    Duration::from_secs(4),
+];
+
+#[derive(Default)]
+struct RecoveryBudget {
+    failures: VecDeque<Instant>,
+}
+
+impl RecoveryBudget {
+    fn record_failure(&mut self, now: Instant) -> usize {
+        while self
+            .failures
+            .front()
+            .is_some_and(|at| now.duration_since(*at) > RECOVERY_WINDOW)
+        {
+            self.failures.pop_front();
+        }
+        self.failures.push_back(now);
+        self.failures.len()
+    }
+
+    fn backoff(attempt: usize) -> Duration {
+        RECOVERY_BACKOFF[attempt
+            .saturating_sub(1)
+            .min(RECOVERY_BACKOFF.len().saturating_sub(1))]
+    }
+}
+
+fn supervise(code: &Path) {
+    let mut budget = RecoveryBudget::default();
+    loop {
+        if !is_enabled() {
+            return;
+        }
+        std::thread::sleep(SUPERVISOR_POLL);
+        let Some(reason) = failure_reason() else {
+            continue;
+        };
+        if !recover(code, reason, &mut budget) {
+            return;
+        }
+    }
+}
+
+fn recover(code: &Path, mut reason: String, budget: &mut RecoveryBudget) -> bool {
+    loop {
+        if !is_enabled() {
+            return false;
+        }
+        let failure_count = budget.record_failure(Instant::now());
+        if failure_count >= MAX_RECOVERY_FAILURES {
+            fail_permanently(format!(
+                "Voicebot stopped after {MAX_RECOVERY_FAILURES} recovery failures in 10 minutes: {reason}. Check the Voicebot logs before trying again."
+            ));
+            return false;
+        }
+
+        set_status(
+            "starting",
+            format!("{reason}; restarting Voicebot ({failure_count}/{MAX_RECOVERY_FAILURES})"),
+        );
+        stop_children();
+        if !wait_for_enabled(RecoveryBudget::backoff(failure_count)) {
+            return false;
+        }
+        match run(code) {
+            Ok(()) => return true,
+            Err(error) if is_enabled() => {
+                log::error!("[Voicebot] recovery failed: {error}");
+                reason = format!("Voicebot recovery failed: {error}");
+            }
+            Err(_) => return false,
+        }
+    }
+}
+
+fn wait_for_enabled(duration: Duration) -> bool {
+    let deadline = Instant::now() + duration;
+    while is_enabled() {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return true;
+        }
+        std::thread::sleep(remaining.min(Duration::from_millis(100)));
+    }
+    false
+}
+
+fn failure_reason() -> Option<String> {
+    let (livekit_port, voice_port) = {
+        let mut guard = state().lock().unwrap();
+        if !guard.enabled || guard.running.is_none() {
+            return None;
+        }
+        if let Some(dead) = dead_child_in(&mut guard.children) {
+            return Some(format!("{dead} exited; see logs/{dead}.log"));
+        }
+        let running = guard.running.as_ref()?;
+        (running.livekit_port, running.voice_port)
+    };
+    if !tcp_port_is_open(livekit_port) {
+        return Some("LiveKit stopped responding; see logs/livekit.log".into());
+    }
+    if !speech_health_is_ok(voice_port) {
+        return Some("The speech server is unhealthy; see logs/voice.log".into());
+    }
+    None
+}
+
+fn tcp_port_is_open(port: u16) -> bool {
+    std::net::TcpStream::connect_timeout(
+        &std::net::SocketAddr::from(([127, 0, 0, 1], port)),
+        Duration::from_secs(2),
+    )
+    .is_ok()
+}
+
+fn speech_health_is_ok(port: u16) -> bool {
+    use std::io::{Read, Write};
+
+    let Ok(mut stream) = std::net::TcpStream::connect_timeout(
+        &std::net::SocketAddr::from(([127, 0, 0, 1], port)),
+        Duration::from_secs(2),
+    ) else {
+        return false;
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
+    let _ = stream.set_write_timeout(Some(Duration::from_secs(2)));
+    if stream
+        .write_all(b"GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
+        .is_err()
+    {
+        return false;
+    }
+    let mut response = [0u8; 64];
+    let Ok(size) = stream.read(&mut response) else {
+        return false;
+    };
+    response[..size].starts_with(b"HTTP/1.1 200") || response[..size].starts_with(b"HTTP/1.0 200")
 }
 
 #[cfg(test)]
@@ -894,6 +1096,67 @@ mod tests {
         assert_eq!(read_voice_port(&port_file), None);
         std::fs::write(&port_file, "43127\n").unwrap();
         assert_eq!(read_voice_port(&port_file), Some(43127));
+    }
+
+    #[test]
+    fn recovery_budget_stops_after_the_third_failure_and_expires() {
+        let now = Instant::now();
+        let mut budget = RecoveryBudget::default();
+        assert_eq!(budget.record_failure(now), 1);
+        assert_eq!(budget.record_failure(now + Duration::from_secs(1)), 2);
+        assert_eq!(budget.record_failure(now + Duration::from_secs(2)), 3);
+        assert_eq!(RecoveryBudget::backoff(1), Duration::from_secs(1));
+        assert_eq!(RecoveryBudget::backoff(2), Duration::from_secs(2));
+        assert_eq!(RecoveryBudget::backoff(99), Duration::from_secs(4));
+        assert_eq!(
+            budget.record_failure(now + RECOVERY_WINDOW + Duration::from_secs(3)),
+            1
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn dead_child_probe_detects_an_isolated_fixture_process() {
+        let mut children = vec![(
+            "fixture".to_string(),
+            std::process::Command::new("/bin/sh")
+                .args(["-c", "exit 17"])
+                .spawn()
+                .unwrap(),
+        )];
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let mut found = None;
+        while Instant::now() < deadline {
+            found = dead_child_in(&mut children);
+            if found.is_some() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(found.as_deref(), Some("fixture"));
+        let _ = children[0].1.wait();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn speech_health_probe_accepts_only_http_success() {
+        fn serve(status: &'static str) -> u16 {
+            use std::io::Write;
+            let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+            let port = listener.local_addr().unwrap().port();
+            std::thread::spawn(move || {
+                let Ok((mut stream, _)) = listener.accept() else {
+                    return;
+                };
+                let _ = stream.write_all(
+                    format!("HTTP/1.1 {status}\r\nContent-Length: 2\r\n\r\nok").as_bytes(),
+                );
+            });
+            port
+        }
+
+        assert!(speech_health_is_ok(serve("200 OK")));
+        assert!(!speech_health_is_ok(serve("503 Service Unavailable")));
     }
 
     #[cfg(unix)]
