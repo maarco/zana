@@ -142,6 +142,40 @@ var(--background);
       color: var(--muted-foreground);
       margin-top: 2px;
     }
+    .voicebot-setup {
+      display: grid;
+      gap: 8px;
+      padding: 10px 12px;
+      background: var(--card);
+      border-radius: var(--radius);
+      margin-bottom: 8px;
+    }
+    .voicebot-setup progress {
+      width: 100%;
+      height: 6px;
+      accent-color: var(--ok);
+    }
+    .voicebot-setup-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .voicebot-setup-actions code {
+      padding: 5px 7px;
+      border-radius: 4px;
+      background: var(--muted);
+      color: var(--foreground);
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+      font-size: 11px;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+    .voicebot-setup-actions a {
+      color: var(--foreground);
+      font-size: 11px;
+      font-weight: 700;
+    }
     .setting-copy {
       min-width: 0;
     }
@@ -525,6 +559,18 @@ var(--background);
         <div class="section-meta">Experimental</div>
       </div>
 
+      <div class="voicebot-setup" id="voicebot-setup" role="status" aria-live="polite">
+        <div class="setting-label" id="voicebot-setup-title">Voicebot setup</div>
+        <div class="setting-desc" id="voicebot-setup-detail">Checking prerequisites...</div>
+        <progress id="voicebot-setup-progress" max="5" value="0" hidden></progress>
+        <div class="voicebot-setup-actions">
+          <code id="voicebot-install-command" hidden></code>
+          <button class="btn-secondary" type="button" id="voicebot-copy-command" hidden>Copy command</button>
+          <a id="voicebot-homebrew" href="https://brew.sh" target="_blank" rel="noreferrer" hidden>Install Homebrew</a>
+          <button class="btn-secondary" type="button" id="voicebot-retry" hidden>Retry setup</button>
+        </div>
+      </div>
+
       <div class="setting-row">
         <div class="setting-copy">
           <div class="setting-label">Terminal Tool</div>
@@ -770,11 +816,48 @@ var(--background);
     // Voicebot saves on its own: its switches act at once, Save Voicebot writes the rest.
     const voicebotEl = (id) => document.getElementById(id);
     function voicebotSay(text) { voicebotEl('voicebot-status').textContent = text; }
+    function renderVoicebotStatus(status) {
+      const stageNames = {
+        installing: 'Installing', starting: 'Starting', loading: 'Loading',
+        ready: 'Ready', error: 'Setup needs attention', off: 'Off',
+      };
+      const detail = voicebotEl('voicebot-setup-detail');
+      const title = voicebotEl('voicebot-setup-title');
+      const progress = voicebotEl('voicebot-setup-progress');
+      const command = voicebotEl('voicebot-install-command');
+      const copy = voicebotEl('voicebot-copy-command');
+      const homebrew = voicebotEl('voicebot-homebrew');
+      const retry = voicebotEl('voicebot-retry');
+      title.textContent = stageNames[status.stage] || status.stage || 'Voicebot setup';
+      detail.textContent = status.detail || '';
+      if (status.progress) {
+        progress.hidden = false;
+        progress.max = status.progress.total;
+        progress.value = status.progress.current;
+      } else {
+        progress.hidden = true;
+      }
+      const installCommand = status.install_command || '';
+      command.hidden = !installCommand;
+      command.textContent = installCommand;
+      copy.hidden = !installCommand;
+      homebrew.hidden = !installCommand;
+      retry.hidden = status.stage !== 'error';
+    }
+    async function refreshVoicebotStatus() {
+      try {
+        renderVoicebotStatus(await window.__TAURI__.core.invoke('voicebot_status'));
+      } catch (e) {
+        voicebotSay(String(e));
+      }
+    }
+    let voicebotStatusPoll = null;
     async function loadVoicebot() {
       if (!/Mac/i.test(navigator.platform)) { voicebotEl('voicebot-section').hidden = true; return; }
       if (!window.__TAURI__) return;
       try {
         const cfg = await window.__TAURI__.core.invoke('get_voicebot_config');
+        renderVoicebotStatus(cfg.status);
         voicebotEl('voicebot-terminal-toggle').classList.toggle('active', cfg.terminal);
         voicebotEl('voicebot-context-command').value = cfg.context_command;
         voicebotEl('voicebot-wake-word').value = cfg.wake_word;
@@ -794,10 +877,24 @@ var(--background);
         voicebotEl('voicebot-prompt').value = cfg.prompt;
         voicebotEl('voicebot-mcp').value = cfg.mcp;
         voicebotSay(`Status: ${cfg.status.detail}`);
+        if (!voicebotStatusPoll) voicebotStatusPoll = setInterval(refreshVoicebotStatus, 1000);
       } catch (e) {
         voicebotSay(String(e));
       }
     }
+    voicebotEl('voicebot-retry')?.addEventListener('click', async () => {
+      try {
+        voicebotSay('Retrying Voicebot setup...');
+        await window.__TAURI__.core.invoke('retry_voicebot');
+        await refreshVoicebotStatus();
+      } catch (e) { voicebotSay(String(e)); }
+    });
+    voicebotEl('voicebot-copy-command')?.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(voicebotEl('voicebot-install-command').textContent);
+        voicebotSay('Copied the install command');
+      } catch (e) { voicebotSay(`Could not copy the command: ${e}`); }
+    });
     voicebotEl('voicebot-terminal-toggle')?.addEventListener('click', async (event) => {
       const enabled = event.currentTarget.classList.contains('active');
       try {

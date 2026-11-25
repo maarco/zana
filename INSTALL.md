@@ -12,9 +12,10 @@ The old Fn-key dictation and Whisper workflow is retired.
 - A working OpenAI-compatible chat model endpoint. Hosted providers usually
   require an API key; local servers may have their own authentication settings.
   Speech recognition is local, but Voicebot needs a chat model to answer.
-- An internet connection and several gigabytes of free disk space for the first
+- An internet connection and at least 10 GB of free disk space for the first
   setup. Voicebot installs about 1.5 GB of Python packages, then downloads its
-  local speech models and voices.
+  local speech models and voices. Zana checks the real free space before each
+  download and reports the required and available amounts if it is too low.
 
 ## Install prerequisites
 
@@ -51,8 +52,11 @@ cargo run -p Zana-app
 
 On the first launch, Zana creates a Python 3.12 environment, installs Voicebot's
 packages, and downloads the local Parakeet and VibeVoice models and voice assets.
-This can take several minutes. Keep the app open until the Voicebot status is
-Ready. Its files and setup logs are in
+The onboarding Voicebot step and Preferences > Voicebot show the current setup
+step. If `uv` or LiveKit is missing, they show the exact `brew install` command
+and a Homebrew link. A network download retries with capped backoff; after a
+failed start, choose Retry setup in either surface without relaunching Zana.
+Keep the app open until the Voicebot status is Ready. Its files and setup logs are in
 `~/Library/Application Support/Zana/voicebot/`.
 
 ## Configure an answering model
@@ -96,6 +100,7 @@ configured chat endpoint. Screen titles and screenshots are shared with the
 configured model only when Voicebot uses those screen tools. See
 [PRIVACY.md](PRIVACY.md) for details.
 
-If Voicebot does not finish setup, open Preferences > Voicebot > Open Folder and
-check `logs/install.log`. For permission issues, review System Settings > Privacy
-& Security and make sure the correct Zana app has access.
+If Voicebot does not finish setup, use Retry setup in onboarding or Preferences,
+then open Preferences > Voicebot > Open Folder and check `logs/install.log`. For
+permission issues, review System Settings > Privacy & Security and make sure the
+correct Zana app has access.

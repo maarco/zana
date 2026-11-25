@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse, StreamingResponse, PlainTextResponse
 from pydantic import BaseModel
 
 from port_reporting import report_bound_port
+from startup_retry import retry_startup
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 VOICEBOT_HOME = os.path.expanduser(os.getenv("VOICEBOT_HOME", os.path.join(HERE, ".home")))
@@ -116,16 +117,27 @@ def _tts_generate(text, voice, streamer, stop=None):
 
 app = FastAPI()
 
-@app.on_event("startup")
-def startup():
-    mlx_pool.submit(_load_parakeet).result()
-    _load_vibevoice()
+def _load_and_warm():
+    if "model" not in _stt:
+        mlx_pool.submit(_load_parakeet).result()
+    if "model" not in _tts:
+        _load_vibevoice()
     # warm up both models
     s = AudioStreamer(batch_size=1)
     threading.Thread(target=_tts_generate, args=("Hello there.", VIBEVOICE_VOICE, s), daemon=True).start()
     while s.audio_queues[0].get() is not None:
         pass
     log.info("Warm-up complete, ready.")
+
+
+def _report_startup_retry(delay, attempt, error):
+    log.warning("Speech model startup failed (%s); retrying in %ss (attempt %s)",
+                error, delay, attempt)
+
+
+@app.on_event("startup")
+def startup():
+    retry_startup(_load_and_warm, on_retry=_report_startup_retry)
 
 @app.get("/health")
 def health():

@@ -431,6 +431,70 @@
       color: var(--text-whisper);
     }
 
+    .voicebot-setup-status {
+      width: min(560px, 90vw);
+      margin: 18px auto 0;
+      padding: 12px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 12px;
+      text-align: left;
+      pointer-events: auto;
+      background: rgba(0, 0, 0, 0.22);
+    }
+    .voicebot-setup-status progress {
+      width: 100%;
+      height: 6px;
+      margin-top: 8px;
+      accent-color: var(--success-pulse);
+    }
+    .voicebot-setup-status .setup-detail {
+      color: var(--text-whisper);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .voicebot-setup-status .setup-title {
+      color: var(--text-ethereal);
+      font-size: 13px;
+      font-weight: 900;
+    }
+    .voicebot-setup-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .voicebot-setup-actions code {
+      padding: 4px 7px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-ethereal);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+    .voicebot-setup-actions a {
+      color: var(--text-ethereal);
+      font-size: 11px;
+      font-weight: 900;
+    }
+    .voicebot-setup-actions button {
+      padding: 8px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-ethereal);
+      font: inherit;
+      font-size: 11px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+    .voicebot-setup-actions button:disabled {
+      cursor: default;
+      opacity: 0.5;
+    }
+
     .ready-bottom {
       margin-bottom: 30px;
     }
@@ -677,12 +741,23 @@
     <!-- PHASE 3: VOICEBOT READY -->
     <div class="phase" id="phase-ready">
       <div class="ready-top">
-        <div class="awakening">Your Voicebot is ready</div>
+        <div class="awakening">Finish setting up your Voicebot</div>
         <div class="subtitle">Choose a chat model and API key in Preferences. Your wake word is optional and can be changed there.</div>
+        <div class="voicebot-setup-status" id="voicebot-setup-status" role="status" aria-live="polite">
+          <div class="setup-title" id="voicebot-setup-title">Voicebot setup</div>
+          <div class="setup-detail" id="voicebot-setup-detail">Checking prerequisites...</div>
+          <progress id="voicebot-setup-progress" max="5" value="0" hidden></progress>
+          <div class="voicebot-setup-actions">
+            <code id="voicebot-install-command" hidden></code>
+            <button type="button" id="voicebot-copy-command" onclick="copyVoicebotCommand()" hidden>Copy command</button>
+            <a id="voicebot-homebrew" href="https://brew.sh" target="_blank" rel="noreferrer" hidden>Install Homebrew</a>
+            <button type="button" id="voicebot-retry" onclick="retryVoicebotSetup()" hidden>Retry Voicebot setup</button>
+          </div>
+        </div>
       </div>
       <div class="ready-bottom">
         <button class="btn-permission" onclick="openVoicebotPreferences()">Open Voicebot Preferences</button>
-        <button class="btn-complete" onclick="completeGenesis()">Start Voicebot</button>
+        <button class="btn-complete" id="complete-voicebot" onclick="completeGenesis()" disabled>Start Voicebot</button>
         <div id="completion-error" class="subtitle" role="alert" aria-live="assertive" hidden></div>
         <div class="restart-note">Zana will restart and start Voicebot. Then ask your first question.</div>
       </div>
@@ -1117,6 +1192,7 @@
         checkPermissionLoop();
       } else if (phaseIndex === 3) {
         state.genesisProgress = 1.0;
+        beginVoicebotSetupStatus();
       }
     }
 
@@ -1125,6 +1201,75 @@
     // ============================================================================
     let renderer;
     let tauriReady = false;
+    let voicebotSetupPoll = null;
+
+    function renderVoicebotSetupStatus(status) {
+      status = status || {};
+      const title = document.getElementById('voicebot-setup-title');
+      const detail = document.getElementById('voicebot-setup-detail');
+      const progress = document.getElementById('voicebot-setup-progress');
+      const command = document.getElementById('voicebot-install-command');
+      const copy = document.getElementById('voicebot-copy-command');
+      const homebrew = document.getElementById('voicebot-homebrew');
+      const retry = document.getElementById('voicebot-retry');
+      const complete = document.getElementById('complete-voicebot');
+      const stageNames = {
+        installing: 'Installing Voicebot', starting: 'Starting Voicebot',
+        loading: 'Loading Voicebot', ready: 'Voicebot ready',
+        error: 'Voicebot setup needs attention', off: 'Voicebot is off',
+      };
+      title.textContent = stageNames[status.stage] || 'Voicebot setup';
+      detail.textContent = status.detail || '';
+      if (status.progress) {
+        progress.hidden = false;
+        progress.max = status.progress.total;
+        progress.value = status.progress.current;
+      } else {
+        progress.hidden = true;
+      }
+      const installCommand = status.install_command || '';
+      command.hidden = !installCommand;
+      command.textContent = installCommand;
+      copy.hidden = !installCommand;
+      homebrew.hidden = !installCommand;
+      retry.hidden = status.stage !== 'error';
+      complete.disabled = status.stage !== 'ready';
+    }
+
+    async function refreshVoicebotSetupStatus() {
+      if (!window.__TAURI__) return;
+      try {
+        const status = await window.__TAURI__.core.invoke('voicebot_status');
+        renderVoicebotSetupStatus(status);
+      } catch (e) {
+        document.getElementById('voicebot-setup-detail').textContent = String(e);
+      }
+    }
+
+    function beginVoicebotSetupStatus() {
+      refreshVoicebotSetupStatus();
+      if (!voicebotSetupPoll) voicebotSetupPoll = setInterval(refreshVoicebotSetupStatus, 1000);
+    }
+
+    window.retryVoicebotSetup = async function() {
+      const detail = document.getElementById('voicebot-setup-detail');
+      try {
+        detail.textContent = 'Retrying Voicebot setup...';
+        await window.__TAURI__.core.invoke('retry_voicebot');
+        await refreshVoicebotSetupStatus();
+      } catch (e) {
+        detail.textContent = `Could not retry Voicebot setup: ${e?.message || e}`;
+      }
+    };
+
+    window.copyVoicebotCommand = async function() {
+      try {
+        await navigator.clipboard.writeText(document.getElementById('voicebot-install-command').textContent);
+        document.getElementById('voicebot-setup-detail').textContent = 'Copied the install command';
+      } catch (e) {
+        document.getElementById('voicebot-setup-detail').textContent = `Could not copy the command: ${e}`;
+      }
+    };
 
     window.beginGenesis = function() {
       // Animate genesis progress for voice phase

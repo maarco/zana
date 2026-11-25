@@ -114,3 +114,41 @@ test('completion marker failure is shown in onboarding', async () => {
   assert.equal(completionError.hidden, false);
   assert.match(completionError.textContent, /permission denied/);
 });
+
+test('Voicebot setup retry invokes the backend without a relaunch', async () => {
+  const html = fs.readFileSync(onboardingPath, 'utf8');
+  const start = html.indexOf('window.retryVoicebotSetup = async function() {');
+  assert.notEqual(start, -1, 'Voicebot retry handler exists');
+
+  let depth = 0;
+  let end = -1;
+  for (let index = html.indexOf('{', start); index < html.length; index += 1) {
+    if (html[index] === '{') depth += 1;
+    if (html[index] === '}' && --depth === 0) {
+      end = index + 1;
+      break;
+    }
+  }
+  assert.notEqual(end, -1, 'Voicebot retry handler closes');
+
+  const detail = { textContent: '' };
+  const calls = [];
+  const context = {
+    window: {
+      __TAURI__: {
+        core: {
+          invoke: async (command) => { calls.push(command); },
+        },
+      },
+    },
+    document: { getElementById: () => detail },
+  };
+  vm.runInNewContext(
+    `${html.slice(start, end)}; globalThis.refreshed = 0; globalThis.refreshVoicebotSetupStatus = async () => { refreshed += 1; }; globalThis.retryVoicebotSetup = window.retryVoicebotSetup;`,
+    context,
+  );
+
+  await context.retryVoicebotSetup();
+  assert.deepEqual(calls, ['retry_voicebot']);
+  assert.equal(context.refreshed, 1);
+});

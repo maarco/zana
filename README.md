@@ -33,8 +33,8 @@ installation, usage, status, or troubleshooting are historical. Use
 
 - **macOS**: 13 Ventura or newer recommended
 - **Processor**: Apple silicon only (M-series)
-- **RAM**: 8GB minimum (16GB recommended for larger Whisper models)
-- **Storage**: ~2GB for app + Whisper models
+- **RAM**: 8GB minimum (16GB recommended for local speech models)
+- **Storage**: at least 10GB free for the first Voicebot setup
 
 ## Installation
 

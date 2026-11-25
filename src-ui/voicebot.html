@@ -65,7 +65,8 @@
       for (;;) {
         const s = await invoke('voicebot_status');
         if (s.stage === 'ready') return;
-        setStatus({ installing: 'Installing', starting: 'Starting', loading: 'Loading', error: 'Error', off: 'Off' }[s.stage] || s.stage, s.detail);
+        const progress = s.progress ? ` (${s.progress.current}/${s.progress.total})` : '';
+        setStatus(({ installing: 'Installing', starting: 'Starting', loading: 'Loading', error: 'Error', off: 'Off' }[s.stage] || s.stage) + progress, s.detail);
         await new Promise((r) => setTimeout(r, s.stage === 'error' ? 5000 : 1000));
       }
     }
